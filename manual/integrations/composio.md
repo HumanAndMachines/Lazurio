@@ -48,8 +48,15 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   Composio se v něm nic nepřipojí ani neodpojí, dokud se to neopraví.
 - Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
   přihlášení v Nastavení → Nástroje.
-- Sdílené organizace Composia se zvanými lidmi, API klíči a sdílením se
-  nedělají.
+- Do své organizace Composia nikoho nezvete. Sdílené organizace se zvanými
+  lidmi, API klíči a sdílením se nedělají: dělaly by nepořádek a ostatní by
+  viděli vaše volání. Lazurio nedrží žádný klíč organizace Composia.
+- Co v organizaci připojíte, používají agenti (Chat, Apps i Automate) ve
+  vašem Prostředí té Organizace.
+- Potřebuje-li jiné Prostředí téže Organizace jiné přihlašovací údaje (jiný
+  Gmail, jiné účty), přihlaste se v něm do Composia samostatným účtem. Tři
+  Prostředí s různými přihlašovacími údaji tedy znamenají tři účty Composia,
+  každý se svou organizací jména Organizace (dodatek 0162 z 2026-10-17).
 
 ## V modelu Integrací (dodatek 0162 z 2026-10-09)
 
