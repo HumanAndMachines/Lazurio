@@ -23,7 +23,9 @@ Tento runbook popisuje model Composia.
 Připojené aplikace patří u Composia účtu a jeho organizaci, ne mašině. Dvě
 mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 
-- Každý člověk má jeden svůj účet Composia, přihlášený přes GitHub.
+- Každý člověk má výchozí jeden svůj účet Composia, přihlášený přes GitHub.
+  Další účet si založí, jen když jiné Prostředí potřebuje jiné přihlašovací
+  údaje (viz níže).
 - V něm má pro každou Organizaci Lazuria jednu vlastní organizaci se stejným
   jménem, ve které nikdo jiný není, a výchozí organizaci, kterou Composio
   založilo při registraci.
