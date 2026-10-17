@@ -31,13 +31,16 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   se porovnává bez ohledu na velikost písmen, mezery a diakritiku („Human and
   Machine“ odpovídá `humanandmachine`). Launchpad ji nastaví sám
   (`composio orgs switch`), aby v ní pracovali i agenti.
-- Chybí-li taková organizace, Launchpad to řekne v Apps → Integrace a odkáže
-  do dashboardu Composia, kde ji založíte; Composio organizaci jinak založit
-  neumí. Dokud chybí, Composio dál pracuje v organizaci, kterou máte
-  vybranou, takže nic, co už máte připojené, nepřestane fungovat. Jakmile ji
-  založíte, Launchpad do ní přepne sám a aplikace v ní připojíte znovu;
-  přejmenováním stávající organizace na jméno Organizace zůstanou připojení
-  zachovaná.
+- Chybí-li taková organizace, Launchpad ukáže jeden krok: jméno ke
+  zkopírování a animaci cesty v dashboardu Composia. V něm máte vlevo nahoře
+  vybrané „FOR YOU“, vlevo dole otevřete kartu organizace a zvolíte „Create
+  Org“. Že organizace vznikla, Launchpad pozná sám a přepne do ní (dodatek
+  0162 z 2026-10-17). Composio organizaci jinak založit neumí; Lazurio ho
+  požádalo o rozhraní (ComposioHQ/composio#4949).
+- Dokud organizace chybí, Composio dál pracuje v organizaci, kterou máte
+  vybranou, takže nic, co už máte připojené, nepřestane fungovat. V nové
+  organizaci aplikace připojíte znovu; přejmenováním stávající organizace na
+  jméno Organizace zůstanou připojení zachovaná.
 - Nejde-li přečíst jméno Organizace Environmentu (rozbitý Folder), přes
   Composio se v něm nic nepřipojí ani neodpojí, dokud se to neopraví.
 - Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
