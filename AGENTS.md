@@ -50,10 +50,13 @@ nepřepisují.
 Agent mluví nebo píše k člověku (chat, handoff, popis PR určený uživateli,
 texty v aplikaci), místo, ve kterém člověk pracuje, česky pojmenuje
 **Prostředí**: s velkým P, ve středním rodě („toto Prostředí“, „v tomto
-Prostředí“), druh přívlastkem (Pracovní, Týmové, Místní, Automatizované
-Prostředí). Osobní Prostředí se lidem jmenuje **Buddy**, ve větách **Prostředí Buddy**,
-a jeho obsah je **Osobní Workspace**; technicky zůstává osobním Prostředím
-(decision 0207). Hostované Prostředí česky vlastní jméno nemá; kde je
+Prostředí“). Lidem se ukazují jen tři druhy: **Osobní**, **Pracovní** a
+**Týmové Prostředí**; o konkrétním Prostředí piš vždy s druhem podle
+kontextu („toto Pracovní Prostředí“), holé „Prostředí“ jen obecně.
+Automatizované Prostředí je lidem Pracovní Prostředí s automatizacemi a
+vlastní počítač člověka druh nemá, je to „váš počítač“. Produkt a postavička
+osobního zástupce se jmenují **Buddy** a obsah Osobního Prostředí je
+**Osobní Workspace** (decision 0207 s dodatkem z 2026-10-18). Hostované Prostředí česky vlastní jméno nemá; kde je
 potřeba ho odlišit, je to „Prostředí na serveru“, nikdy „Remote Environment“
 ani „Vzdálené Prostředí“. Anglicky je to **Environment** a hostované **Remote
 Environment**. Prostředí nepojmenovávej slovy „Mašina“, „VM“ ani „server“;
