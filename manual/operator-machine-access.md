@@ -145,12 +145,14 @@ nestaví žádný most.
   přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
   nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
   nepřejmenovávají.
-- **Servisní VM se nezakládá (0181).** Na hostu virtualizace nevzniká servisní
-  VM (`services-NN`); diagnostický kolektor běží přímo na hostu. AI pool je
-  běžný Environment Organizace s presetem AI pool: jeden na Organizaci, na
-  vlastním stroji, přiřazený jen Ownerovi nebo Adminovi a pojmenovaný jako
-  každý jiný Environment Organizace (0146). Jména `team-NN` a `ai-team-NN` se
-  pro něj nepoužívají.
+- **Jedna servisní Mašina na server (0209).** Každý virtualizační host
+  Organizace má právě jednu servisní Mašinu `services-NN` s číslem hostu
+  (`<org>-proxmox-01` má `services-01`). Je to Pracovní Prostředí jen pro
+  Ownery a Adminy Organizace a každá její služba (AI pool, brány a další)
+  běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
+  servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
+  zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
+  Prostředími více lidí služby Organizace nemá.
 
 ## Infra je blueprint
 
