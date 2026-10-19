@@ -21,7 +21,8 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
     (preview 0.0.45-preview.20261012.2).
 - **Teprve přijde:** stable T3 Code 0.0.45-lazurio.8 a nasazení na ostatní Environmenty;
   refaktor podle dodatku 0191 z 2026-10-12 (body 28–35).
-- **Jen cíl:** MausBot na prohlížeči Environmentu.
+- **Jen cíl, staví ho plán DEV-6673:** MausBot na prohlížeči Environmentu (body 34 a 41–43 rozhodnutí
+  0191).
 
 ## Principy
 
@@ -263,14 +264,23 @@ vidět, které karty jsou nejnáročnější.
 
 ### Lazurio MausBot
 
-Pro MausBot se vymyslí totéž co pro T3 Code (Matěj 2026-10-11):
-- lišta bota drží karty, které bot ukazuje;
-- karty bota se zavřou, když bot skončí;
-- práce bota v prohlížeči jde přes `agent-browser` v prohlížeči Environmentu.
+Bot pracuje jako vlákno T3 Code (0191 body 34 a 41–43, Matěj 2026-10-19):
+- **žádný vlastní prohlížeč, profil ani počítač:** bot pracuje v prohlížeči Environmentu přes
+  `agent-browser` připojený na port 9222, se sezením `bot-<id>` (prefix `bot-` je vyhrazený
+  MausBotu, C2);
+- **lišta bota** drží karty, které bot otevřel nebo ukazuje; smazání nebo archivace bota je pustí
+  (`lazurio browser done`) a kartu ukončí hub, jako u vlákna T3 Code (0191 bod 26);
+- **pravý panel MausBotu** ukazuje karty lišty bota přes pohled Platformy (`…/t/<id>`) a Novou kartu
+  stejně jako T3 Code; MausBot k tomu převezme smluvní modul Platformy jako T3 Code (úkol
+  2026-10-05-510);
+- **nastavení agent-browseru** patří Platformě: MausBot nespouští démony s vlastním
+  `AGENT_BROWSER_CONFIG` ani nemění limit nečinnosti (C7);
+- **programy na obrazovce Environmentu** (například Blender) ovládají boti přes Computer Use na ploše,
+  střídavě s ostatními agenty (0191 bod 42, druhá vlna).
 
-Je to třetí vlna 0191 (bod 9) a F47 MausBot zatím nenavrhuje. Do té doby používá MausBot
-vlastní profily podle své dosavadní podoby. Přechod na prohlížeč Environmentu se navrhne
-v plánu MausBotu podle smlouvy výše.
+Do přechodu používá MausBot vlastní démony `agent-browser` s headless Chromem podle upstreamu a vlastní
+živý pohled; obojí z kódu odejde. Zásady, podle kterých se MausBot upravuje, drží `LAZURIO.md` forku
+`Lazurio/OpenMausBot`.
 
 ### Codex Desktop (vědomý kompromis)
 
@@ -394,7 +404,8 @@ prohlížeč takto:
     povrchů přes `lang` v odpovědi identity (úkol 2026-10-12-704);
   - společné scénáře lišt a dvě zbývající varování `lazurio doctor` (úkol 2026-10-12-706);
   - zdokumentovaný příkaz forku agent-browseru pro ukončení sezení (úkol 2026-10-12-707);
-  - MausBot jako poslední (úkol 2026-10-05-510).
+  - MausBot na prohlížeči Environmentu (úkol 2026-10-05-510 v plánu DEV-6673; diskuse k bodu 34
+    proběhla 2026-10-19, body 41–43).
 - Viditelné označení cizího Environmentu a karty z jiného Environmentu, například červeným
   rámečkem (bod 35): zatím jen směr pro návrhy rozhraní.
 - Uspávání karet a jeho mechanismus (DEV-6656 spike 916).
