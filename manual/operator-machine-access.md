@@ -42,10 +42,11 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
-     Výjimkami jsou grant na port proxy AI poolu vlastní Organizace
-     (0181), ze kterého SSH ani jiný port neplyne, a servisní SSH
-     z jmenovaného Pracovního Prostředí Ownera nebo Admina do Pracovních
-     a Týmových Prostředí členů téže Organizace (0202).
+     Výjimkou je servisní SSH z jmenovaného Pracovního Prostředí Ownera
+     nebo Admina do Pracovních a Týmových Prostředí členů téže Organizace
+     (0202). Ke službám servisní Mašiny svého serveru (AI pool a další)
+     jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
+     Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
@@ -56,8 +57,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
    nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
    Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
-   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM
-   (kromě portu proxy AI poolu své Organizace, 0181). Pracovní zóna nemá hranu
+   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM;
+   ke službám servisní Mašiny svého serveru, které jí Deployment Repo povolí,
+   jde po vnitřní síti serveru, ne přes Headscale (0209). Pracovní zóna nemá hranu
    z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
@@ -145,12 +147,14 @@ nestaví žádný most.
   přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
   nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
   nepřejmenovávají.
-- **Servisní VM se nezakládá (0181).** Na hostu virtualizace nevzniká servisní
-  VM (`services-NN`); diagnostický kolektor běží přímo na hostu. AI pool je
-  běžný Environment Organizace s presetem AI pool: jeden na Organizaci, na
-  vlastním stroji, přiřazený jen Ownerovi nebo Adminovi a pojmenovaný jako
-  každý jiný Environment Organizace (0146). Jména `team-NN` a `ai-team-NN` se
-  pro něj nepoužívají.
+- **Jedna servisní Mašina na server (0209).** Každý virtualizační host
+  Organizace má právě jednu servisní Mašinu `services-NN` s číslem hostu
+  (`<org>-proxmox-01` má `services-01`). Je to Pracovní Prostředí jen pro
+  Ownery a Adminy Organizace a každá její služba (AI pool, brány a další)
+  běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
+  servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
+  zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
+  Prostředími více lidí služby Organizace nemá.
 
 ## Infra je blueprint
 
