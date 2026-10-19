@@ -478,7 +478,12 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Prostředí svého člověka (decision 0210) a jeho instalace, běh, paměť,
    konverzace a profil patří tomuto Prostředí a Personalspace jeho Ownera.
    Task Agent v jiném Prostředí do Buddyho nesahá bez pokynu Ownera a
-   přístup prokazuje operací.
+   přístup prokazuje operací. Dosavadní hostované instalace Buddyho na
+   samostatné VPS zůstávají do své migrace, jak jsou: jejich vnitřek
+   (instalace, runtime, paměť, zálohy, incidenty) se řídí vygenerovaným
+   `AGENTS.md` aktivního Resident rootu na hostu a privátním profilem jeho
+   Ownera, ne pravidly source checkoutu, a lokální spuštění je u nich
+   zakázané.
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
    `bun run doctor:task`. Update po vrstvách srovná Lazurio Root → Organization
