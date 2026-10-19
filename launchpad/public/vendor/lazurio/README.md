@@ -31,3 +31,10 @@ kanonického čtyřfasetového `symbol-color.svg` z commitu
 
 Ani ikonové kopie se neupravují ručně. Změna kresby patří nejdřív do
 generátoru design systému Lazurio a potom se znovu vyexportuje celá sada.
+
+## Svěží palette refresh (2026-10-19)
+
+`tokens.css` is a byte-for-byte copy from `HumanAndMachine-ai/design-system-lazurio`
+commit `f3eb7117e81ea52b341a03b0d45a8842a9b81525` (reviewed PR #99). Success, warning and danger
+use the approved semantic foreground, background and border values. Other assets
+retain the provenance recorded above.
