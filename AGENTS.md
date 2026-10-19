@@ -806,7 +806,11 @@ podle `manual/integrations/executor.md` nebo
 `manual/integrations/composio.md`; přihlášení nebo klíč dokončí on sám na
 stránce, kterou mu otevřeš v prohlížeči Environmentu. Jen na jeho výslovný
 pokyn smíš přidat vlastní MCP server do Executoru; kde Executor ještě
-neběží, nastav ho na pokyn operátora podle téhož runbooku. Konzoli
+neběží, nastav ho na pokyn operátora podle téhož runbooku.
+Integrační služba Služeb serveru (0209, dodatek z 2026-10-19 večer (e)) je
+jiný případ: Admin ji povoluje v Deployment Repu a v povoleném Prostředí
+se v Integracích ukáže sama; agent ji nepřidává, neodebírá ani k ní nikoho
+nepřihlašuje a její credential zůstává ve Službách serveru. Konzoli
 Executoru používají agenti a servisní přístup; lidé cílově všechno dělají
 v Launchpadu. Nastavení celé
 Organizace (třeba povolení Composia nebo firemní aplikace Google

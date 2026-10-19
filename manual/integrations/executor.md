@@ -176,6 +176,9 @@ servisní přístup ji při potížích otevře v prohlížeči Environmentu na
   není, připojí ji jen na výslovný pokyn člověka postupem výše.
 - Vlastní MCP server přidat jen na výslovný pokyn člověka, vždy do
   Executoru Environmentu, ne jen do svého nástroje.
+- Integrační službu Služeb serveru (root 0209, dodatek z 2026-10-19 večer
+  (e)) nepřidávat ani neodebírat: Admin ji povoluje v Deployment Repu a v
+  povoleném Prostředí se v Integracích ukáže sama.
 - Navenek viditelný zápis udělat jen na pokyn Operátora.
 - Kde Executor neběží, nainstalovat ho na pokyn operátora podle tohoto
   runbooku.

@@ -63,9 +63,10 @@ nepatří.
 
 ## Cílová hranice bridge
 
-Bridge běží jednou na serveru Organizace jako služba Služeb serveru (root
-rozhodnutí 0209 a jeho dodatky z 2026-10-19): kontejner s limity a vlastním
-credentialem v custody Služeb serveru, do kterých vstupují jen Owneři a Admini
+Bridge běží jako služba Služeb serveru (root rozhodnutí 0209 a jeho dodatky
+z 2026-10-19): v každých Službách serveru, jejichž Prostředí ho mají
+povolené, právě jedna nasazená instance ze stejného repozitáře a pinu.
+Instance je kontejner s limity a credentialem v custody Služeb serveru, do kterých vstupují jen Owneři a Admini
 Organizace. Agenti v ostatních Prostředích téhož serveru na něj dosáhnou po
 vnitřní síti serveru, jen když jim to povolí Deployment Repo Organizace;
 povolené Prostředí ho uvidí v Integracích jako MCP server bez ručního
@@ -137,8 +138,9 @@ Aktivace pro Prostředí je povolení v Deployment Repu, ne kopie credentialu.
 
 ## Rollout gate
 
-Širší onboarding je povolený až po metadata-only testu dvou povolených
-Prostředí:
+Širší onboarding na serveru je povolený až po metadata-only testu dvou
+povolených Prostředí téhož serveru; rozšíření bridge na další server
+Organizace projde stejnou branou se dvěma Prostředími toho serveru:
 
 1. obě volají stejný exact pin bridge a tool schema;
 2. nad jedním schváleným read-only cílem vrátí stejný normalizovaný výsledek;
@@ -147,7 +149,8 @@ Prostředí:
 5. restart bridge a Služeb serveru zachová funkční konfiguraci bez přenosu
    secretů;
 6. rotace nebo incidentní odebrání credentialu bridge má jmenovaného ownera a
-   ověřený postup.
+   ověřený postup; když ESO9 nevydá samostatnou identitu pro každou instanci,
+   sdílejí instance jeden credential a jeho revokace zastaví všechny.
 
 ## Write lane
 

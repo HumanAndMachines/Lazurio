@@ -28,6 +28,14 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
   operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč (v Týmovém
   Prostředí týmový účet Composia, nikdy osobní); žádný
   projekt ani klíč Composia se na mašinu nezakládá a nekopíruje.
+- **Integrační služba Služeb serveru není vlastní napojení.** Služba, kterou
+  Organizace provozuje ve Službách serveru (root 0209, dodatek z
+  2026-10-19 večer), například MCP brána k firemnímu systému, má jediný
+  credential v custody Služeb serveru. Admin ji povoluje Prostředím téhož
+  serveru v Deployment Repu; povolené Prostředí drží jen svůj token a
+  služba se v něm ukáže v Integracích sama. Agent ji nepřidává, neodebírá
+  ani k ní nikoho nepřihlašuje. Vlastní MCP servery a přihlášení operátora
+  se řídí tímto pravidlem beze změny.
 - **Executor brokerem není.** Běží v každém Environmentu jako jeho služba
   a tokeny MCP serverů drží v Environmentu (decision 0162, dodatek
   z 2026-10-09; runbook [integrations/executor.md](integrations/executor.md)).
