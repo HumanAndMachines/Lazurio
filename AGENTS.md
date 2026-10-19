@@ -795,8 +795,9 @@ znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
 Integrace** (dodatek 0162 z 2026-10-09) a každá má právě jednu cestu:
 nástrojem z Nastavení Launchpadu → Nástroje (`gh`, `wacli`…), přímo přes
 Executor 1, povinnou službu každého Environmentu, jejíž přístupy zůstávají
-v Environmentu, nebo přes Composio s vlastním účtem člověka, pokud ho
-Organizace (na osobním Environmentu člověk) povolila. Při práci použij
+v Environmentu, nebo přes Composio s vlastním účtem člověka (v Týmovém
+Prostředí s týmovým účtem Composia), pokud ho Organizace (na osobním
+Environmentu člověk) povolila. Při práci použij
 Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
 Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
 člověka: pošli mu odkaz na její kartu v Apps → Integrace. Dokud stránka

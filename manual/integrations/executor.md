@@ -24,7 +24,8 @@ z 2026-10-09.
   potřebuje jiné přístupy, zakládá další Environment.
 - Každá Integrace má v Environmentu jednu cestu: nástrojem z Nastavení →
   Nástroje, přímo přes Executor, nebo přes Composio s vlastním účtem
-  člověka ([composio.md](composio.md)), pokud je povolené. Agent ji použije
+  člověka, v Týmovém Prostředí s týmovým účtem Composia
+  ([composio.md](composio.md)), pokud je povolené. Agent ji použije
   v pořadí nástroj aplikace, Executor, Composio.
 - Firemní aplikace Google Workspace a Microsoft 365 nastavuje Admin
   v Dashboardu s agentem; do Executoru každého Environmentu se dostanou

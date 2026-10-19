@@ -25,7 +25,8 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
   strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
   decision 0162 a sekce [Composio jako volitelný nástroj](#composio-jako-volitelný-nástroj):
-  operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč; žádný
+  operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč (v Týmovém
+  Prostředí týmový účet Composia, nikdy osobní); žádný
   projekt ani klíč Composia se na mašinu nezakládá a nekopíruje.
 - **Executor brokerem není.** Běží v každém Environmentu jako jeho služba
   a tokeny MCP serverů drží v Environmentu (decision 0162, dodatek
@@ -76,7 +77,7 @@ Environmentu:
    pro agenty se shell přístupem rovnocenná a často jednodušší cesta;
    credentials drží CLI lokálně stejně jako MCP server.
 3. **Composio** — snadná cesta s vlastním účtem člověka podle decision
-   0162, když oficiální MCP ani CLI poskytovatele neexistuje nebo nevyhovuje
+   0162 (v Týmovém Prostředí s týmovým účtem Composia, nikdy osobním), když oficiální MCP ani CLI poskytovatele neexistuje nebo nevyhovuje
    a Composio je povolené: na pracovním Environmentu nastavením Organizace
    (decision 0194), na osobním Environmentu člověkem. Kurátorovaný katalog Organizace je doporučení cesty pro
    danou aplikaci; poslední slovo má operátor Environmentu.
@@ -107,7 +108,7 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Pravidlo | Znění |
 | --- | --- |
 | Kdo rozhoduje | Operátor. Napojení je volitelné a nic se centrálně nevynucuje. |
-| Cesty | Každá Integrace má právě jednu cestu: nástrojem z výběru Launchpadu (`gh` je povinný, ne volitelný), přímo přes Executor (povinná služba každého Environmentu), nebo přes Composio s vlastním účtem, pokud je povolené. |
+| Cesty | Každá Integrace má právě jednu cestu: nástrojem z výběru Launchpadu (`gh` je povinný, ne volitelný), přímo přes Executor (povinná služba každého Environmentu), nebo přes Composio s vlastním účtem (v Týmovém Prostředí s týmovým účtem Composia), pokud je povolené. |
 | Přihlášení Composia | Přes prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje. Agenti používají příkazovou řádku `composio`. |
 | Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení. Člověk má výchozí jeden účet Composia a v něm vlastní organizaci pro každou Organizaci se stejným jménem, do které nikoho nezve; Environment Organizace pracuje v té její, osobní Environment ve výchozí. Potřebuje-li jiné Prostředí téže Organizace jiné přihlašovací údaje, přihlásí se v něm samostatným účtem Composia; Týmové Prostředí se přihlašuje týmovým účtem Composia, nikdy osobním (dodatky 0162 z 2026-10-13, 2026-10-17 a 2026-10-19, [composio.md](integrations/composio.md)). |
 | Oddělení kontextů | Nový Environment, tedy nová mašina s vlastními přihlášeními. |
