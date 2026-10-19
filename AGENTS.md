@@ -795,8 +795,9 @@ znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
 Integrace** (dodatek 0162 z 2026-10-09) a každá má právě jednu cestu:
 nástrojem z Nastavení Launchpadu → Nástroje (`gh`, `wacli`…), přímo přes
 Executor 1, povinnou službu každého Environmentu, jejíž přístupy zůstávají
-v Environmentu, nebo přes Composio s vlastním účtem člověka, pokud ho
-Organizace (na osobním Environmentu člověk) povolila. Při práci použij
+v Environmentu, nebo přes Composio s vlastním účtem člověka (v Týmovém
+Prostředí s týmovým účtem Composia), pokud ho Organizace (na osobním
+Environmentu člověk) povolila. Při práci použij
 Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
 Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
 člověka: pošli mu odkaz na její kartu v Apps → Integrace. Dokud stránka
@@ -823,7 +824,8 @@ Mašině jde samostatně odhlásit. Kde přihlášení patří účtu a ne Maši
 Člověk má výchozí jeden účet Composia a v něm vlastní organizaci pro každou
 Organizaci se stejným jménem, do které nikoho nezve; Environment Organizace
 pracuje v té její. Prostředí téže Organizace s jinými přihlašovacími údaji se
-přihlásí samostatným účtem Composia (dodatky 0162 z 2026-10-13 a 2026-10-17). Integrace sdílené celou Organizací drží její tracked
+přihlásí samostatným účtem Composia; Týmové Prostředí týmovým účtem Composia,
+nikdy osobním (dodatky 0162 z 2026-10-13, 2026-10-17 a 2026-10-19). Integrace sdílené celou Organizací drží její tracked
 katalog (jen jména env proměnných, nikdy hodnoty); nástroj povolený jen
 operátorem na jeho Environmentu se do katalogu nezapisuje; osobní integrace
 patří do personalspace scope. Postup a standard:

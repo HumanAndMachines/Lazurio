@@ -2,7 +2,8 @@
 
 Stav k 2026-10-09: Composio je jedna ze tří cest Integrací (rozhodnutí 0162,
 dodatek z 2026-10-09). Připojí jedním klikem mnoho aplikací, ale jde přes
-server Composia a s vlastním účtem člověka. Zapíná se a přihlašuje
+server Composia a s vlastním účtem člověka; v Týmovém Prostředí s týmovým
+účtem Composia, nikdy osobním (dodatek 0162 z 2026-10-19). Zapíná se a přihlašuje
 v Nastavení Launchpadu → Nástroje (sekce vydaná v LazurioPlatform 0.1.8).
 Přímou cestu z Environmentu drží Executor 1 ([executor.md](executor.md)).
 Tento runbook popisuje model Composia.
@@ -12,7 +13,8 @@ Tento runbook popisuje model Composia.
 - O napojení rozhoduje operátor Environmentu. Je volitelné a nic se centrálně
   nevynucuje.
 - Operátor Composio povolí v Nastavení Launchpadu a přihlásí svůj účet přes
-  prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje.
+  prohlížeč, stejně jako `gh`; v Týmovém Prostředí přihlásí týmový účet
+  Composia, nikdy osobní. API klíč se nikdy nekopíruje.
 - Agenti používají příkazovou řádku `composio`. Její aktivace se propíše do
   instrukcí Lazurio Folderu té mašiny.
 - Aplikaci operátor připojí odkazem, který mu vrátí Launchpad nebo agent, a
@@ -25,7 +27,8 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 
 - Každý člověk má výchozí jeden svůj účet Composia, přihlášený přes GitHub.
   Další účet si založí, jen když jiné Prostředí potřebuje jiné přihlašovací
-  údaje (viz níže).
+  údaje (viz níže). Týmové Prostředí má vlastní týmový účet Composia, nikdy
+  osobní účet některého člověka.
 - V něm má pro každou Organizaci Lazuria jednu vlastní organizaci se stejným
   jménem, ve které nikdo jiný není, a výchozí organizaci, kterou Composio
   založilo při registraci.
@@ -105,6 +108,10 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
+- V Týmovém Prostředí se do Composia přihlašuje týmový účet Composia, nikdy
+  osobní účet některého člověka: co se v něm připojí, používá každý z Teamu.
+  Je to samostatný účet a jeho organizace nese jméno Organizace stejně jako
+  v osobním účtu (dodatek 0162 z 2026-10-19).
 
 ## Co agent smí
 
