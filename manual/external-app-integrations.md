@@ -55,6 +55,37 @@ zvolit nástroj správné Organizace, technickou hranici mezi Organizacemi ale
 netvoří. U cest, kde přihlášení patří účtu a ne mašině (Composio), platí
 doporučení „účet Environmentu“ ze sekce níže.
 
+## Ochrana účtů při práci s externími platformami
+
+Platí pro všechny Organizace, osobní úkoly, Task Agenty i Buddyho.
+Povolení ověř před zahájením workflow a znovu při změně akce, rozsahu
+nebo způsobu ovládání. Zaznamenej odkaz na oficiální pravidla a datum
+ověření do pracovního Draftu; neveřejný kontext účtu zůstává v jeho scope.
+
+- Před automatizovaným publikováním, zprávami, reakcemi, lajky, follows nebo
+  jinými opakovanými akcemi ověř aktuální oficiální pravidla konkrétní
+  platformy pro danou akci i způsob ovládání (API, integrace, prohlížeč).
+  Přihlášení, dostupný nástroj ani souhlas člověka s obsahem nedokazují, že
+  platforma tento způsob automatizace dovoluje.
+- Zakázanou automatizaci neprováděj. Je-li povolení nejasné nebo chybí
+  požadovaný souhlas platformy, připrav pouze koncepty a předej člověku
+  ruční provedení. Před dovolenou, ale rizikovou akcí vysvětli konkrétní
+  riziko omezení, ztráty dosahu či pozastavení účtu a vyžádej scoped souhlas.
+- Nespouštěj hromadné engagement akce nebo dávky podobných odpovědí bez
+  tohoto ověření. Nevymýšlej „bezpečný“ počet nebo tempo a nenapodobuj
+  člověka změnami časování za účelem obcházení detekce.
+- Při rate limitu, varování, ověřovací výzvě, vracení změn nebo opakovaném
+  selhávání zápisů dotčené akce zastav. Ověř skutečný stav a případné
+  duplicity; nepokračuj opakovanými zápisy, jiným účtem, relací, IP ani
+  nástrojem za účelem obejití omezení. Samotné zaseknuté načítání neoznačuj
+  za prokázaný ban. Člověku řekni, co je potvrzené, co je nejisté a co
+  zůstalo neodeslané.
+- Na X bez doložené změny jeho pravidel neautomatizuj lajkování ani
+  skriptované publikování přes web; AI reply bot vyžaduje předchozí
+  výslovné písemné schválení X. Výchozí postup je připravit texty,
+  které člověk sám odešle. Pravidla:
+  https://help.x.com/en/rules-and-policies/x-automation
+
 ## Žebříček výběru integrace
 
 **Integrace a pořadí při práci (decision 0162, dodatek z 2026-10-09).**
@@ -94,7 +125,8 @@ Environmentu:
    není „oficiální integrace" jen proto, že obsluhuje známou službu. MCP
    server patří do Executoru Environmentu.
 5. **Browser fallback** — čtení/obsluha webu agentem v browseru pod přímým
-   dohledem Operátora, když MCP/CLI cesta neexistuje.
+   dohledem Operátora, když MCP/CLI cesta neexistuje a pravidla platformy
+   tento způsob i konkrétní akci dovolují (viz Ochrana účtů výše).
 
 **Zakázané v každém kroku:** servery postavené na scraping/cookie-session
 přístupu (reuse browser session tokenů, obcházení bot detekce) — porušují
@@ -102,7 +134,9 @@ ToS poskytovatele a riskují ban účtu Organizace; sdílené brokery jiné než
 Composio podle decision 0162; kopírování klíčů a tokenů do chatu, Gitu nebo
 logu; zřizování nových konektorů v cloud UI účtu.
 
-**Když žádná MCP/CLI cesta neexistuje:** použij browser fallback, případně
+**Když žádná MCP/CLI cesta neexistuje:** použij pouze platformou dovolený
+browser fallback; pokud povolení chybí, předej Draft člověku k ručnímu
+provedení. Případně použij
 existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/PR
 živého standardu — nový konektor sám neinstaluj; jeho zřízení je vědomé
 rozhodnutí Operátora, ne automatický fallback agenta.
