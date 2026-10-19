@@ -42,10 +42,11 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
-     Výjimkami jsou grant na port proxy AI poolu vlastní Organizace
-     (0181), ze kterého SSH ani jiný port neplyne, a servisní SSH
-     z jmenovaného Pracovního Prostředí Ownera nebo Admina do Pracovních
-     a Týmových Prostředí členů téže Organizace (0202).
+     Výjimkou je servisní SSH z jmenovaného Pracovního Prostředí Ownera
+     nebo Admina do Pracovních a Týmových Prostředí členů téže Organizace
+     (0202). Ke službám servisní Mašiny svého serveru (AI pool a další)
+     jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
+     Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
@@ -56,8 +57,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
    nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
    Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
-   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM
-   (kromě portu proxy AI poolu své Organizace, 0181). Pracovní zóna nemá hranu
+   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM;
+   ke službám servisní Mašiny svého serveru, které jí Deployment Repo povolí,
+   jde po vnitřní síti serveru, ne přes Headscale (0209). Pracovní zóna nemá hranu
    z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
