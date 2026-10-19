@@ -105,6 +105,10 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
+- V Týmovém Prostředí se do Composia přihlašuje týmový účet Composia, nikdy
+  osobní účet některého člověka: co se v něm připojí, používá každý z Teamu.
+  Je to samostatný účet a jeho organizace nese jméno Organizace stejně jako
+  v osobním účtu (dodatek 0162 z 2026-10-19).
 
 ## Co agent smí
 
