@@ -268,8 +268,10 @@ Bot pracuje jako vlákno T3 Code (0191 body 34 a 41–43, Matěj 2026-10-19):
 - **žádný vlastní prohlížeč, profil ani počítač:** bot pracuje v prohlížeči Environmentu přes
   `agent-browser` připojený na port 9222, se sezením `bot-<id>` (prefix `bot-` je vyhrazený
   MausBotu, C2);
-- **lišta bota** drží karty, které bot otevřel nebo ukazuje; smazání nebo archivace bota je pustí
-  (`lazurio browser done`) a kartu ukončí hub, jako u vlákna T3 Code (0191 bod 26);
+- **lišta bota** drží karty, které bot otevřel nebo ukazuje, v souboru držitele `bot-<id>.json`, který
+  zapisuje server MausBotu; smazání nebo archivace bota karty z něj odebere (nebo soubor smaže) a
+  ukončí sezení `agent-browser` bota, aby karty nedržel jeho démon, a zbytek dořeší hub, jako u
+  vlákna T3 Code (0191 bod 26, pravidlo „Pouští, co skončilo“ výše);
 - **pravý panel MausBotu** ukazuje karty lišty bota přes pohled Platformy (`…/t/<id>`) a Novou kartu
   stejně jako T3 Code; MausBot k tomu převezme smluvní modul Platformy jako T3 Code (úkol
   2026-10-05-510);
