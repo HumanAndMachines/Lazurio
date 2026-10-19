@@ -53,8 +53,11 @@ texty v aplikaci), místo, ve kterém člověk pracuje, česky pojmenuje
 Prostředí“). Lidem se ukazují jen tři druhy: **Osobní**, **Pracovní** a
 **Týmové Prostředí**; o konkrétním Prostředí piš vždy s druhem podle
 kontextu („toto Pracovní Prostředí“), holé „Prostředí“ jen obecně.
-Automatizované Prostředí je lidem Pracovní Prostředí s automatizacemi a
-vlastní počítač člověka druh nemá, je to „váš počítač“. Produkt a postavička
+Prostředí s nastavenými automatizacemi je obyčejné Pracovní Prostředí, ve
+kterém může pracovat i člověk; pojem Automatizované Prostředí nepoužívej.
+Potřebuje-li takové Prostředí jméno, jmenuje se **Henry** (třeba `henry-01`;
+decision 0170 s dodatkem z 2026-10-19). Vlastní počítač člověka druh nemá,
+je to „váš počítač“. Produkt a postavička
 osobního zástupce se jmenují **Buddy** a obsah Osobního Prostředí je
 **Osobní Workspace** (decision 0207 s dodatkem z 2026-10-18). Hostované Prostředí česky vlastní jméno nemá; kde je
 potřeba ho odlišit, je to „Prostředí na serveru“, nikdy „Remote Environment“
@@ -179,7 +182,7 @@ frameworku a k práci v Lazuriu nejsou potřeba.
   týmovém Remote Environmentu právě připojený oprávněný uživatel (cílově
   podle vstupního grantu, i bez GitHubu; do nasazení grantů Authu člen
   GitHub Teamu Environmentu) a na
-  Automatizovaném Environmentu odpovědný Owner nebo Admin Organizace
+  Environmentu Henry odpovědný Owner nebo Admin Organizace
   (decisions 0175/0192). Provozovatel hostingu, který Remote Environment dodává,
   je jiná role.
 - **Kolega** — člověk v Organizaci. Pravomoce má podle svých rolí
@@ -199,7 +202,7 @@ frameworku a k práci v Lazuriu nejsou potřeba.
 
 Pojem **AI Kolega** (AI s vlastním seatem a pravomocemi jako člověk) je
 deprecated (decisions 0156/0169): automatizovanou práci pro Organizaci nese
-Automatizovaný Environment persony s odpovědným Operátorem, ne další seat.
+Environment Henry s personou a odpovědným Operátorem, ne další seat.
 Persona není Operátor, identita ani pravomoc. Existující seaty a GitHub účty
 fungují beze změny; nové texty pojem AI Kolega nezavádějí.
 
@@ -373,7 +376,7 @@ a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší
 ## Design System je společný základ Organizace
 
 Každý aktivní člen Organizace má mít přístup ke čtení jejího Design Systemu,
-včetně účtů jejích Automatizovaných Environmentů. Platí to pro všechny
+včetně účtů jejích Environmentů Henry. Platí to pro všechny
 Teamy a pro organizační i produktové Design Systemy, které Organizace vlastní.
 Při založení, vyčlenění do samostatného repozitáře, onboardingu člena i
 instalaci Environmentu ověř skutečnou dostupnost. Admin zajistí alespoň
