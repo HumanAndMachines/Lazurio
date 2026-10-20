@@ -41,10 +41,10 @@ try {
 function parseArgs(argv) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
     console.log([
-      "bun resident/updater.mjs install --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile workspace [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
-      "bun resident/updater.mjs update  --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile workspace [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
-      "bun resident/updater.mjs rollback --install-root PATH --profile workspace [--to ARTIFACT_ID]",
-      "bun resident/updater.mjs status --install-root PATH [--profile workspace]",
+      "bun distribution/runtime/updater.mjs install --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile workspace [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
+      "bun distribution/runtime/updater.mjs update  --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile workspace [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
+      "bun distribution/runtime/updater.mjs rollback --install-root PATH --profile workspace [--to ARTIFACT_ID]",
+      "bun distribution/runtime/updater.mjs status --install-root PATH [--profile workspace]",
     ].join("\n"));
     process.exit(0);
   }
