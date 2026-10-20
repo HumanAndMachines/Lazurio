@@ -7,6 +7,11 @@ const MODULE_SLOT = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$
 // never values. The Launchpad injects each as LAZURIO_RUNTIME_SECRET_<NAME>
 // from the Environment vault.
 const SECRET_NAME = /^[A-Z][A-Z0-9_]*$/;
+// The built version of a static App (decision 0195 point 19, Module
+// Standard 4.5, LazurioPlatform F58): a relative directory of the App's
+// package, each segment safe, at most 200 characters.
+const BUILD_OUTPUT_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const STATIC_FALLBACKS = new Set(["404", "spa"]);
 const SURFACES = new Set(["internal", "manual", "admin", "public-preview"]);
 const PROTOCOLS = new Set(["http", "https", "tcp"]);
 const RUNTIME_KEYS = new Set([
@@ -19,6 +24,8 @@ const RUNTIME_KEYS = new Set([
   "dev_script",
   "preview_script",
   "build_script",
+  "build_output",
+  "static_fallback",
   "required_module_slots",
   "plugin",
   "icon",
@@ -241,7 +248,42 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
   if (entrypoint && !["http", "https"].includes(entrypoint.protocol)) {
     issues.push(`${label}.listeners entrypoint musí používat http nebo https`);
   }
+  validateBuiltVersion(runtime, packageJson, label, issues);
   return issues;
+}
+
+// Module Standard 4.5: what a static App declares to open from main as its
+// build. The Platform serves the output itself, so the App has one HTTP
+// listener, no secrets, and a build script.
+function validateBuiltVersion(runtime, packageJson, label, issues) {
+  if (runtime.build_output === undefined) {
+    if (runtime.static_fallback !== undefined) {
+      issues.push(`${label}.static_fallback smí být jen spolu s build_output`);
+    }
+    return;
+  }
+  const output = runtime.build_output;
+  if (
+    typeof output !== "string"
+    || output.length === 0
+    || output.length > 200
+    || !output.split("/").every((segment) => BUILD_OUTPUT_SEGMENT.test(segment))
+  ) {
+    issues.push(`${label}.build_output musí být relativní adresář balíčku App (segmenty [A-Za-z0-9_][A-Za-z0-9._-]*, nejvýše 200 znaků)`);
+  }
+  if (runtime.static_fallback !== undefined && !STATIC_FALLBACKS.has(runtime.static_fallback)) {
+    issues.push(`${label}.static_fallback musí být "404" nebo "spa"`);
+  }
+  if (typeof runtime.build_script !== "string" || !packageJson?.scripts?.[runtime.build_script]) {
+    issues.push(`${label}.build_output vyžaduje build_script, který existuje v scripts`);
+  }
+  const listeners = Array.isArray(runtime.listeners) ? runtime.listeners : [];
+  if (listeners.length !== 1 || listeners[0]?.protocol !== "http" || listeners[0]?.health?.kind !== "http") {
+    issues.push(`${label}.build_output vyžaduje právě jeden listener s protocol http a health kind http`);
+  }
+  for (const key of ["secrets", "optional_secrets"]) {
+    if (runtime[key] !== undefined) issues.push(`${label}.build_output nedovoluje ${key}`);
+  }
 }
 
 function validateInjectedScript(command, label, issues) {

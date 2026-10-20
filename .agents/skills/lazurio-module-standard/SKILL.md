@@ -172,8 +172,13 @@ ani pro productionspace repa (decision 0041).
       `dist`) a u SPA `static_fallback: "spa"`. Musí mít `build_script`,
       právě jeden HTTP listener s HTTP health a žádné `secrets`; konfigurace
       čte listener jen při servírování (`dev`, `preview`), nikdy při
-      `build`. Ověř, že sestavení projde bez listeneru a že health cesta je
-      ve výstupu soubor se stavem 200. App s API ve vývojovém serveru
+      `build`; statické sestavení přesuň z `prepare_script` do
+      `build_script`, aby neběželo dvakrát. Ověř, že sestavení projde bez
+      listeneru a že health cesta je ve výstupu přímo soubor se stavem 200
+      (cesta končící `/` na svůj `index.html`). Konformance rootu tato pole zná
+      od commitu s kapitolou 4.5 (dřívější `lazurio module setup` je odmítne
+      jako nepovolená) a Launchpad je čte od vydání Platformy s F58; převod
+      Modulu proto mergni až po obojím. App s API ve vývojovém serveru
       (Vite pluginy) nebo vlastním Bun serverem `build_output` nedeklaruje;
       v PR uveď, že čeká na druhou fázi (`start_script`).
 2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom

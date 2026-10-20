@@ -100,6 +100,10 @@ Konvence: `prepare:app` a `check:prepared`.
 - `prepare_script` dělá **všechno**, co start nesmí: build klienta, generování
   dat, `ensure` symlinků, migrace repository-db, stažení WASI bindings…
   Musí být idempotentní a bez síťového volání mimo instalaci závislostí.
+  Výjimkou je App s `build_output` (kap. 4.5): její statické sestavení je
+  jen v `build_script` a `prepare_script` dělá jen to, co potřebuje vývojový
+  server i sestavení (například `astro sync`), nikdy sestavení samotné, jinak
+  by běželo dvakrát.
 - `check_script` je read-only: vrátí 0, když je App připravená, jinak nenulu.
   Launchpad ho volá před startem; selhání znamená „připrav", ne „spusť".
 - Instalace závislostí (`bun install --frozen-lockfile` z lockfilu vedle
@@ -345,10 +349,12 @@ Kdo deklaruje `build_output`, splňuje zároveň:
    `astro.config.ts` Knowledgebase referenční Organizace. Konfigurace, která
    listener při sestavení potřebuje, skončí nálezem `build-script-failed`.
 5. Po sestavení je `build_output` adresář a cesta health entrypointu se
-   v něm vyřeší na soubor se stavem 200 (přesný soubor, `<cesta>.html`, pak
-   `<cesta>/index.html`; cesta končící `/` je její `index.html`). Přesměrování
-   ani stránka 404 se nepočítají a takové sestavení se nepoužije
-   (`build-output-unservable`).
+   v něm vyřeší přímo na soubor se stavem 200: cesta bez koncového `/` na
+   přesný soubor nebo `<cesta>.html`, cesta končící `/` na svůj
+   `index.html`. Cesta bez koncového `/`, která vede jen na adresář
+   s `index.html`, by odpověděla přesměrováním, a tak neprojde, stejně jako
+   stránka 404 (kap. 4.4: health vrací 200 bez přesměrování). Takové
+   sestavení se nepoužije (`build-output-unservable`).
 
 Sestavení spouští Launchpad jako `bun --no-env-file run <build_script>`
 v adresáři balíčku App, po běžné přípravě (kap. 3), s uzavřeným prostředím
