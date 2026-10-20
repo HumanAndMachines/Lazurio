@@ -102,7 +102,8 @@ autoritu.
    práce. Po prvním pushi branch hned otevři PR proti správné base branchi
    jako GitHub Draft PR. Pokud Operátor výslovně zakázal PR otevřít,
    nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
-   koncem práce si vyžádej rozhodnutí: Draft zahodit, nebo PR povolit —
+   koncem práce si nástrojem na otázky vyžádej rozhodnutí: Draft zahodit,
+   nebo PR povolit —
    samotná remote branch bez PR není přípustná náhrada.
    Jakmile je práce hotová a ověřená, přepni PR na Ready for review
    sám, ještě před handoffem — Ready není Publikace, říká jen „připraveno
@@ -120,20 +121,24 @@ autoritu.
    něm pokládej otázku na Publikaci.
 12. Handoff veď průvodcovsky (decisions 0103/0112): závěrečná zpráva začíná
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
-   shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
-   standardizovanou dvojotázkou „Mám změny Publikovat vaším jménem? Nebo mám
-   požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Operátora. Na týmovém Environmentu místo dvojotázky
-   polož otázku „Komu mám říct, aby tyhle změny publikoval?", nikdy
-   nemerguj (ani na „Publikuj") a pokračuj předáním níže (decision 0148,
-   dodatek z 2026-10-05). Před otázkou zjisti
+   shrnutí, ověření, odkaz na aplikaci běžící z worktree), který zůstává
+   textem zprávy. Pod ním polož nástrojem na otázky (decision 0211)
+   standardizovanou dvojotázku „Mám změny Publikovat vaším jménem? Nebo mám
+   požádat jiného Kolegu o kontrolu a Publikaci?" — obě volby vždy nabídni,
+   žádnou neoznačuj jako doporučenou a nedomýšlej volbu za Operátora. Na
+   týmovém Environmentu místo dvojotázky polož stejně nástrojem otázku
+   „Komu mám říct, aby tyhle změny publikoval?", nikdy nemerguj (ani na
+   „Publikuj") a pokračuj předáním níže (decision 0148, dodatek
+   z 2026-10-05). Bez nástroje na otázky se zeptej textem s očíslovanými
+   volbami a napiš, že čekáš na odpověď. Před otázkou zjisti
    živá GitHub práva Operátora a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
    `gh repo view <owner>/<repo> --json
    rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed`,
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
-   Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
+   Když Operátor v threadu zvolí Publikaci (v nástroji na otázky nebo
+   explicitním „Publikuj"), PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
    `AGENTS.md` nedeklaruje jinak; synchronizaci šablony slučuj merge commitem
    až po ověření `git merge-base --is-ancestor <commit šablony> <head>` a
@@ -156,7 +161,7 @@ autoritu.
    nebo ji předá dalšímu oprávněnému assignee s konkrétním stavem. Assignment
    nevytváří GitHub práva ani neobchází review a branch rules. Samostatný
    Release, infra apply a změny přístupů mají vlastní podmínky.
-   Pokud Operátor nikoho neurčil, požádej ho o volbu
+   Pokud Operátor nikoho neurčil, polož mu volbu nástrojem na otázky
    — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
    rozhodující osobu určuje politika repa. Předej Operátorovi, kdo teď
    dotažení vlastní. Merge neobcházej ani na

@@ -45,6 +45,8 @@ náhradu review v jedné Organizaci se Steward seatem.
 - Operátor před startem rozhodl sporné skupiny: legacy repa (např. staré
   dependabot fronty), cizí Drafty, productionspace repa s vlastním branch
   modelem, Windows testovací Mašina.
+- Chybí-li mandát nebo některé z těchto rozhodnutí, polož je před startem
+  nástrojem na otázky (decision 0211).
 
 ## Postup
 

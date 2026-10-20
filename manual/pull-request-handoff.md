@@ -15,6 +15,10 @@ Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
 (například s rolí Triage) nestačí; samotný název persony práva nedokládá.
 Odpovědný Owner/Admin může předání provést v rámci svých práv také.
 
+Předání Operátor obvykle volí v handoffu: dvojotázku z 0103 i výběr Kolegy
+mu Agent klade nástrojem na otázky (0211). Persona bez člověka v relaci
+nástroj nepoužívá a otázku předá ve svém výstupu tomu, kdo jí práci zadal.
+
 Příjemce vyřeší skutečné vady, připomínky, CI a integrační konflikty
 v rozsahu PR. Po potřebném nezávislém review a zelených kontrolách mergne
 metodou povolenou repozitářem. Pokud práci potřebuje převzít někdo jiný,
