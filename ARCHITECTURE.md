@@ -9,7 +9,11 @@
 > implementace k migraci; nejde o okamžitou změnu runtime.
 
 
-> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+> **Buddy v Osobním Prostředí (decision 0210).** Buddy je Hermes Agent, který
+> běží v Osobním Prostředí svého člověka. Samostatný hostovaný Buddy na
+> dedikované VPS, Resident distribuce Buddyho a Zulip skončily; dosavadní
+> hostované instalace se do své migrace řídí pravidly svého hostu. Pravidla pro
+> agenty drží [manuál Buddyho](manual/buddy.md).
 
 
 Tento dokument je krátká mapa cílového systému. Popisuje jeho hlavní části,
@@ -51,7 +55,7 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | --- | --- |
 | **Owner** | Člověk nebo Organizace, která vlastní Mašinu, její data, přístupy a poslední cestu obnovy. |
 | **Machine (Mašina)** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který Lazurio chápe jako jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to třída hardwaru ani registrovaná identita. |
-| **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
+| **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Dnes je jí Buddy, který běží v Osobním Prostředí svého člověka (decision 0210). |
 | **Task Agent** | Dočasná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
 | **Personalspace** | Privátní prostor právě jednoho člověka a jeho případného Buddyho. |
@@ -95,8 +99,9 @@ prázdného startupu a odpovědností drží
 ### 1. Jedna Mašina je jedna bezpečnostní hranice
 
 Mašinu určuje společný podporovaný rozsah dopadu, lokální runtime stav a cesta
-obnovy, ne počet fyzických serverů. Lokální workstation, dedikovaný Buddy VPS
-a celý Hosted Team Workspace proto mohou být třemi konkrétními druhy Mašiny.
+obnovy, ne počet fyzických serverů. Lokální workstation, osobní hostovaná
+Mašina a celý Hosted Team Workspace proto mohou být třemi konkrétními druhy
+Mašiny.
 Samotný proces, Modul, aplikace, worktree, browser, Unixový účet nebo libovolný
 kontejner Mašinou nejsou.
 
@@ -119,11 +124,11 @@ může ovlivnit všechny Workspaces na hostu. Izolace sourozeneckých Teamů pro
 není tvrzením, že jsou izolované od oprávněného host operatora nebo provideru.
 
 V komunikaci vždy používej konkrétní druh hranice: například „lokální Mašina
-Kolegy“, „Buddy VPS“, „Hosted Team Workspace Mašina“ nebo „Organization Host
-Mašina“. „Team Machine“ je nanejvýš hovorová zkratka pro Hosted Team Workspace,
-ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr ani
-vlastní IAM; konkrétní hranici dokazují její podporovaný profil a
-infrastruktura daného Ownera a provideru. Jediný lokální popis identity je
+Kolegy“, „osobní hostovaná Mašina“, „Hosted Team Workspace Mašina“ nebo
+„Organization Host Mašina“. „Team Machine“ je nanejvýš hovorová zkratka pro
+Hosted Team Workspace, ne další systémový objekt. Lazurio pro Mašiny nezavádí
+centrální registr ani vlastní IAM; konkrétní hranici dokazují její
+podporovaný profil a infrastruktura daného Ownera a provideru. Jediný lokální popis identity je
 `lazurio.machine.json` (decision 0144): owner-bound soubor zapsaný při
 handoveru z desired state v Deployment Repu Ownera, který uvnitř Mašiny jen
 jmenuje Mašinu, Ownera a vyšší hranici. Není to registr, manifest s
@@ -167,10 +172,12 @@ přístupy u poskytovatelů.
 
 ## Buddy a AI Kolega
 
-Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu, své Osobní Prostředí. Buddy běží přímo v ní a funguje v jejím rámci (decision 0210); žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
-Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
-mandátem a správou dat, ne odděleným vývojem runtime.
+Buddy a AI Kolega se liší vlastníkem, mandátem a správou dat. Buddy je od
+decision 0210 Hermes Agent v Osobním Prostředí svého člověka. AI Kolega je
+deprecated (decisions 0156/0169): automatizovanou práci Organizace nese
+Pracovní Prostředí s automatizacemi (Henry) a Lazurio MausBotem.
 
 | Vlastnost | Buddy | AI Kolega |
 | --- | --- | --- |
@@ -179,18 +186,19 @@ mandátem a správou dat, ne odděleným vývojem runtime.
 | Paměť | osobní GBrain | organizačně svěřený GBrain |
 | Síťová bezpečnostní hranice | Ownerova | organizační |
 | Přístupy | delegace Ownera | granty Organizace |
-| Technický základ | Resident runtime | stejný Resident runtime |
+| Technický základ | Hermes Agent v Osobním Prostředí | Pracovní Prostředí Organizace s Lazurio MausBotem |
 
-Buddyho smí oslovovat právě jeden člověk, jeho Owner, přes privátní komunikační
-rozhraní. Owner Mašinu vlastní a může ji měnit. Co smí běžící Agent dělat,
-omezuje sandbox agentního runtime; Lazurio vedle něj nestaví druhý sandbox.
-Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
+Buddyho oslovuje jen jeho člověk, Owner Osobního Prostředí, a jen on mu zadává
+tahy (decision 0210 body 4 a 12). Owner Mašinu vlastní a může ji měnit. Buddy
+pracuje bez sandboxu s plnými právy Osobního Prostředí jako ostatní agenti
+(decisions 0172 a 0210); hranici drží Osobní Prostředí, mandáty a to, že tahy
+zadává jen jeho člověk.
 
-Podrobný profil, instalaci a incidentní hranice popisuje
-[manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
-hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
+Pravidla pro práci s Buddym, jeho profilem a pamětí drží
+[manuál Buddyho](manual/buddy.md). Immutable runtime Lazuria a jeho profil
+Workspace popisuje [manuál Residentů](manual/lazurio-resident-profiles.md).
 
-**Hosted Buddy:** osobní VM lidského Operátora s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Síť, servis a vztah k dosavadní implementaci drží [synchronizační přehled, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
+**Osobní Prostředí:** osobní VM lidského Operátora, ve které běží Buddy. Drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Dosavadní hostované instalace Buddyho na dedikované VPS zůstávají do své migrace, jak jsou, a řídí se pravidly svého hostu (decision 0210 bod 1).
 
 ## Pracovní prostory
 
@@ -467,7 +475,7 @@ denní ploše nezobrazuje.
 
 Přesné rozhraní drží
 [manuál immutable runtime](manual/lazurio-runtime-install-interface.md) a
-[manuál aktualizace Residenta](manual/update-installed-resident.md). Praktický
+[manuál Residentů](manual/lazurio-resident-profiles.md). Praktický
 workstation postup pro Task Agenty drží
 [manuál Lazurio Rootu](manual/lazurio-root-for-agents.md).
 
@@ -529,7 +537,9 @@ ještě není dost jednoduchý.
   kontrakt Modulů.
 - [Manifest family](manual/lazurio-manifest-family.md) — návrh přechodu z
   generačních názvů manifestů na rodinu `lazurio.*.json`.
-- [Resident profiles](manual/lazurio-resident-profiles.md) — Buddy, AI Kolega,
+- [Buddy](manual/buddy.md) — Buddy v Osobním Prostředí, jeho profil, paměť a
+  kdo k němu smí.
+- [Resident profiles](manual/lazurio-resident-profiles.md) — profil Workspace,
   instalovaný root a provozní hranice.
 - [AGENTS.md](AGENTS.md) — pravidla spolupráce, pravomoci a publikace.
 

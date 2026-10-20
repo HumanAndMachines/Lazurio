@@ -70,7 +70,7 @@ Bun runtime `package.json#packageManager`. `setup-bun`, Install Core i Doctor
 Nesoulad pouze vrátí strojově čitelný nález a návod pro Agenta. Změna
 externího Bunu vyžaduje explicitní souhlas a standardní postup zjištěného
 instalačního mechanismu; není součástí Git-only `lazurio update`.
-Immutable Resident/Buddy artefakty mají oddělené profilové toolchain piny,
+Immutable Resident artefakty mají oddělené profilové toolchain piny,
 protože jejich upgrade a rollback patří vlastnímu artefaktovému lifecycle.
 
 Troubleshooting vývojové mašiny používá explicitní

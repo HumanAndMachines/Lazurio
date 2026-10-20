@@ -17,16 +17,16 @@ Výstupem jsou dva samostatné private repozitáře na osobním GitHub účtu:
 První je katalog a privacy kontrakt Personalspace, druhý drží pouze soukromou
 Markdown paměť. Software se instaluje z veřejného `garrytan/gbrain`.
 
-Schválený target-state pro pozdější Buddy onboarding přidává třetí private
-repo:
+Má-li vlastník Buddyho, přibude třetí private repo:
 
 ```text
 <login>/<login>-buddy
 ```
 
-Je to secret-free Hermes Profile Distribution, nikoli runtime backup nebo
-fork Hermes softwaru. Tato akční varianta je ale **PENDING `CAC-0072`** a
-současný live příkaz ji nevytváří.
+Je to secret-free Hermes Profile Distribution se `SOUL.md`, nikoli runtime
+backup nebo fork Hermes softwaru. Buddy běží v Osobním Prostředí svého člověka
+(decision 0210, [manuál Buddyho](buddy.md)); tento root příkaz Buddy repo
+nevytváří.
 
 ## Na hostované osobní Mašině
 
@@ -84,21 +84,23 @@ vědomým rozhodnutím vlastníka. Navazující přesný postup je v
 upstream
 [`INSTALL_FOR_AGENTS.md`](https://github.com/garrytan/gbrain/blob/master/INSTALL_FOR_AGENTS.md).
 
-Pro Personalspace bez Buddyho může být tato lokální aktivace záměrná. Buddy
-varianta dnes není live: parser odmítá už samotný `--with-buddy`, nevytváří
-třetí repo a negeneruje VPS handoff. Cílový `CAC-0072` kontrakt bude vyžadovat
-`buddy.runtime.github_repo: HumanAndMachines/Lazurio`,
-`buddy.runtime.deployment_target: owner-dedicated-personalspace-vps` a
-`buddy.runtime.local_execution: forbidden`; reálný cloud/DNS/access/provider
-krok zůstane explicitním human-action gatem.
+Pro Personalspace bez Buddyho může být tato lokální aktivace záměrná. Parser
+odmítá samotný `--with-buddy` a třetí repo nevytváří. Blok `buddy` podle
+decision 0210 deklaruje `buddy.runtime.deployment_target:
+owner-personal-environment` a `buddy.hermes.software_repo:
+Lazurio/hermes-agent` a nenese `buddy.runtime.github_repo` ani
+`buddy.runtime.local_execution`; jiný cíl, tato pole nebo Hermes mimo fork
+failují stejně jako v šabloně Personalspace.
 
-Doctor odděluje strukturální platnost od rollout stavu. Známé nasazené vazby
-na předchozí Buddy runtime repozitáře proto zůstávají čitelné jako migrační
-warning pod `DEV-6438`; neznámý runtime source, localhost target nebo povolené
-lokální spuštění dál failují. `buddy.slug` je stabilní osobní identita a nemusí
-kopírovat technický název private profile repozitáře. Managed Resident používá
-reviewované forky `Lazurio/hermes-agent` a `Lazurio/gbrain`; přímé upstream
-vazby jsou po dobu odděleného template rolloutu pouze známý warning.
+Doctor odděluje strukturální platnost od rollout stavu. Dosavadní hostovaný
+blok (`owner-dedicated-personalspace-vps`, `local_execution: forbidden`
+a známý `runtime.github_repo`) zůstává do migrace své instalace validní
+a Doctor ho hlásí jako deprecation warning odkazující na decision 0210;
+neúplný hostovaný blok nebo neznámý runtime source dál failují.
+`buddy.slug` je stabilní osobní identita a nemusí kopírovat technický název
+private profile repozitáře. Buddy bere Hermes Agent a gbrain z forků
+`Lazurio/hermes-agent` a `Lazurio/gbrain`; přímý upstream gbrainu je
+u Personalspace s Buddym jen warning.
 
 ## Když owner repo už existuje
 
@@ -146,9 +148,9 @@ GitHub visibility owner, gbrain a volitelného Buddy repa. Nestačí deklarace
 `private` v manifestu: public, internal, nedostupné nebo neověřitelné repo je
 hard failure. Samotná dostupnost gbrain CLI ještě neznamená aktivovaný brain.
 
-U Buddy-enabled Personalspace proveď `gbrain doctor`, Hermes config/Doctor,
-MCP a gateway smoke výhradně na dedikované VPS podle
-`personalspace/<login>_GEN3/manual/host-personalspace-with-buddy.md`.
+U Personalspace s Buddym ověřuje gbrain, Hermes a MCP Osobní Prostředí, ve
+kterém Buddy běží (decision 0210); dosavadní hostované instalace se do své
+migrace řídí pravidly svého hostu. Hranici drží [manuál Buddyho](buddy.md).
 
 Pokud gate selže, neopravuj ho přidáním submodulu ani zveřejněním repa. Oprav
 remote/visibility/mount podle diagnostiky nebo smaž pouze necommitnutý lokální

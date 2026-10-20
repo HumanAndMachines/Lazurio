@@ -1,5 +1,12 @@
 # Synchronizace dokumentace osobní Mašiny a Buddyho
 
+> **Nahrazeno rozhodnutím 0210.** Buddy je od 2026-10-19 Hermes Agent
+> v Osobním Prostředí svého člověka; samostatný hostovaný Buddy na dedikované
+> VPS, „Buddy Light“, Resident distribuce Buddyho a Zulip skončily. Platný stav
+> drží [manuál Buddyho](buddy.md) a [decision register](decision-register.md).
+> Tato stránka zůstává jen jako historie k odkazům; pravidla 0153/0154 o jediné
+> osobní Mašině a Headscale platí dál podle registru.
+
 Tato stránka je odvozený popis pro root consumery, nikoli decision record nebo roadmapa. Původní cesta souboru zůstává kvůli odkazům. Kanonická pravidla vlastní [rozhodnutí 0153/0154](decision-register.md); historické rozhodnutí 0080 se zde nepřepisuje ani nenahrazuje vlastním identifikátorem.
 
 ## Owner, Mašina a DNS
@@ -16,4 +23,4 @@ Produktové pořadí, dodací etapy a acceptance se čtou z kanonických plánů
 
 Starší VPS-only manifesty a bindingy jsou evidence dosavadních instalací. Nejsou automatickým požadavkem nové instalace ani důkazem provedené migrace. Lokální profilový mount není runtime. Pro aktuální osobní host platí jediná Mašina podle 0153 a Headscale podle 0154; historie zrušeného síťového pilotu zůstává pouze v rozhodnutí 0154.
 
-Synchronizovanými consumery jsou [hosted-access manuál](hosted-buddy-vps.md), [mapa rootu](../MAP.md), [root instrukce](../AGENTS.md), [Personalspace kontrakt](../personalspace/README.md), distribuční a provisioning manuály. Žádný z těchto odkazů sám nemigruje instalaci, neuděluje přístup a nepotvrzuje funkční DNS/TLS, zálohu nebo obnovu.
+Synchronizovanými consumery jsou [manuál Buddyho](buddy.md), [mapa rootu](../MAP.md), [root instrukce](../AGENTS.md), [Personalspace kontrakt](../personalspace/README.md), distribuční a provisioning manuály. Žádný z těchto odkazů sám nemigruje instalaci, neuděluje přístup a nepotvrzuje funkční DNS/TLS, zálohu nebo obnovu.

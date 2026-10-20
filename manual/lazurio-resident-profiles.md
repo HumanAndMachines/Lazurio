@@ -1,12 +1,17 @@
-# Buddy a AI Kolega v Lazuriu
+# Lazurio Resident a jeho profil Workspace
 
-> **Buddy migration boundary (2026-09-12).** This page describes the implemented resident distribution, including its existing Zulip/bridge dependencies. The [new Buddy product target](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/hosted-buddy-vps.md) uses standard Hermes channels and does not require those components. Keep installed-runtime checks until a separately verified migration; do not apply this historical dependency list as requirements for new product design.
-
+> **Buddy nemá Resident profil (decision 0210).** Buddy je Hermes Agent
+> v Osobním Prostředí svého člověka; co o něm platí, drží
+> [manuál Buddyho](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/buddy.md).
+> Profil Buddyho v Resident distribuci, jeho Zulip bridge a operator plane
+> jeho hostů skončily. Dosavadní hostované instalace Buddyho se do své migrace
+> řídí pravidly svého hostu.
 
 Lazurio je pracovní prostředí, ve kterém lidé a stroje používají stejné
-Organizace, nástroje a dohledatelné procesy. Buddy a AI Kolega nejsou dvě kopie
-Lazuria ani dlouhodobé Git branche. Jsou to dva profily jednoho produktu,
-postavené z jednoho přesného source commitu.
+Organizace, nástroje a dohledatelné procesy. Lazurio Resident je immutable
+runtime artefakt Lazuria postavený z jednoho přesného source commitu, ne druhá
+kopie Lazuria ani dlouhodobá Git branch. Build kontrakt dnes vydává jediný
+profil, Workspace.
 
 Tento manuál je veřejná a offline dostupná část kontraktu. Neobsahuje
 konkrétní osobnosti, mandáty, paměť, jména instalací, incidentní logy ani
@@ -18,7 +23,7 @@ credentials.
 | --- | --- |
 | Operátor | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Operátorem je vždy člověk (decision 0175). |
 | Kolega | Člověk v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
-| Buddy | Osobní zástupce jednoho člověka uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
+| Buddy | Osobní zástupce jednoho člověka. Běží v jeho Osobním Prostředí (decision 0210) a jedná jen v mezích jeho práv a mandátů. Resident profil nemá. |
 | AI Kolega | AI s vlastní identitou, Mašinou, Personalspace a pracovními právy jako člověk; pojem je deprecated (decisions 0156/0169). Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
 | Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
@@ -74,116 +79,19 @@ kanonické rozhraní `LAZURIO_RUNTIME_ROOT=/opt/lazurio-runtime` a
 druhou dostává přes `--root`. Runtime nemá self-update. Exact build, startup
 gate a rollout pořadí drží `manual/lazurio-runtime-install-interface.md`.
 
-## Profil Buddy
+## AI Kolega
 
-Buddy patří jednomu člověku a zastupuje ho jeho právy. Veřejný profil určuje
-hranice práce, soukromí a incidentního chování; neurčuje osobnost konkrétního
-Buddyho. Ta spolu s ústavou, mandáty a pamětí zůstává v privátním
-Personalspace.
-
-Buddy není AI Kolega ani Steward. Běžný Task Agent spuštěný na Buddyho
-Mašině také není Buddy. Transakčně citlivé kroky — přístupy, secrets,
-destruktivní operace, billing, ownership a publish/release mimo trvalý mandát
-— vyžadují přesný souhlas člověka, kterého Buddy zastupuje.
-
-### Trust model Buddyho
-
-Pro provoz se vždy rozlišují tři otázky:
-
-1. Buddyho turn smí zadat právě jeden člověk; to drží privátní
-   komunikační surface a provider access.
-2. Mašinu a Lazurio vlastní tentýž člověk jako Owner. Smí je lokálně
-   upravit; Doctor změnu popíše jako drift a lifecycle nabídne vratnou cestu,
-   ale změnu nezakazuje.
-3. Přístup běžícího Agenta k souborům a nástrojům drží Hermes sandbox. Lazurio
-   vedle něj nevytváří druhý ACL ani paralelní sandbox.
-
-Skutečnou vstupní hranicí Buddyho je jeho privátní komunikační surface.
-Zulip realm, membership, credentials a síťový access plane musí být určené
-právě jednomu člověku a technické identitě jeho Buddy botu. Turn smí zadat
-pouze tento člověk; bot odpovídá a poskytovatel infrastruktury není další
-Operátor. Jiný autor konverzace znamená porušené nasazení, ne novou roli.
-
-Owner vlastní svou Mašinu a systém předpokládá, že to se sebou myslí dobře.
-Lazurio proti němu nestaví vlastní ACL, ownership gate ani permission zámek.
-Agentní přístup k souborům a nástrojům omezuje existující sandbox runtime —
-dnes Hermes Agent. Manifest, Doctor, service oddělení a rollback pouze
-zviditelňují odchylky, omezují náhodnou self-mutaci procesu a umožňují obnovu;
-nejsou druhou autorizační hranicí.
-
-Jedna úzká provozní podmínka z toho neustupuje: runtime nesmí vlastnit ani umět
-přepsat sandbox, který jej omezuje. Hermes checkout a Bun může vlastnit a měnit
-Owner nebo jím řízená maintenance identita, která nespouští agentní relaci.
-Účty `buddy` a `buddy-bridge` k nim musí mít pouze potřebné čtení/spuštění a
-nesmí je nahradit ani přes parent adresář. Preflight kontroluje skutečná host
-oprávnění a tracked Hermes bytes proti pinned commitu bez důvěry v Git index,
-replacement refs či symlinkované předky. Jde o self-protection existujícího
-Hermes sandboxu, ne o nový Lazurio ACL.
-
-Veřejný Buddy runtime obsahuje komunikační bridge mezi privátním Zulipem a
-agentním runtime. Bridge sám nevlastní identitu ani mandáty: před prvním
-síťovým krokem ověří mount privátního profilu, vloží jeho ústavu a mandáty do
-každého turnu a odmítne běh bez úplného kontraktu. Běží pod odděleným účtem,
-nevystavuje příchozí port a trvanlivou frontu drží mimo immutable root.
-Přechodová služba používá již existující host custody soubor; jeho secrets
-nekopíruje ani nevypisuje. Cutover je vratný přes uchovanou původní systemd
-unit a úspěch nového residenta dokazuje registrace polleru, nikoli jen stav
-procesu. Unmanaged pre-resident unit se před migrací i po explicitním restore
-ověřuje svým legacy enabled/active systemd kontraktem; nový `poller.json` po ní
-se nedá vyžadovat.
-Hermes dostává aktivní Lazurio Root jako `TERMINAL_CWD`, aby jeho context-file
-discovery vložilo veřejný profilový `AGENTS.md` i do Zulip session. Ten se
-vrství s privátní ústavou a mandáty; žádná z těchto vrstev nenahrazuje druhou.
-Existující Personalspace se při migraci nekopíruje: updater ho adoptuje jako
-explicitní updater-managed mutable mount kontrakt a service preflight ověří, že
-deklarovaný Buddy profil skutečně leží uvnitř `active/personalspace`.
-Produkční příkaz `buddy-rollout` skládá aktivaci rootu a service cutover do
-jedné kompenzované operace. Selže-li service gate, novou aktivaci odstraní nebo
-vrátí last-known-good a znovu zprovozní předchozí service vstupy.
-Bun binárku pro unit volí Owner explicitně přes `--bun PATH`; preflight ji
-resolveuje a ověří její spustitelnost runtime účtem, ale nevyžaduje root-owned
-instalaci. Současně ověří, že ji ani Hermes checkout účty `buddy` a
-`buddy-bridge` nevlastní a nemohou přepsat nebo nahradit přes zapisovatelný
-parent.
-Sanitizované privileged subprocessy chrání instalační krok před ambientním
-`PATH` a Git hooky, ne Lazurio před Ownerem.
-Privátní Buddy profil zůstává mutable a služba jej čte přes běžná host
-oprávnění. Další sandbox pro Personalspace tu nevzniká; přístup agentních
-nástrojů omezuje existující Hermes sandbox.
-
-## Profil AI Kolega a Steward overlay
-
-AI Kolega je samostatná AI s pravomocemi jako člověk. Má vlastní účet, seat, Mašinu,
-Personalspace a přístupy do Organizací. Budoucí profil `ai-colleague` použije
-stejný build, manifest, Doctor a updater jako Buddy, ale jiné root instrukce.
-
-Steward není třetí profil. Je to role overlay nad AI Kolegou, který může
-zpřesnit workflow a health checks. Overlay však nevytvoří žádné oprávnění:
-merge, release a administrativní operace dál povoluje jen přihlášená GitHub
-identita, její Teamy a branch rules.
+Profil `ai-colleague` se nestaví. AI Kolega je deprecated (decisions
+0156/0169): automatizovanou práci Organizace nese Pracovní Prostředí
+s automatizacemi (Henry) a Lazurio MausBotem a Hermes zůstává jen Buddymu.
 
 ## Instalace, aktualizace a rollback
 
 První nasazení celé Mašiny a aktualizace už nainstalovaného Lazurio Rootu jsou
-dvě různé operace. Blank nebo obnovovanou Mašinu připravuje zvenku reviewovaný
-operator plane; jeho public-safe vstup je `provisioning/README.md` ve source
-checkoutu. Běžný update už aktivního Residenta provádí pouze jeho verzovaný
-updater. Ansible může updater explicitně zavolat, ale nesmí znovu implementovat
-kopírování, přepnutí active verze ani rollback.
-
-Buddy/Linux operator lane v1 používá jen existující mechanismy: Ansible pro
-host desired state, upstream install rozhraní Hermesu a GBrainu, Tailscale jako
-access plane, UFW jako host firewall a provider snapshot jako recovery bod.
-Nový osobní GBrain začíná na lokálním PGLite; nevzniká kvůli němu další
-PostgreSQL service. Zulip je privátní externí transport prerequisite a Buddy
-bridge jej polluje odchozím spojením, takže resident host nepotřebuje veřejný
-Zulip ingress.
-
-Síťový kontrakt Linux profilu v1 má nulový veřejný ingress. SSH, případný
-privátní Zulip HTTPS a servisní UI se připouštějí pouze přes deklarované
-tailnet rozhraní. Najde-li preflight staré veřejné nebo jinak cizí allow
-pravidlo, nic nemaže ani nepřepisuje: zastaví se a nechá Ownera rozhodnout,
-co na jeho Mašině skutečně patří zachovat.
+dvě různé operace. Mašinu připravuje zvenku reviewovaný operator plane; pro
+Prostředí je to Machines. Aktivaci verze, kontrolu a rollback drží verzovaný
+updater Lazuria, který operator plane volá z ověřeného operator kitu. Operator
+plane nesmí znovu implementovat kopírování, přepnutí active verze ani rollback.
 
 Release je svázaný s přesným artefaktem. Bezpečný lifecycle má tento tvar:
 
@@ -201,19 +109,15 @@ základního kontraktu. Přesný stav aktuálního artefaktu ověří
 
 Updater v1 drží immutable verze pod `versions/`, content-free lifecycle stav a
 mutable `organizations/` a `personalspace/` pod odděleným `state/`. `active`
-je atomicky měněný odkaz na jednu zdravou verzi. Po assisted bootstrapu
-se update, status a rollback spouští z `active/resident/updater.mjs`; živý root
-se kvůli tomu nestává source checkoutem.
+je atomicky měněný odkaz na jednu zdravou verzi. Update, status a rollback
+spouští operator kit mimo aktivní root; živý root se kvůli tomu nestává source
+checkoutem.
 
 Lifecycle adapter immutable hosted artefaktu v1 je záměrně pouze POSIX (Linux
 a macOS). Windows hosted Resident se nezapne, dokud nebude mít vlastní atomický
 pointer adapter a stejné failure testy. To neomezuje localhost Windows profil:
 pracovní Root zůstává `%USERPROFILE%\\Lazurio`. V dnešním Source profilu je
 source samotný Root a oprava patří do task worktree.
-
-Konkrétní offline postup pro status, update, rollback a zachování lokálního
-hotfixu je v `manual/update-installed-resident.md` a je součástí resident
-artefaktu.
 
 ## Když je potřeba vlastní oprava Launchpadu
 
@@ -255,5 +159,3 @@ nepřátelský model.
 
 Žádná z těchto vrstev se nestává druhou autoritou jen proto, že je lokálně
 dostupná.
-
-Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM člověka s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.

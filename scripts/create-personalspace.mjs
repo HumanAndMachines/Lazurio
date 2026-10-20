@@ -251,7 +251,7 @@ export async function createPersonalspace(options, { root = process.cwd() } = {}
   console.log(`- owner repo: ${repo} (${ownerInfo ? "private, existuje" : "bude vytvořeno jako private"})`);
   console.log(`- gbrain repo: ${gbrainRepo} (${gbrainInfo ? "private, existuje" : "bude vytvořeno jako private"})`);
   console.log(`- mount: personalspace/${login}_GEN3`);
-  console.log("- Buddy: PENDING CAC-0072; tento live příkaz Buddy repo ani runtime nevytváří");
+  console.log("- Buddy: tento příkaz Buddy repo nevytváří; Buddy běží v Osobním Prostředí (decision 0210)");
   if (!options.apply) {
     if (ownerInfo) {
       console.log("- apply gate: existující repo se automaticky nespouští; použij kontrolovaný resume postup v manuálu");
