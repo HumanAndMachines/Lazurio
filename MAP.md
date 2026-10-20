@@ -86,10 +86,11 @@ pracovní Root.
   pro přidělování nových portů. Přesný port vlastní každý Modul ve svém
   `lazurio.module.json`; globální registr neexistuje.
 - `launchpad/` — vývojový povrch pro Buildery. Objevuje Organizace, Teamy a
-  Moduly, spouští aplikace z `main` i worktrees a ukazuje read-only
+  Moduly, otevírá stabilní aplikace z `main` a ukazuje read-only
   productionspace. Dlaždice Guide odkazuje na lokalizovanou část veřejné
   dokumentace na `documentation.lazurio.ai`; Launchpad její obsah neduplikuje.
-  Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
+  Vývojové worktrees mají vlastní loopback náhled přes prohlížeč Environmentu
+  (`manual/environment-browser.md`). Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Uživatele Organizace (Organization User) do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu

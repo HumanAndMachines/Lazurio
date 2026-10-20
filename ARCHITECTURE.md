@@ -275,6 +275,16 @@ port Modulu se veřejně nevystavuje. Produkční aplikace se v Dashboardu mohou
 objevit jen z ověřeného katalogu produkčních nasazení, nikdy ze seznamu
 vývojových služeb Workspace.
 
+**Aktuální směr od 2026-10-20:** stabilní adresa aplikace modulu patří
+`main`, cílově sestavenému vydání. Vývojový worktree běží na vlastním
+loopback portu a ukazuje se přes prohlížeč Environmentu. Stabilní služba,
+port ani route se kvůli náhledu nepřepínají. Podrobný postup a rozdíl mezi
+cílem a nasazeným runnerem drží `manual/environment-browser.md`.
+
+Následující profily popisují historický runtime Root Repa. Přepínání source
+na jedné adrese už není přípustný agentní postup, i když ho starý runtime
+technicky umí.
+
 Launchpad proto používá tři oddělené lifecycle profily:
 
 - **localhost** je úsporná dílna. `Start` a `Open` spouštějí přesný `main` nebo
@@ -303,9 +313,8 @@ Launchpad LazurioPlatform, který rezidentní Launchpad nahradí (decision 0167)
 tyto profily mění: na Linuxu jsou moduly služby operačního systému, spouští je
 Launchpad i CLI `lazurio module …` a restart Launchpadu přežijí; na macOS
 zůstávají vázané na session. Spouští moduly z `main`; volba worktree nepatří do
-přepnutí hostovaných Mašin; náhled pull requestu tam dostane dočasnou URL
-Environmentu jako lease (směr rozhodnutý dodatkem 0167, pravidla lease jsou
-návrh shapingu).
+přepnutí hostovaných Mašin. Původní návrh dočasné URL jako lease nahrazuje
+rozhodnutí z 2026-10-20: samostatný loopback náhled přes prohlížeč Environmentu.
 Profily výše platí pro Launchpad instalací Root Repa do jejich migrace
 (decision 0164).
 
@@ -349,8 +358,10 @@ Z toho plynou tato pravidla:
 3. Dvě různé Module ID v jedné Organizaci nesmějí vlastnit stejné číslo.
    Oddělené Organizace stejné číslo mít mohou; globální ani veřejný seznam
    portů napříč uživateli nevzniká.
-4. Main, verze a worktrees stejného Modulu sdílejí jeho lease. Na jedné Mašině
-   běží v jednu chvíli nejvýše jedna varianta.
+4. Deklarovaný lease patří stabilní aplikaci z `main`. Vývojové worktrees
+   běží vedle ní na vlastních volných loopback portech; její lease nepřebírají
+   (rozhodnutí z 2026-10-20). Starý Root runtime, který varianty přepínal
+   na jednom lease, není cesta pro nové náhledy.
 5. Pokud na jedné lokální Mašině kolidují Moduly dvou namountovaných
    Organizací, Launchpad je nepřemapuje. Umožní potvrzené přepnutí z jedné
    konkrétní aplikace na druhou. Oddělené Hosted Team Workspaces mají vlastní

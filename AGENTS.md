@@ -438,6 +438,34 @@ odchylku opravuješ v Modulu. Konformanci ověřuje `lazurio module setup`
 
 Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizations/<org>/`, přečti její `AGENTS.md` a až potom měň její obsah.
 
+## Stabilní aplikace a vývojové náhledy
+
+Stabilní adresa aplikace modulu patří verzi z `main`, cílově sestavenému
+vydání. Člověk se na ni musí moci vrátit a pokračovat v práci, i když vedle
+vyvíjíš novou verzi. Kvůli náhledu ji nepřepínej na worktree, nezastavuj její
+službu a nepřebírej její port.
+
+Vývojovou verzi spusť z vlastního worktree na samostatném volném loopback
+portu. Skutečnou adresu `http://127.0.0.1:<port>` nebo `http://localhost:<port>`
+otevři v prohlížeči toho Environmentu, ve kterém dev server běží. Platí to
+pro změnu modulu, prototyp, jinou branch i vývoj aplikace v productionspace.
+Člověku předej vrácený odkaz na konkrétní kartu Environment Browseru, označ
+ho jako vývojový náhled a uveď místní adresu i branch. Holý localhost odkaz
+vzdálený náhled na jeho počítači neotevře. Na vlastním počítači se místní
+náhled otevírá přímo v jeho prohlížeči.
+
+Pro náhled nevytvářej hostname, gateway route ani druhý katalog. Chybí-li
+prohlížeč, volný port nebo závislost aplikace, pojmenuj překážku; stabilní
+adresu nepoužij jako náhradu. Ověř vykreslení a hlavní cestu. Při úklidu
+zastav jen vlastní dev server a pusť svou kartu; zavření karty samo proces
+neukončuje. Postup drží `manual/environment-browser.md`.
+
+Toto rozhodnutí z 2026-10-20 nahrazuje starší přepínání `main`/worktree na
+jedné adrese i pozdější návrh dočasných hostname náhledů (0167, P9/B14).
+Dnešní runner ještě může spouštět deklarovaný dev příkaz z `main`; přechod
+stabilních aplikací na buildy vyžaduje samostatnou implementaci a ověření.
+Samotná změna instrukcí není nasazení release režimu.
+
 ## Otevírání Launchpadu pro App Agenty
 
 Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěný
@@ -455,7 +483,8 @@ nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
 `lazurio module status HumanAndMachine-ai/website-lazurio --json`, spusť jej
 přes `lazurio module start HumanAndMachine-ai/website-lazurio --json` a ve
 vestavěném browseru otevři `result.runtime.url` vrácené lifecycle kontraktem;
-adresu ani port neodvozuj ručně.
+adresu ani port neodvozuj ručně. Tento postup otevírá stabilní aplikaci;
+pro rozpracovanou změnu použij vývojový náhled podle pravidla výše.
 
 Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 

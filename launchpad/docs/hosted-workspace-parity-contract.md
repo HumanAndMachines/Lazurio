@@ -1,5 +1,12 @@
 # Hosted Workspace machine parity contract
 
+> Historický kontrakt runtime Root Repa. Od 2026-10-20 se vývojový náhled
+> ukazuje na samostatném loopback portu přes prohlížeč Environmentu; stabilní
+> adresa aplikace zůstává na `main`. Takeover stejného portu popsaný níže je
+> evidence starého runneru, ne postup pro agenta. Aktuální pravidlo drží
+> `manual/environment-browser.md` a dodatek rozhodnutí 0167/0191.
+
+
 > **Stav (2026-09-18):** hosted identita Launchpadu je přepnutá na model
 > decision 0146 (`manual/decision-register.md`): každá aplikace běží na kořeni
 > vlastního hostname `https://<app>.<machine>.<domain>/` (dílna = hostovaná VM,
