@@ -486,6 +486,38 @@ Když prompt změnu konkrétní vrstvy `PATH` neautorizuje, Agent vrátí přesn
 instalační report a vyžádá si souhlas; User souhlas se neinterpretuje jako
 Machine souhlas a dočasná absolutní cesta není přípustný bypass gate.
 
+### Codex: nástroj na otázky
+
+Agent se člověka ptá nástrojem harnessu na otázky (decision 0211). Codex
+ho jako `request_user_input` v režimu Default nabízí jen se zapnutou funkcí
+`default_mode_request_user_input`. V Codexu 0.163.0 je ve stavu „under
+development“ a ve výchozím stavu vypnutá. Zapíná se pro každou Mašinu
+v uživatelském `~/.codex/config.toml`, který sdílí Codex CLI i Codex
+Desktop. Zapni ji oficiálním příkazem, který zbytek souboru zachová:
+
+```sh
+codex features enable default_mode_request_user_input
+```
+
+Výsledkem je v `~/.codex/config.toml` tento záznam:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
+Je to změna nastavení Codexu na Mašině, proto ji proveď se souhlasem
+Operátora; soubor nepřepisuj celý. Ověř ji příkazem `codex features list`,
+kde má řádek `default_mode_request_user_input` hodnotu `true`. Projeví se po
+novém spuštění Codexu. Codex na zapnutou funkci ve vývoji upozorní
+varováním; to je očekávané.
+
+Claude Code nabízí `AskUserQuestion` ve výchozím stavu a nic se nezapíná.
+Hermes `clarify` vykreslí v Telegramu volby jako tlačítka. Fork T3 Code
+v Lazuriu funkci pro svá vlákna Codexu v Prostředích zapne samostatnou
+změnou, která se teprve připravuje; do jejího nasazení na ni nespoléhej.
+Kde nástroj chybí, platí textový fallback z decision 0211.
+
 ## GitHub přihlášení není Git transport
 
 `gh auth status` dokazuje API přihlášení, nikoli schopnost Gitu číst privátní

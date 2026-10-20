@@ -532,6 +532,39 @@ an exact installation report and requests consent. User consent is not treated
 as Machine consent, and a temporary absolute path is not an acceptable bypass
 of the gate.
 
+### Codex: the question tool
+
+The Agent asks a person through the harness question tool (decision 0211).
+Codex offers it as `request_user_input` in Default mode only with the feature
+`default_mode_request_user_input` turned on. In Codex 0.163.0 the feature is
+at stage "under development" and off by default. It is turned on per Machine
+in the user-level `~/.codex/config.toml`, which Codex CLI and Codex Desktop
+share. Turn it on with the official command, which keeps the rest of the file:
+
+```sh
+codex features enable default_mode_request_user_input
+```
+
+The result in `~/.codex/config.toml` is this entry:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
+This changes the Codex settings of the Machine, so make it with the
+Operator's consent; do not rewrite the whole file. Verify it with
+`codex features list`, where the `default_mode_request_user_input` row shows
+`true`. It takes effect after Codex starts again. Codex shows a warning that
+an under-development feature is on; that is expected.
+
+Claude Code offers `AskUserQuestion` by default and nothing needs turning on.
+Hermes `clarify` renders the options as buttons in Telegram. The Lazurio fork
+of T3 Code will turn the feature on for its own Codex threads in Environments
+through a separate change that is still being prepared; do not rely on it
+until that change is deployed. Where no question tool exists, the text
+fallback from decision 0211 applies.
+
 ## GitHub login is not Git transport
 
 `gh auth status` proves the API login, not Git's ability to read a private SSH

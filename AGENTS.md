@@ -29,8 +29,8 @@ konkrétní template nástroj dostává jeho explicitní cestu.
 
 **Kam se podívat.** Lidská mapa repa („co je co a kde to leží“) je `MAP.md`.
 Když nevíš, jestli změna patří do rootu, do Organizace nebo do modulu, začni
-tam a tímhle souborem; když pořád není jasno, zeptej se Operátora místo
-hádání.
+tam a tímhle souborem; když pořád není jasno, zeptej se Operátora nástrojem
+na otázky místo hádání.
 
 ## Názvosloví
 
@@ -288,19 +288,39 @@ lokálně: od prvního pushe je viditelná jako GitHub Draft PR, a jakmile je
 hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publikace,
 říká jen „připraveno ke kontrole"; hotová práce nezůstává viset jako Draft.
 
+**Člověka se ptáš nástrojem na otázky** (decision 0211). Potřebuješ-li od
+člověka rozhodnutí nebo odpověď, polož otázku nástrojem svého harnessu na
+otázky (Claude Code `AskUserQuestion`, Codex `request_user_input`, Hermes
+`clarify`), ne jen textem ve zprávě: otázka v textu zapadne a vlákno vypadá,
+že pracuje, a přitom stojí. Nabídni 2–4 volby, doporučenou dej první
+s označením „(Doporučeno)“ a kontext napiš do zprávy nad otázku. Nejdřív
+udělej všechno, co na odpovědi nezávisí. Ptej se, jen když bez odpovědi
+nejde bezpečně pokračovat nebo když rozhodnutí patří člověku; na nic, co
+zjistíš sám, se neptej. Nemá-li harness nástroj na otázky nebo ho
+v aktuálním režimu nenabízí, zeptej se textem s očíslovanými volbami a
+výslovně napiš, že čekáš na odpověď a co do té doby stojí. Subagent, bot
+MausBotu ani automatický reviewer člověka v relaci nemá: nástroj
+nepoužije a otázku předá ve svém výstupu tomu, kdo mu práci zadal
+(nadřazenému agentovi nebo Buddymu). Zapnutí nástroje v Codexu popisuje
+kapitola „Codex: nástroj na otázky“ v
+[`manual/organization-install.md`](manual/organization-install.md).
+
 **Handoff je průvodcovský.** Operátor nemusí rozumět Gitu ani GitHubu — ty jsi
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
-ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
+ověření, odkaz na aplikaci běžící z worktree. Handoff zůstává textem zprávy;
+pod ním položíš nástrojem na otázky standardizovanou dvojotázku
 „Mám změny Publikovat vaším jménem?
 Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
 nikdy ji nedomýšlíš za Operátora. **Na týmovém Environmentu** dvojotázku
-nahrazuje otázka „Komu mám říct, aby tyhle změny publikoval?" a „Publikuj"
-tam vede k předání jmenovanému člověku, nikdy k merge agentem (viz níže).
+nahrazuje otázka „Komu mám říct, aby tyhle změny publikoval?", položená
+stejně nástrojem, a „Publikuj" tam vede k předání jmenovanému člověku,
+nikdy k merge agentem (viz níže).
 Před otázkou zjistíš živá GitHub práva
-svého Operátora a řídíš se jimi: smí-li merge a řekne-li v threadu
-„Publikuj", PR mergneš metodou, kterou repozitář povoluje, aktualizuješ
+svého Operátora a řídíš se jimi: smí-li merge a zvolí-li v threadu
+Publikaci (v nástroji na otázky nebo slovy „Publikuj"), PR mergneš metodou,
+kterou repozitář povoluje, aktualizuješ
 `main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného
 oprávněného Kolegy, PR mu zároveň přiřadíš jako assignee a @zmínkou mu
 výslovně předáš odpovědnost za dotažení. Reviewer request znamená žádost
@@ -324,7 +344,8 @@ publikuje vždy jmenovaný člověk** (decision 0148, dodatek z 2026-10-05):
 identita Teamu (Lazurio for GitHub) nepatří žádnému člověku, otevírá pull
 requesty a na placeném plánu GitHubu je sama schválit nesmí. Agent tam proto
 sám nikdy nemerguje, ani na pokyn z chatu. Když je práce hotová, zeptá se
-Operátora: „Komu mám říct, aby tyhle změny publikoval?“ Tomu člověku vyžádá
+Operátora nástrojem na otázky: „Komu mám říct, aby tyhle změny
+publikoval?“ Tomu člověku vyžádá
 review, přiřadí mu PR, @zmínkou mu předá odpovědnost za Publikaci a
 Operátorovi řekne, kdo ji teď drží. Kdo změny z týmového Environmentu schválí
 a publikuje, za ně odpovídá.
@@ -337,7 +358,8 @@ Technické detaily a důkazy zůstávají v PR.
 
 **Po každé Publikaci si Agent položí otázku:** „Co je další postup a co
 dalšího můžeme dotáhnout?“ Odpověď stručně předloží Operátorovi jako
-doporučené navazující kroky.
+doporučené navazující kroky; čeká-li na jeho volbu, položí ji nástrojem na
+otázky.
 
 **Review bereš vážně, ale ne bez výhrad** (decision 0163). Skutečnou vadu,
 kterou review najde, opravíš hned: špatné chování, rozpor mezi texty, tvrzení
@@ -599,7 +621,8 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    URL uvedeš v handoffu. Neptáš se předem a nezapisuješ to místo toho do
    Mission Controlu. Issue tě neblokuje: pokračuješ na všem, co na něm
    nestojí, a zastavíš se jen tam, kde bez odpovědi nejde pokračovat bezpečně
-   nebo kde rozhodnutí patří Operátorovi. Před zápisem odstraň secrets,
+   nebo kde rozhodnutí patří Operátorovi; tam se zeptáš nástrojem na otázky.
+   Před zápisem odstraň secrets,
    Personalspace, Organization-specific obsah mimo jeho access hranici
    a duplicity; do veřejného repa nikdy nezapisuj Organization-specific
    obsah. Když Issues nejsou povolené, účet nemá právo nebo public-safety není
@@ -898,16 +921,22 @@ záměrných non-goals, podstatných rollout/rizik a otevřených otázek>
 Ověřeno: <checks/testy a výsledek>
 Zkontrolujte si to v aplikaci: <URL běžící z worktree, pokud existuje>
 Lokálně nezůstává nic mimo PR.
-
-Mám změny Publikovat vaším jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?
 ```
 
-Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání
+Blok zůstává textem zprávy. Hned pod ním polož nástrojem na otázky
+(decision 0211) standardizovanou dvojotázku „Mám změny Publikovat vaším
+jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?“ s volbami
+„Publikovat vaším jménem“ a „Požádat jiného Kolegu“; žádnou neoznačuj jako
+doporučenou. Bez nástroje na otázky ji napiš pod blok jako očíslované volby
+a dodej, že čekáš na odpověď.
+
+Co po dvojotázce následuje — merge po volbě Publikace (v nástroji na otázky
+nebo explicitním „Publikuj"), nebo předání
 zvolenému oprávněnému Kolegovi — říká kanonický blok výš; přesný merge,
 pull a cleanup postup drží skill `worktree-development-discipline`. Na
 týmovém Environmentu končí handoff místo dvojotázky otázkou „Komu mám říct,
-aby tyhle změny publikoval?" a následuje vždy předání (decision 0148,
-dodatek z 2026-10-05).
+aby tyhle změny publikoval?", položenou stejně nástrojem na otázky, a
+následuje vždy předání (decision 0148, dodatek z 2026-10-05).
 
 Před handoffem po změně root configu, Launchpadu, Guide nebo mountpointů spusť:
 
