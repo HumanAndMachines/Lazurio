@@ -140,19 +140,21 @@ nestaví žádný most.
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Operátor (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
 - **Jména uzlů zařízení lidí.** Uzel zařízení člověka v tailnetu se jmenuje
-  `<login>-<zařízení>` (např. `<login>-macbook`) a další headless klient
-  téhož zařízení `<login>-<zařízení>-cli`. Uzel osobní VM, tedy Osobního
-  Prostředí na serveru, se jmenuje `<login>-personal-vm`; její technické
-  jméno z předchozího bodu zůstává login. `<login>` je zmrazený lowercase
-  GitHub login, týž slug jako u osobního Headscale usera. `<zařízení>` je
+  `<login>-<zařízení>` (např. `<login>-macbook`) a další headless klient téhož
+  zařízení `<login>-<zařízení>-cli`. Uzel osobní VM, tedy Osobního Prostředí
+  na serveru, se jmenuje `<login>-personal-vm`; její technické jméno z
+  předchozího bodu zůstává login. `<login>` je štítek osobního Headscale
+  usera; u účtu propojeného s GitHubem je to zmrazený lowercase GitHub login,
+  týž slug jako v bodech výše. Účet bez GitHubu (0192) použije štítek svého
+  Headscale usera a GitHub se kvůli jménu uzlu nepropojuje. `<zařízení>` je
   krátký stálý štítek (`macbook`, `iphone`, `pixel`, `windows`), zvolený
-  jednou a stejný ve všech tailnetech. `-cli` je userspace `tailscaled`
-  s vlastním stavem a socketem, nejvýš jeden na zařízení a tailnet. Jméno
-  nenese Organizaci, roli ani personu: nezačíná `company_slug` ani `lazurio-`,
-  které patří tagovaným uzlům a runnerům, a končí `-vm` jen u osobní VM. Je to
+  jednou a stejný ve všech tailnetech. `-cli` je userspace `tailscaled` s
+  vlastním stavem a socketem, nejvýš jeden na zařízení a tailnet. Jméno nenese
+  Organizaci, roli ani personu: nezačíná `company_slug` ani `lazurio-`, které
+  patří tagovaným uzlům a runnerům, a končí `-vm` jen u osobní VM. Je to
   konvence, kterou Machines nekontroluje: jméno nic neuděluje a existující
-  uzly se kvůli ní nepřejmenovávají. Jméno se nastavuje na zařízení samém
-  jako hostname klienta, nikdy ručně na Conglomerate Hostu. Pravidla, chování
+  uzly se kvůli ní nepřejmenovávají. Jméno se nastavuje na zařízení samém jako
+  hostname klienta, nikdy ručně na Conglomerate Hostu. Pravidla, chování
   Headscale a dopad přejmenování na vazby drží Machines
   `docs/conglomerate-tailnet.md` §1.1.
 - **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
