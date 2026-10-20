@@ -130,12 +130,10 @@ ohraničené hranice** a **definované procesy**.
   pracovní prostředí Operátora, ale jeho Personalspace nepřebírá ani
   nemountuje.
 - **Jedna osobní hostovaná Mašina.** Operátor má v personalspace právě jednu
-  hostovanou Mašinu (osobní VM). **Má-li** Buddyho, bydlí právě na ní — není to
-  druhý host, ale runtime uvnitř téže hranice pod pravidly
-  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy je jen pro
-  člověka. Nově založené osobní Prostředí je Buddy, Produkt 1, a Buddyho má
-  vždy (decision 0207); dosavadní pilotní osobní Mašiny bez Buddyho zůstávají,
-  jak jsou. Vlastní
+  hostovanou Mašinu, své Osobní Prostředí. Buddy, nabrífovaný Hermes Agent,
+  běží přímo v něm jako jeho součást, ne jako druhý host (decision 0210);
+  Buddy je jen pro člověka. Kdo Osobní Prostředí nemá, Buddyho nemá; dosavadní
+  pilotní Osobní Prostředí bez Buddyho ho dostanou samostatným rolloutem. Vlastní
   hardware Operátora stojí mimo pool a jméno nepotřebuje — je to klient.
   Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
   Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
@@ -384,11 +382,11 @@ Pravidlo nezakládá právo zápisu, veřejnou viditelnost ani přístup jiné
 Organizace. Živá oprávnění zůstávají autoritou; Agent bez mandátu Admina
 grant sám nerozšiřuje a předá konkrétní chybějící přístup k nápravě.
 
-## Cílový Hosted Buddy
+## Buddy v Osobním Prostředí
 
-Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu, své Osobní Prostředí. Buddy běží přímo v ní a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
-Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Buddy z Produktu 1 je bez tailnetu a SSH, jen přes Lazurio účet z webu (decision 0207). U osobních Mašin v tailnetu (piloty, Produkt 2) mají osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+Buddy je Hermes Agent z forku `Lazurio/hermes-agent`, instalovaný oficiální cestou upstreamu, s pamětí v gbrainu z forku `Lazurio/gbrain` nad vaultem v Personalspace (decision 0210). Pracuje z Lazurio Folderu, bez sandboxu a s plnými právy Osobního Prostředí. Kam se dostane Osobní Prostředí, tam se dostane i Buddy; do dalších Prostředí vstupuje relací SSH nebo vláknem T3 Code a přihlášení Osobního Prostředí nepřeposílá. Samostatná Buddy VPS, Resident distribuce Buddyho a Zulip skončily. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Buddy z Produktu 1 je bez tailnetu a SSH, jen přes Lazurio účet z webu (decision 0207). Osobní Prostředí v tailnetu (piloty, Produkt 2) je nodem tailnetu jednoho Conglomerate Hostu; osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Text sám nemění žádný runtime, profil, ACL ani mandát.
 
 ## Správa infrastruktury Ownery
 
@@ -414,15 +412,11 @@ Agenti v Environmentu pracují s plným přístupem: jejich hranicí je Environm
 a pravidla práce, ne sandbox harnessu ani lokální per-modulový IAM; menší práva
 znamenají samostatný Environment (decision 0172).
 
-Má-li Operátor **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
-mašinu — na dedikovanou per-owner VPS, což je právě ta jediná hostovaná Mašina
-Operátora výše, ne další host vedle ní. Hranice tím nekončí, jen se prodlužuje:
-paměť a konverzace Buddyho jsou personalspace se vším, co pro něj platí, a
-přístup na host je Operátorův, ne agentův — i když ho lokální mašina technicky
-dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s ním drží
-[`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md). **Deklarace v
-manifestu není důkaz přístupu; ten se prokazuje operací, a dokud ho nemáš,
-platí odpověď „nemá".**
+**Buddy** běží v Osobním Prostředí svého člověka (decision 0210). Paměť a
+konverzace Buddyho jsou personalspace se vším, co pro něj platí, a přístup do
+Osobního Prostředí je Operátorův, ne agentův — i když ho lokální mašina
+technicky dovolí použít. **Deklarace v manifestu není důkaz přístupu; ten se
+prokazuje operací, a dokud ho nemáš, platí odpověď „nemá".**
 
 ## Lazurio Module Standard
 
@@ -480,15 +474,16 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    o firmě, klientovi, modulu, Mission Control plánu nebo productionspace
    repu pokračuje v Organization checkoutu podle jeho `AGENTS.md`; úkol
    o personalspace podle `personalspace/<owner>_GEN3/AGENTS.md`. Root
-   pravidla platí jen pro root. **Čtvrtý scope není lokální:** běh
-   hostovaného Buddyho (instalace, runtime, paměť, zálohy, incidenty) žije
-   na samostatné per-owner Mašině (v nasazeném baseline dedikované VPS)
-   pod vygenerovaným `AGENTS.md` aktivního Buddy
-   resident rootu a privátním profilem jeho Ownera, ne pod pravidly source
-   checkoutu; lokální mount
-   `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu
-   (`local_execution: forbidden`). Hranici i zjištění, jestli Operátor
-   Buddyho má, drží [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md).
+   pravidla platí jen pro root. **Čtvrtý scope je Buddy:** běží v Osobním
+   Prostředí svého člověka (decision 0210) a jeho instalace, běh, paměť,
+   konverzace a profil patří tomuto Prostředí a Personalspace jeho Ownera.
+   Task Agent v jiném Prostředí do Buddyho nesahá bez pokynu Ownera a
+   přístup prokazuje operací. Dosavadní hostované instalace Buddyho na
+   samostatné VPS zůstávají do své migrace, jak jsou: jejich vnitřek
+   (instalace, runtime, paměť, zálohy, incidenty) se řídí vygenerovaným
+   `AGENTS.md` aktivního Resident rootu na hostu a privátním profilem jeho
+   Ownera, ne pravidly source checkoutu, a lokální spuštění je u nich
+   zakázané.
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
    `bun run doctor:task`. Update po vrstvách srovná Lazurio Root → Organization
