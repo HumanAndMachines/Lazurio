@@ -20,8 +20,9 @@
 //
 // PROČ TU BYDLÍ SVÁZÁNÍ IDENTITY. Sdílený surface má vlastní integrity baseline
 // (`schemas/doctor-surface-vendor.json`) a musí vyhovět i
-// doctorovi, který běží SÁM — na Buddy VPS nad personalspace doctorem žádný
-// rodič není, takže po něm nikdo nemůže chtít, aby dokazoval, čí zdraví hlásí.
+// doctorovi, který běží SÁM — samostatně spuštěný personalspace doctor nad sebou
+// žádného rodiče nemá, takže po něm nikdo nemůže chtít, aby dokazoval, čí zdraví
+// hlásí.
 // Root ale dítě spustil kvůli konkrétnímu mountu, takže si tu povinnost přidává
 // sám: `runBoundChildDoctor` níž. Je to politika rootu, ne kontrakt všech
 // doctorů; kdyby seděla ve sdíleném kontraktu, byl by z něj consumer-specific
@@ -233,10 +234,10 @@ function demoteToScopeMismatch(child, failure) {
  * ROOT-SIDE VÁZÁNÍ IDENTITY. Surface povinně porovnává jen to, co dítě samo
  * nabídlo: když `scope.absolute_path` chybí, není co porovnat, a dokud deklarace
  * mlčí o `scope_type`, není proti čemu vázat druh scope. To je pro samostatně
- * běžícího doctora správně — na Buddy VPS nad ním žádný rodič není a nemá koho
- * přesvědčovat. Root ho ale spustil KVŮLI KONKRÉTNÍMU MOUNTU, takže si tu
- * povinnost přidává sám, a přidává si ji tady: je to jeho politika, ne kontrakt
- * všech doctorů, a ve sdíleném surfacu by z ní byl consumer-specific fork.
+ * běžícího doctora správně — nad ním žádný rodič není a nemá koho přesvědčovat.
+ * Root ho ale spustil KVŮLI KONKRÉTNÍMU MOUNTU, takže si tu povinnost přidává
+ * sám, a přidává si ji tady: je to jeho politika, ne kontrakt všech doctorů,
+ * a ve sdíleném surfacu by z ní byl consumer-specific fork.
  *
  * Bez téhle vazby stačí vrátit platný v3 report o ČEMKOLI a root pod tímhle
  * mountem ohlásí zdraví cizího checkoutu. Druh scope proto určuje LANE, ve které

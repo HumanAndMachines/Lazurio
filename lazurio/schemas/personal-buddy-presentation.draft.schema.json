@@ -42,7 +42,7 @@
           "type": "string",
           "format": "uri",
           "pattern": "^(?:https?|tg|sgnl|whatsapp)://",
-          "description": "Hosted Buddy nebo messenger odkaz; HTTP(S) loopback/localhost semantická validace odmítne."
+          "description": "Odkaz na Buddyho v Osobním Prostředí nebo do messengeru; HTTP(S) loopback/localhost semantická validace odmítne."
         }
       },
       "additionalProperties": true

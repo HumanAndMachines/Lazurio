@@ -41,7 +41,7 @@
             "workspace",
             "personalspace"
           ],
-          "description": "Druh checkoutu, ve kterém doctor běžel. 'personalspace' je Personalspace GEN3 root; na Buddy VPS je to jediný běžící doctor a žádný launchpad_root nad ním neexistuje."
+          "description": "Druh checkoutu, ve kterém doctor běžel. 'personalspace' je Personalspace GEN3 root; v samostatném checkoutu nebo v Lazurio Folderu je to jediný běžící doctor a žádný launchpad_root nad ním neexistuje."
         },
         "path": {
           "type": "string",
