@@ -52,6 +52,12 @@ const CANONICAL_SOURCE = "lazurio.organization.json";
 // 0162, addendum 2026-10-14): the Organization's single-tenant Entra app is a
 // public client, so no field may name a secret, and the closed tree refuses
 // any other key.
+//
+// `access_requests` ("Žádosti o přístup", decision 0204, addendum 2026-10-17
+// afternoon, point b; plan DEV-6668 M8) is the Dashboard's own setting: Core
+// validates it so an Organization that writes it keeps its other settings,
+// but no Environment receives, applies or reports it, so it has no key in
+// `ORGANIZATION_SETTINGS_KEYS`.
 const SETTINGS_CONTRACT = objectNode({
   integrations: objectNode({
     composio: objectNode({ allowed: booleanLeaf() }, ["allowed"]),
@@ -65,10 +71,20 @@ const SETTINGS_CONTRACT = objectNode({
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),
   }),
+  access_requests: dashboardOnly(objectNode({ enabled: booleanLeaf() }, ["enabled"])),
 });
 
-/** Dot-separated keys of every known setting, as reported per item to the Dashboard. */
-export const ORGANIZATION_SETTINGS_KEYS = Object.freeze(leafKeys(SETTINGS_CONTRACT, []));
+const SETTINGS_LEAVES = leaves(SETTINGS_CONTRACT, [], true);
+
+/** Dot-separated keys of every setting Environments apply, as reported per item to the Dashboard. */
+export const ORGANIZATION_SETTINGS_KEYS = Object.freeze(
+  SETTINGS_LEAVES.filter((leaf) => leaf.reported).map((leaf) => leaf.key),
+);
+
+/** Dot-separated keys of the Dashboard's own settings: validated here, never delivered to or reported by an Environment. */
+export const ORGANIZATION_SETTINGS_DASHBOARD_KEYS = Object.freeze(
+  SETTINGS_LEAVES.filter((leaf) => !leaf.reported).map((leaf) => leaf.key),
+);
 
 /**
  * The settings a new Organization starts with. Decision 0162 (addendum
@@ -192,6 +208,11 @@ function objectNode(fields, required = []) {
   });
 }
 
+// A setting of the Dashboard alone: validated like any other, never reported.
+function dashboardOnly(node) {
+  return Object.freeze({ ...node, reported: false });
+}
+
 function booleanLeaf() {
   return Object.freeze({ kind: "boolean" });
 }
@@ -210,9 +231,11 @@ function arrayLeaf(items, { minItems = 0, maxItems = Infinity } = {}) {
   return Object.freeze({ kind: "array", items, minItems, maxItems });
 }
 
-function leafKeys(node, prefix) {
-  if (node.kind !== "object") return [prefix.join(".")];
-  return [...node.fields].flatMap(([key, child]) => leafKeys(child, [...prefix, key]));
+// Leaves in declaration order; a leaf under a Dashboard-only node is not reported.
+function leaves(node, prefix, reported) {
+  const here = reported && node.reported !== false;
+  if (node.kind !== "object") return [{ key: prefix.join("."), reported: here }];
+  return [...node.fields].flatMap(([key, child]) => leaves(child, [...prefix, key], here));
 }
 
 // RFC 6901 JSON Pointer segment.

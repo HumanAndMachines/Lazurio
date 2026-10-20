@@ -190,7 +190,7 @@ it, as `settings` (`lazurio.organization.settings.v1`):
 | Root | `settings.status` | Consumer behavior |
 | --- | --- | --- |
 | canonical manifest is the read authority, no section | `absent` | nothing governed; `values` is `{}` |
-| canonical manifest is the read authority, valid section | `valid` | apply `values` (exactly the declared keys); `effective[]` lists every known key and whether the Organization governs it |
+| canonical manifest is the read authority, valid section | `valid` | apply `values` (exactly the declared keys); `effective[]` lists every key Environments apply and whether the Organization governs it |
 | canonical manifest is the read authority, invalid section | `invalid` | apply nothing from this version and keep the last applied one; `issues[]` names every problem with a JSON Pointer |
 | `legacy` | `absent` | a legacy root cannot declare settings and governs nothing |
 | `conflict` or `missing` | `unavailable` | no safe authority; keep the last applied version |
@@ -256,6 +256,15 @@ not secrets; the runbook is
   Organization adds `microsoft365` until Lazurio Core, the Dashboard and the
   LazurioPlatform release that apply it are out, in the order of
   [Readers first](#readers-first).
+
+### Access requests (`settings.access_requests`)
+
+`"access_requests": { "enabled": true }` switches on access requests for the
+Organization (decision 0204, addendum 2026-10-17 afternoon, point b): a closed
+object whose `enabled` boolean is required once it is present. It is a setting
+of the Dashboard alone, so Core validates it but lists it in
+`ORGANIZATION_SETTINGS_DASHBOARD_KEYS`, not in `effective[]`, and no
+Environment receives, applies or reports it.
 
 ### Check in CI
 

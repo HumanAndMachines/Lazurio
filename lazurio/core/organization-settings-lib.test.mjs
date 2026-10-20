@@ -6,6 +6,7 @@ import {
   MICROSOFT365_APPS,
   newOrganizationSettings,
   ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+  ORGANIZATION_SETTINGS_DASHBOARD_KEYS,
   ORGANIZATION_SETTINGS_ISSUE_CODES,
   ORGANIZATION_SETTINGS_KEYS,
   ORGANIZATION_SETTINGS_STATUSES,
@@ -43,8 +44,10 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       "settings_value_invalid",
     ]);
     expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys]);
+    expect(ORGANIZATION_SETTINGS_DASHBOARD_KEYS).toEqual(["access_requests.enabled"]);
     expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
     expect(Object.isFrozen(ORGANIZATION_SETTINGS_KEYS)).toBe(true);
+    expect(Object.isFrozen(ORGANIZATION_SETTINGS_DASHBOARD_KEYS)).toBe(true);
   });
 
   test("an absent section means the Organization governs nothing and each Environment decides", () => {
@@ -275,10 +278,73 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     }
   });
 
+  test("access requests are the Dashboard's own setting: validated, never reported (decision 0204, DEV-6668 M8)", () => {
+    for (const enabled of [true, false]) {
+      const settings = { access_requests: { enabled } };
+      expect(settingsOf(manifest(settings)), String(enabled)).toEqual({
+        contract_version: ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+        status: "valid",
+        source: canonicalSource,
+        values: settings,
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+        issues: [],
+      });
+    }
+    // Beside it every other setting still parses and is reported as before.
+    const settings = {
+      integrations: { composio: { allowed: true }, microsoft365 },
+      access_requests: { enabled: true },
+    };
+    expect(settingsOf(manifest(settings))).toEqual({
+      contract_version: ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+      status: "valid",
+      source: canonicalSource,
+      values: settings,
+      effective: [
+        { key: "integrations.composio.allowed", governed: true, value: true },
+        { key: "integrations.microsoft365.tenant_id", governed: true, value: tenantId },
+        { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
+        { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
+        { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+      ],
+      issues: [],
+    });
+  });
+
+  test("access requests are a closed object with a required boolean", () => {
+    const base = "/settings/access_requests";
+    const cases = [
+      [{ access_requests: {} }, [issue("settings_field_missing", `${base}/enabled`)]],
+      [{ access_requests: { enabled: "yes" } }, [issue("settings_type_invalid", `${base}/enabled`)]],
+      [{ access_requests: { enabled: 1 } }, [issue("settings_type_invalid", `${base}/enabled`)]],
+      [{ access_requests: { enabled: null } }, [issue("settings_type_invalid", `${base}/enabled`)]],
+      [{ access_requests: { enabled: true, team: "guests" } }, [issue("settings_field_unknown", `${base}/team`)]],
+      [{ access_requests: true }, [issue("settings_type_invalid", base)]],
+      // An invalid leaf withholds the whole section, Composio included.
+      [
+        { integrations: { composio: { allowed: true } }, access_requests: { enabled: "yes" } },
+        [issue("settings_type_invalid", `${base}/enabled`)],
+      ],
+    ];
+    for (const [settings, issues] of cases) {
+      expect(settingsOf(manifest(settings)), JSON.stringify(settings)).toEqual({
+        contract_version: ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+        status: "invalid",
+        source: canonicalSource,
+        values: null,
+        effective: null,
+        issues,
+      });
+    }
+  });
+
   test("the manifest schema and Core pin one settings contract", () => {
     expect(organizationManifestSchema.properties.settings).toEqual({ $ref: "#/$defs/organizationSettings" });
     expect(organizationManifestSchema.required).not.toContain("settings");
-    expect(schemaLeafKeys(organizationManifestSchema.$defs.organizationSettings, [])).toEqual(ORGANIZATION_SETTINGS_KEYS);
+    expect(schemaLeafKeys(organizationManifestSchema.$defs.organizationSettings, [])).toEqual([
+      ...ORGANIZATION_SETTINGS_KEYS,
+      ...ORGANIZATION_SETTINGS_DASHBOARD_KEYS,
+    ]);
     expect(validateAgainstSchema(manifest(), organizationManifestSchema, "organization")).toEqual([]);
 
     const documents = [
@@ -309,6 +375,13 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       { integrations: { microsoft365: { ...microsoft365, callbacks: ["https://attacker.example/api/integrations/oauth/callback"] } } },
       { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(256) } } },
       { integrations: { microsoft365: { ...microsoft365, client_secret: "value" } } },
+      { access_requests: { enabled: true } },
+      { access_requests: { enabled: false } },
+      { integrations: { composio: { allowed: false }, microsoft365 }, access_requests: { enabled: true } },
+      { access_requests: {} },
+      { access_requests: { enabled: "yes" } },
+      { access_requests: { enabled: true, team: "guests" } },
+      { access_requests: true },
     ];
     for (const settings of documents) {
       const coreValid = settingsOf(manifest(settings)).status === "valid";
@@ -331,7 +404,8 @@ function issue(code, path) {
 }
 
 // Leaf keys of the JSON schema settings tree, in declaration order, so the
-// published schema cannot gain or lose a setting without Core.
+// published schema cannot gain or lose a setting without Core. The Dashboard's
+// own settings are declared last, after the ones Environments report.
 function schemaLeafKeys(node, prefix) {
   if (node.type !== "object") return [prefix.join(".")];
   expect(node.additionalProperties).toBe(false);
