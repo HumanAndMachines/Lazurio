@@ -24,6 +24,41 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
 - **Jen cíl, staví ho plán DEV-6673:** MausBot na prohlížeči Environmentu (body 34 a 41–43 rozhodnutí
   0191).
 
+## Stabilní aplikace a vývojové náhledy
+
+Stabilní adresa aplikace modulu patří verzi z `main`, cílově sestavenému
+vydání. Člověk se na ni musí moci vrátit a pokračovat v práci, i když vedle
+vyvíjíš novou verzi. Kvůli náhledu ji nepřepínej na worktree, nezastavuj její
+službu a nepřebírej její port.
+
+Vývojovou verzi spusť z vlastního worktree na samostatném volném loopback
+portu. Skutečnou adresu `http://127.0.0.1:<port>` nebo `http://localhost:<port>`
+otevři v prohlížeči toho Environmentu, ve kterém dev server běží. Platí to
+pro změnu modulu, prototyp, jinou branch i vývoj aplikace v productionspace.
+Člověku předej vrácený odkaz na konkrétní kartu Environment Browseru, označ
+ho jako vývojový náhled a uveď místní adresu i branch. Holý localhost odkaz
+vzdálený náhled na jeho počítači neotevře. Na vlastním počítači se místní
+náhled otevírá přímo v jeho prohlížeči.
+
+Pro náhled nevytvářej hostname, gateway route ani druhý katalog. Chybí-li
+prohlížeč, volný port nebo závislost aplikace, pojmenuj překážku; stabilní
+adresu nepoužij jako náhradu. Ověř vykreslení a hlavní cestu. Při úklidu
+zastav jen vlastní dev server a pusť svou kartu; zavření karty samo proces
+neukončuje. Přihlášení a datové závislosti dál určuje owning repozitář; náhled sám data neizoluje.
+
+Toto rozhodnutí z 2026-10-20 nahrazuje starší přepínání `main`/worktree na
+jedné adrese i pozdější návrh dočasných hostname náhledů (0167, P9/B14).
+Dnešní runner ještě může spouštět deklarovaný dev příkaz z `main`; přechod
+stabilních aplikací na buildy vyžaduje samostatnou implementaci a ověření.
+Samotná změna instrukcí není nasazení release režimu.
+
+Na hostovaném Environmentu otevři ověřenou místní adresu příkazem
+`lazurio browser window --session <sezení> --url <localhost-adresa>` a předej
+vrácený odkaz na kartu. V T3 Code použij `preview_open` s
+`reuseExistingTab: false` a místní adresou. Pohled `browser.…/t/<id>` ukazuje
+kartu; nepublikuje dev server pod další doménou. `lazurio module start`
+Platformy spouští primární checkout a není příkazem pro worktree preview.
+
 ## Principy
 
 1. **Prohlížeč patří Environmentu.** Na každém Remote Environmentu (Ubuntu) běží jeden prohlížeč:
