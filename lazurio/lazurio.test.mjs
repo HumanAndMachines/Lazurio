@@ -152,6 +152,65 @@ test("legacy custody výjimka zůstává čitelná stejně jako v Personalspace 
   expect(context.provenance.context_sources).toEqual(["personal.gen3.json"]);
 });
 
+// Blok `buddy` podle decision 0210 a dosavadní hostovaný blok, který podle
+// 0210 bodu 1 zůstává do své migrace (LEGACY, odstraní DEV-6676).
+function buddyBlock(runtime, softwareRepo = "Lazurio/hermes-agent") {
+  return {
+    slug: "owner-buddy",
+    gbrain_path: "gbrain",
+    path: "buddy",
+    repository: {
+      github_repo: "owner-login/owner-login-buddy",
+      visibility: "private",
+      mount_strategy: "doctor-managed-nested-repo",
+    },
+    runtime,
+    hermes: {
+      software_repo: softwareRepo,
+      profile_format: "hermes-profile-distribution",
+      profile_path: "buddy",
+    },
+  };
+}
+
+test("Buddy v Osobním Prostředí (decision 0210) i dosavadní hostovaný Buddy jsou autoritativní context source", async () => {
+  for (const buddy of [
+    buddyBlock({ deployment_target: "owner-personal-environment" }),
+    buddyBlock({
+      github_repo: "HumanAndMachines/Buddy_GEN2",
+      deployment_target: "owner-dedicated-personalspace-vps",
+      local_execution: "forbidden",
+    }, "NousResearch/hermes-agent"),
+  ]) {
+    const root = await tempRoot("lazurio-buddy-0210-rootless-manifest-");
+    await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", { buddy }));
+
+    const context = await buildLazurioContext({ root });
+
+    expect(context.principal).toMatchObject({
+      status: "present",
+      reason: "personalspace_manifest_owner",
+      github_username: "owner-login",
+    });
+    expect(context.provenance.context_sources).toEqual(["personal.gen3.json"]);
+  }
+});
+
+test("Buddy blok, který míchá 0210 s polem skončeného hostovaného modelu, není context source", async () => {
+  const root = await tempRoot("lazurio-buddy-mixed-rootless-manifest-");
+  await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {
+    buddy: buddyBlock({ deployment_target: "owner-personal-environment", local_execution: "forbidden" }),
+  }));
+
+  const context = await buildLazurioContext({ root });
+
+  expect(context.principal).toEqual({
+    status: "not_evaluated",
+    reason: "personalspace_manifest_invalid",
+  });
+  expect(context.provenance.context_sources).toEqual([]);
+});
+
 test("chybějící mount je absent, ale provider access zůstává not_evaluated", async () => {
   const root = await tempRoot("lazurio-launchpad-missing-personalspace-");
   await writeJson(join(root, "launchpad.gen3.json"), {

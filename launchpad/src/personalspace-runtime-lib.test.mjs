@@ -184,12 +184,10 @@ function personalConfig(username) {
         mount_strategy: "doctor-managed-nested-repo",
       },
       runtime: {
-        github_repo: "HumanAndMachines/Lazurio",
-        deployment_target: "owner-dedicated-personalspace-vps",
-        local_execution: "forbidden",
+        deployment_target: "owner-personal-environment",
       },
       hermes: {
-        software_repo: "NousResearch/hermes-agent",
+        software_repo: "Lazurio/hermes-agent",
         profile_format: "hermes-profile-distribution",
         profile_path: "buddy",
       },
