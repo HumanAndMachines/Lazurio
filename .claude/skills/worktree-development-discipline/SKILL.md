@@ -170,6 +170,15 @@ autoritu.
 14. Plošné `rm -rf`, `--force`, `git branch -D` a automatické mazání podle stáří
    nejsou běžný cleanup. Nesplněný guard se předává konkrétně.
 
+## Předání vývojového náhledu
+
+Stabilní adresa aplikace patří `main`, cílově sestavenému vydání. Worktree
+spusť na vlastním volném loopback portu a ukaž přes prohlížeč Environmentu
+(`manual/environment-browser.md`). Handoff nese vrácený odkaz na konkrétní
+kartu a místní adresu s branchí, ne stabilní URL vydávanou za náhled.
+Kvůli preview neměň hlavní službu, její port ani gateway a nevytvářej
+preview hostname. Na vlastním počítači otevři lokální náhled přímo.
+
 ## Ověření
 
 ```bash
