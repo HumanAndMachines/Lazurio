@@ -41,8 +41,9 @@ a vrací předem validovatelný, deterministický Git tree. Nevolá provider, Gi
 filesystem a nevytváří activation profil, registry nebo druhý manifest reader.
 `organization-settings-lib.mjs` vlastní uzavřený kontrakt sekce `settings`
 v `lazurio.organization.json` (decision 0194): validaci s JSON Pointer
-issues, efektivní hodnoty každého známého klíče a výchozí nastavení nové
-Organizace. Resolver Organization rootu jeho verdikt vrací vedle
+issues, efektivní hodnoty každého klíče, který Environmenty používají, a
+výchozí nastavení nové Organizace. Nastavení jen pro Dashboard
+(`access_requests`) validuje, ale do efektivních hodnot nedává. Resolver Organization rootu jeho verdikt vrací vedle
 normalizovaného resource jako `settings`; neplatná sekce se nepoužije, ale
 stav rootu ani sémantický hash nemění.
 `github-provider-lib.mjs` vlastní jediný read-only GitHub CLI transport pro
