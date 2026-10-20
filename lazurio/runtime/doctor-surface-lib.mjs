@@ -3,7 +3,8 @@
 // Doctor není jeden program. Root doctor v kořeni Lazuria orchestruje a nese
 // standardizované kontroly; každé namountované repo — organization, personalspace —
 // si nese vlastní nezávislý doctor, který root najde a zavolá. Personalspace doctor
-// musí umět běžet i SAMOSTATNĚ: na Buddy VPS žádný root nad ním neexistuje.
+// musí umět běžet i SAMOSTATNĚ: v samostatném checkoutu ani v Lazurio Folderu
+// nad ním žádný root neexistuje.
 //
 // Tenhle soubor je jediná kopie surfacu: slovník stavů, odvození souhrnu, exit kódy,
 // validace reportu a invokace + agregace podřízených doctorů. Kdo chce být doctorem,

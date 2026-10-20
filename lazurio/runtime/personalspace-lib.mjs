@@ -59,13 +59,28 @@ const ignoredWorkspaceDirs = new Set([".git", ".worktrees", "node_modules", "dis
 export const PERSONAL_APP_ID_PREFIX = "personal--";
 export const PERSONAL_SCHEMA_VERSION = "humanandmachines.personal.gen3.v1";
 
-const CURRENT_BUDDY_RUNTIME_REPO = "HumanAndMachines/Lazurio";
-const LEGACY_BUDDY_RUNTIME_REPOS = new Set([
+// Buddy v Osobním Prostředí (decision 0210): blok `buddy` deklaruje
+// `runtime.deployment_target: owner-personal-environment` a Hermes Agent
+// z forku. Pole skončeného hostovaného modelu (`runtime.github_repo`,
+// `runtime.local_execution`) nenese. Stejný kontrakt drží `buddyStateIssues`
+// v Lazurio/PersonalspaceTemplate_GEN3.
+const BUDDY_DEPLOYMENT_TARGET = "owner-personal-environment";
+const BUDDY_HERMES_REPO = "Lazurio/hermes-agent";
+// LEGACY: dosavadní hostovaný Buddy na dedikované VPS z doby před 0210. Podle
+// 0210 bodu 1 zůstává do své migrace a řídí se pravidly svého hostu, proto root
+// jeho blok dál přijme a ohlásí jen deprecation warning; jinak by root jiného
+// člověka failoval kvůli Buddymu, kterého zatím nikdo nemigroval. Tyto
+// konstanty, legacy větev v `buddyRuntimeIssues` a `personalBindingWarnings` a
+// legacy hodnoty v `personal.gen3.schema.json` odstraní DEV-6676, až žádný
+// takový Buddy nezbude. Převodník se nepíše: blok po migraci přepíše Agent
+// podle warningu (decision 0173).
+const LEGACY_HOSTED_BUDDY_DEPLOYMENT_TARGET = "owner-dedicated-personalspace-vps";
+const LEGACY_HOSTED_BUDDY_RUNTIME_REPOS = Object.freeze([
+  "HumanAndMachines/Lazurio",
   "HumanAndMachines/Buddy_GEN2",
   "HumanAndMachine-ai/Buddy_GEN2",
   "HumanAndMachines/Buddy",
 ]);
-const CURRENT_HERMES_REPO = "Lazurio/hermes-agent";
 const LEGACY_HERMES_REPO = "NousResearch/hermes-agent";
 const CURRENT_GBRAIN_BINDING = Object.freeze({
   github_repo: "Lazurio/gbrain",
@@ -198,46 +213,11 @@ export function validatePersonalConfig(personal, schema, label) {
         for (const key of buddyRuntimeSpec.required ?? []) {
           if (personal.buddy.runtime?.[key] === undefined) failures.push(`${label}: chybí buddy.runtime.${key}`);
         }
-        checkConst(
-          personal.buddy.runtime,
-          "github_repo",
-          buddyRuntimeSpec.properties?.github_repo,
-          "buddy.runtime.github_repo",
-        );
-        checkEnum(
-          personal.buddy.runtime,
-          "github_repo",
-          buddyRuntimeSpec.properties?.github_repo,
-          "buddy.runtime.github_repo",
-        );
-        checkConst(
-          personal.buddy.runtime,
-          "deployment_target",
-          buddyRuntimeSpec.properties?.deployment_target,
-          "buddy.runtime.deployment_target",
-        );
-        checkConst(
-          personal.buddy.runtime,
-          "local_execution",
-          buddyRuntimeSpec.properties?.local_execution,
-          "buddy.runtime.local_execution",
-        );
         const hermesSpec = buddySpec.properties?.hermes ?? {};
         for (const key of hermesSpec.required ?? []) {
           if (personal.buddy.hermes?.[key] === undefined) failures.push(`${label}: chybí buddy.hermes.${key}`);
         }
-        checkConst(
-          personal.buddy.hermes,
-          "software_repo",
-          hermesSpec.properties?.software_repo,
-          "buddy.hermes.software_repo",
-        );
-        checkEnum(
-          personal.buddy.hermes,
-          "software_repo",
-          hermesSpec.properties?.software_repo,
-          "buddy.hermes.software_repo",
-        );
+        failures.push(...buddyRuntimeIssues(personal.buddy, label));
         checkConst(
           personal.buddy.hermes,
           "profile_format",
@@ -356,20 +336,72 @@ export function validatePersonalConfig(personal, schema, label) {
   return failures;
 }
 
+// `buddy.runtime` má dva přijímané tvary. Blok podle decision 0210 (Buddy
+// v Osobním Prostředí) se kontroluje stejně jako `buddyStateIssues` šablony
+// Personalspace: jiný cíl, pole skončeného modelu i Hermes mimo fork failují.
+// Dosavadní hostovaný blok (LEGACY, viz konstanty nahoře) musí být úplný
+// a známý; jeho platnost nese jen deprecation warning v `personalBindingWarnings`.
+function buddyRuntimeIssues(buddy, label) {
+  const runtime = buddy.runtime;
+  if (runtime === undefined) return [];
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    return [`${label}: buddy.runtime musí být objekt`];
+  }
+  const hermesRepo = buddy.hermes?.software_repo;
+  const failures = [];
+  if (runtime.deployment_target === LEGACY_HOSTED_BUDDY_DEPLOYMENT_TARGET) {
+    if (runtime.local_execution !== undefined && runtime.local_execution !== "forbidden") {
+      failures.push(`${label}: buddy.runtime.local_execution dosavadního hostovaného Buddyho musí být "forbidden"`);
+    }
+    if (runtime.github_repo !== undefined && !LEGACY_HOSTED_BUDDY_RUNTIME_REPOS.includes(runtime.github_repo)) {
+      failures.push(
+        `${label}: buddy.runtime.github_repo dosavadního hostovaného Buddyho musí být jedno z `
+        + LEGACY_HOSTED_BUDDY_RUNTIME_REPOS.join(", "),
+      );
+    }
+    for (const key of ["github_repo", "local_execution"]) {
+      if (runtime[key] === undefined) failures.push(`${label}: chybí buddy.runtime.${key}`);
+    }
+    if (hermesRepo !== undefined && ![BUDDY_HERMES_REPO, LEGACY_HERMES_REPO].includes(hermesRepo)) {
+      failures.push(`${label}: buddy.hermes.software_repo musí být jedno z ${BUDDY_HERMES_REPO}, ${LEGACY_HERMES_REPO}`);
+    }
+    return failures;
+  }
+  if (runtime.deployment_target !== undefined && runtime.deployment_target !== BUDDY_DEPLOYMENT_TARGET) {
+    failures.push(
+      `${label}: buddy.runtime.deployment_target musí být ${BUDDY_DEPLOYMENT_TARGET}: `
+      + "Buddy běží v Osobním Prostředí svého člověka (decision 0210)",
+    );
+  }
+  if (runtime.local_execution !== undefined) {
+    failures.push(
+      `${label}: buddy.runtime.local_execution skončilo s decision 0210 (Buddy běží v Osobním Prostředí `
+      + "z Lazurio Folderu); pole odstraňte",
+    );
+  }
+  if (runtime.github_repo !== undefined) {
+    failures.push(
+      `${label}: buddy.runtime.github_repo skončilo s decision 0210 (Resident distribuce Buddyho skončila; `
+      + "software Buddyho deklaruje buddy.hermes.software_repo); pole odstraňte",
+    );
+  }
+  if (hermesRepo !== undefined && hermesRepo !== BUDDY_HERMES_REPO) {
+    failures.push(`${label}: buddy.hermes.software_repo musí být fork ${BUDDY_HERMES_REPO} (decision 0210)`);
+  }
+  return failures;
+}
+
 export function personalBindingWarnings(personal, label) {
   if (isLegacyPersonalCustodyConfig(personal)) return [];
   const warnings = [];
-  const runtimeRepo = personal?.buddy?.runtime?.github_repo;
-  if (LEGACY_BUDDY_RUNTIME_REPOS.has(runtimeRepo)) {
+  // LEGACY (DEV-6676): zmizí s legacy větví v `buddyRuntimeIssues`.
+  if (personal?.buddy?.runtime?.deployment_target === LEGACY_HOSTED_BUDDY_DEPLOYMENT_TARGET) {
     warnings.push(
-      `${label}: buddy.runtime.github_repo ${runtimeRepo} je známá nasazená legacy vazba; `
-      + `migrace na ${CURRENT_BUDDY_RUNTIME_REPO} zůstává otevřená v DEV-6438`,
-    );
-  }
-  if (personal?.buddy?.hermes?.software_repo === LEGACY_HERMES_REPO) {
-    warnings.push(
-      `${label}: buddy.hermes.software_repo používá přímý upstream ${LEGACY_HERMES_REPO}; `
-      + `Managed Resident cíl je ${CURRENT_HERMES_REPO}`,
+      `${label}: buddy popisuje dosavadního hostovaného Buddyho na dedikované VPS; tento model skončil `
+      + "s decision 0210. Instalace zůstává do své migrace a řídí se pravidly svého hostu. Po migraci "
+      + `do Osobního Prostředí přepište blok na buddy.runtime.deployment_target ${BUDDY_DEPLOYMENT_TARGET} `
+      + `a buddy.hermes.software_repo ${BUDDY_HERMES_REPO}, bez buddy.runtime.github_repo `
+      + "a buddy.runtime.local_execution (manual/buddy.md)",
     );
   }
   const gbrainSoftware = personal?.gbrain?.software;
@@ -380,7 +412,7 @@ export function personalBindingWarnings(personal, label) {
   ) {
     warnings.push(
       `${label}: gbrain.software používá přímý upstream ${LEGACY_GBRAIN_BINDING.github_repo}; `
-      + `Managed Resident cíl je ${CURRENT_GBRAIN_BINDING.github_repo}`,
+      + `Buddy bere gbrain z forku ${CURRENT_GBRAIN_BINDING.github_repo} (decision 0210)`,
     );
   }
   return warnings;

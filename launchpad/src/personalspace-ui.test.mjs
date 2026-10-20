@@ -28,11 +28,19 @@ test("kanonická Personalspace schema kopie zůstává base kontraktem s privát
   expect(schema.properties.shared_spaces.maxItems).toBe(0);
   expect(schema.properties.gbrain.properties.agent_access.const).toBe("mcp-only");
   expect(schema.properties.buddy.properties.display_name).toBeUndefined();
-  expect(schema.properties.buddy.properties.runtime.required).toContain("deployment_target");
-  expect(schema.properties.buddy.properties.runtime.required).toContain("local_execution");
-  expect(schema.properties.buddy.properties.runtime.properties.deployment_target.const)
-    .toBe("owner-dedicated-personalspace-vps");
-  expect(schema.properties.buddy.properties.runtime.properties.local_execution.const).toBe("forbidden");
+  // Buddy v Osobním Prostředí (decision 0210); dosavadní hostovaný blok zůstává
+  // přijatý do své migrace a jeho pole jsou povinná jen v legacy větvi.
+  const buddyRuntime = schema.properties.buddy.properties.runtime;
+  expect(buddyRuntime.required).toEqual(["deployment_target"]);
+  expect(buddyRuntime.properties.deployment_target.enum).toEqual([
+    "owner-personal-environment",
+    "owner-dedicated-personalspace-vps",
+  ]);
+  expect(buddyRuntime.if.properties.deployment_target.const).toBe("owner-dedicated-personalspace-vps");
+  expect(buddyRuntime.then.required).toEqual(["github_repo", "local_execution"]);
+  expect(buddyRuntime.properties.local_execution.const).toBe("forbidden");
+  expect(schema.properties.buddy.else.properties.hermes.properties.software_repo.const)
+    .toBe("Lazurio/hermes-agent");
   // Identity invariant stavební kameny (patterny na repo/mount).
   expect(schema.properties.repository.properties.github_repo.pattern).toContain("_GEN3");
   expect(schema.properties.repository.properties.mount_path.pattern).toContain("personalspace/");

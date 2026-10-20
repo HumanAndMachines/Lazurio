@@ -3,8 +3,9 @@
 Mountpoint pro privátní prostory lidí a AI kolegů podle
 `launchpad.gen3.json` (`personalspace_mountpoint`) a CompaniesAsCode
 decisions 0013 a 0021; strukturu definuje decision 0051
-(revidovaná pro self-service decision 0079 a VPS-only Buddy decision 0080;
-shrnutí drží `../manual/decision-register.md`).
+(revidovaná pro self-service decision 0079; Buddyho v Osobním Prostředí
+zavádí decision 0210 místo VPS-only Buddyho z decision 0080; shrnutí drží
+`../manual/decision-register.md`).
 
 `personalspace/` je integrální privátní vrstva Lazuria a mountpoint
 **jediného osobního prostoru Principála této mašiny**. Není to Organizace ani
@@ -16,18 +17,16 @@ pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
 
 Personalspace může fungovat bez Buddyho. Jeho Principálem je vlastník; Buddy
 binding a přístup ke gbrainu se přidávají jen tehdy, když vlastník Buddyho
-skutečně onboarduje. Nasazený baseline podle 0080 používá dedikovanou per-owner
-VPS. Cílový model [Synchronizace Buddy dokumentace](../manual/buddy-product-decision-2026-09-12.md)
-připouští samostatnou zákaznickou VM, VPS nebo vlastní hardware; tato dokumentace
-instalace nemigruje. Tento lokální mount dál drží jen Git konfiguraci, ne
-Hermes/Buddy runtime.
+skutečně má. Buddy patří k Osobnímu Prostředí a běží v něm (decision 0210);
+Personalspace o něm drží blok `buddy` v `personal.gen3.json`, secret-free
+profil v `buddy/` a paměť v `gbrain/`. Dosavadní hostované instalace Buddyho
+na dedikované VPS zůstávají do své migrace, jak jsou.
 
-**Agentům:** jestli tvůj Principál hostovaného Buddyho má, se nepozná
-z manifestu — deklarace není důkaz a instalace mimo self-service lane v něm
-nemusí být vidět vůbec. Postup zjištění, hranice toho, co s hostem smíš dělat, a pravidlo,
-že **na Buddyho Mašině platí vygenerované instrukce aktivního Buddy resident rootu spolu
-s privátním profilem Principála** a ne pravidla source checkoutu, drží
-[`../manual/hosted-buddy-vps.md`](../manual/hosted-buddy-vps.md).
+**Agentům:** jestli vlastník Buddyho má a jestli k němu máš přístup, se
+z manifestu nepozná: deklarace není důkaz a přístup se prokazuje operací. Co
+s Buddym smíš, kde leží jeho profil a paměť a že se dosavadní hostované
+instalace řídí pravidly svého hostu, ne pravidly source checkoutu, drží
+[`../manual/buddy.md`](../manual/buddy.md).
 
 Owner identifikátor je GitHub username vlastníka, například `exampleowner` — jeho prostor je
 `personalspace/exampleowner_GEN3/` a repo `exampleowner/exampleowner_GEN3`.
@@ -54,7 +53,7 @@ personalspace/
     ├── gbrain/                 # privátní paměťové data repo vlastníka
     │                           #   (přístup jen Principál + volitelný Buddy)
     ├── buddy/                  # volitelný mount private Hermes Profile
-    │                           #   Distribution; config pro VPS, ne localhost
+    │                           #   Distribution Buddyho (bez secrets)
     ├── secrets/                # owner-scoped secret custody (viz níže)
     └── README.md
 ```
@@ -100,15 +99,15 @@ checkout.
 Detail a recovery jsou v `manual/create-personalspace.md`; pilot Matouše
 a cross-platform evidence drží `CAC-0071`.
 
-Třírepo onboarding s private Hermes profilem Buddyho zůstává **PENDING
-`CAC-0072`**. Live root parser `--with-buddy` odmítá jako neznámý argument;
-Buddy repo ani hosted handoff nevytváří. Původní návrh bindingu s
-`deployment_target: owner-dedicated-personalspace-vps` odpovídá VPS baseline,
-ne obecnému cílovému modelu Synchronizace Buddy dokumentace. Budoucí adapter musí fail-closed
-ověřit samostatnou per-owner Mašinu a podporovaný deployment target; konkrétní
-schéma pro VM/VPS/hardware zůstává otevřené. `local_execution: forbidden`
-pro tento profilový mount zůstává. Akční surface smí vzniknout až po publikaci
-a cross-repo contract testu samostatného adapteru.
+Root příkaz Buddyho nezakládá: parser `--with-buddy` odmítá jako neznámý
+argument a Buddy repo nevytváří. Blok `buddy` podle decision 0210 drží
+`runtime.deployment_target: owner-personal-environment` a
+`hermes.software_repo: Lazurio/hermes-agent`, bez `runtime.github_repo`
+a `runtime.local_execution`; stejný kontrakt kontroluje šablona Personalspace
+i root.
+Dosavadní hostovaný blok (`owner-dedicated-personalspace-vps`,
+`local_execution: forbidden`, `runtime.github_repo`) root do migrace instalace
+přijme a Doctor ho hlásí jako deprecation warning.
 
 Existující neversionované manifesty zůstávají přechodně čitelné s Doctor
 warningem a migrují se podle
@@ -145,10 +144,12 @@ Adresáře se drží lokálně s módem `0700`, secret soubory s módem `0600`.
 Do Gitu patří jen tento standard a no-secret runbooky, nikdy skutečné secret
 hodnoty ani obsah JSON souborů. Personalspace ani jeho secrets custody se
 nesdílejí.
-Buddy/Hermes provider auth, sessions a runtime secrets patří pouze do
-oddělené custody na Buddyho Mašině (v nasazeném baseline dedikované VPS),
-ne do této lokální profilové cesty.
+Buddy/Hermes provider auth, sessions a runtime secrets patří jen do custody
+Osobního Prostředí, ve kterém Buddy běží (u dosavadních hostovaných instalací
+do custody jejich hostu); do profilu `buddy/` ani do Gitu nikdy.
 Detailní pravidla jsou v `manual/security/local-secret-custody.md`
 (aktualizace cesty na owner-scoped tvar je součást CAC-0048).
 
-Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
+Podle decision 0210 je Osobní Prostředí jediná osobní hostovaná Mašina člověka
+(0153) a Buddy běží v něm; organizační klony a běhy zůstávají na přidělených
+Organization-owned Mašinách.

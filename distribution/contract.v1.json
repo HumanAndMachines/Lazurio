@@ -16,11 +16,6 @@
     "stable"
   ],
   "profiles": {
-    "buddy": {
-      "descriptor": "distribution/profiles/buddy/profile.json",
-      "root_instructions": "distribution/profiles/buddy/root-instructions.md",
-      "evals": "distribution/profile-evals/buddy.json"
-    },
     "workspace": {
       "descriptor": "distribution/profiles/workspace/profile.json",
       "root_instructions": "distribution/profiles/workspace/root-instructions.md",
@@ -82,10 +77,8 @@
     "manual/organization-install.md",
     "manual/hosted-machine-first-login.md",
     "distribution/locales/en/manual/organization-install.md",
-    "manual/update-installed-resident.md",
     "scripts/install-launchpad-macos.sh",
-    "scripts/macos/",
-    "bridge/"
+    "scripts/macos/"
   ],
   "source_excludes": {
     "basenames": [
@@ -115,14 +108,6 @@
     "resident/dependencies/hermes.json",
     "resident/dependencies/gbrain.json",
     "resident/dependencies/toolchain.json",
-    "resident/updater-lib.mjs",
-    "resident/updater.mjs",
-    "resident/buddy-service-lib.mjs",
-    "resident/buddy-service.mjs",
-    "resident/buddy-rollout-lib.mjs",
-    "resident/buddy-rollout.mjs",
-    "resident/services/buddy-bridge.service.template",
-    "resident/services/hermes-lazurio-root.conf.template",
     "lazurio/search-scopes.v1.json"
   ],
   "mutable_mounts": [

@@ -106,9 +106,6 @@ pracovní Root.
   locale projekce Root-owned dlouhých dokumentů, evaly a deterministický build
   non-Git Lazurio Rootu; sdílený produkt se sem nekopíruje do druhého `common/`
   stromu.
-- `provisioning/` — source-only operator plane pro přípravu Resident Mašiny;
-  do výsledného Lazurio Rootu se nebalí a atomický install/update/rollback
-  deleguje na verzovaný resident lifecycle.
 - `.agents/skills/` — základní opakovatelné postupy pro Buddy a AI kolegy
 - `organizations/README.md` — vysvětlení mountpointu; jediný trackovaný soubor uvnitř `organizations/` v root repu
 - `organizations/<org>/` — lokální gitignored Organization GEN3 checkout, ideálně podle GitHub organizace
@@ -128,7 +125,7 @@ pracovní Root.
   workspace aplikace; starší tvar `<modul>.<team>.<doména>` je nahrazený.
 - `organizations/<org>/productionspace/` — org-level repozitáře dané Organizace, které nejsou workspace moduly (např. firmware, connect, platformní runtime nebo pracovní template checkout); každé repo si definuje vlastní pravidla a Doctor u nich vynucuje jen bezpečné minimum (decisions 0041 a 0127 v manual/decision-register.md)
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní
-- **Hostovaný Buddy** — když si Operátor Buddyho onboarduje, běží na dedikované per-owner VPS (historický VPS baseline: decision 0080; aktuální osobní Mašina: decisions 0153/0154; [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md)), ne lokálně; lokální mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu. Na hostu platí vygenerované instrukce aktivního Buddy resident rootu spolu s privátním profilem jeho Ownera, ne pravidla source checkoutu — hranici a postup zjištění drží `manual/hosted-buddy-vps.md`
+- **Buddy** — běží v Osobním Prostředí svého člověka (decision 0210); v `personalspace/<owner>_GEN3/` drží mount `buddy/` jeho secret-free profil a `gbrain/` jeho paměť. Dosavadní hostované instalace na dedikované VPS se do své migrace řídí vygenerovanými instrukcemi aktivního Resident rootu na hostu a privátním profilem Ownera, ne pravidly source checkoutu. Hranici a postup zjištění drží `manual/buddy.md`
 - `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>` — lokální gitignored
   custody cesta pro root/Buddy/operator secrets; organization/AI-colleague
   secrets patří do organization-local `private/secrets/...`

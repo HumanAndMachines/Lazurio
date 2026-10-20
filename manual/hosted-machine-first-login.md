@@ -67,7 +67,7 @@ je Pracovní, týmová VM Pracovní týmové a osobní Mašina Operátora Osobn�
   (preset `hosted-organization-team`). Pro ni platí
   [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
 - `machine.kind: personal-vm` s `owner.kind: principal` = osobní Mašina
-  Operátora podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
+  Operátora, jeho Osobní Prostředí podle [`buddy.md`](buddy.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
   typ nehádá a **osobní přihlášení `gh` neprovede** — bez platného handoveru

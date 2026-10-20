@@ -94,11 +94,16 @@
         "runtime": {
           "type": "object",
           "required": [
-            "github_repo",
-            "deployment_target",
-            "local_execution"
+            "deployment_target"
           ],
           "properties": {
+            "deployment_target": {
+              "enum": [
+                "owner-personal-environment",
+                "owner-dedicated-personalspace-vps"
+              ],
+              "description": "owner-personal-environment: Buddy běží v Osobním Prostředí svého člověka (decision 0210). owner-dedicated-personalspace-vps je jen dosavadní hostovaný Buddy na dedikované VPS z doby před 0210: zůstává do své migrace a řídí se pravidly svého hostu (0210 bod 1), Doctor ho hlásí jako deprecation warning. Tuto hodnotu i pole github_repo a local_execution odstraní DEV-6676, až žádný takový Buddy nezbude."
+            },
             "github_repo": {
               "enum": [
                 "HumanAndMachines/Lazurio",
@@ -106,15 +111,43 @@
                 "HumanAndMachine-ai/Buddy_GEN2",
                 "HumanAndMachines/Buddy"
               ],
-              "description": "Kanonický runtime source je HumanAndMachines/Lazurio. Známé předchozí Buddy repozitáře zůstávají read-compatible pouze proto, aby Doctor mohl pravdivě hlásit migrační warning místo falešné nevalidity."
-            },
-            "deployment_target": {
-              "const": "owner-dedicated-personalspace-vps",
-              "description": "Buddy-enabled Personalspace smí aktivovat runtime pouze na dedikované per-owner VPS."
+              "description": "Jen dosavadní hostovaný blok: runtime source Resident distribuce Buddyho nebo jejích předchůdců. Blok podle 0210 ho nenese; software Buddyho deklaruje hermes.software_repo."
             },
             "local_execution": {
               "const": "forbidden",
-              "description": "Lokální Lazurio/Personalspace smí držet konfiguraci, ale nesmí spouštět Hermes/Buddy runtime ani poskytovat localhost fallback."
+              "description": "Jen dosavadní hostovaný blok: Buddy běží na hostu, ne z lokálního checkoutu. Blok podle 0210 ho nenese."
+            }
+          },
+          "if": {
+            "required": [
+              "deployment_target"
+            ],
+            "properties": {
+              "deployment_target": {
+                "const": "owner-dedicated-personalspace-vps"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "github_repo",
+              "local_execution"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "github_repo"
+                  ]
+                },
+                {
+                  "required": [
+                    "local_execution"
+                  ]
+                }
+              ]
             }
           },
           "additionalProperties": true
@@ -132,7 +165,7 @@
                 "Lazurio/hermes-agent",
                 "NousResearch/hermes-agent"
               ],
-              "description": "Managed Resident používá Lazurio/hermes-agent; přímý upstream zůstává známou přechodovou vazbou."
+              "description": "Buddy podle decision 0210 bere Hermes Agent z forku Lazurio/hermes-agent. Přímý upstream NousResearch/hermes-agent přijme jen dosavadní hostovaný blok do své migrace (DEV-6676)."
             },
             "profile_format": {
               "const": "hermes-profile-distribution"
@@ -142,6 +175,34 @@
             }
           },
           "additionalProperties": true
+        }
+      },
+      "if": {
+        "required": [
+          "runtime"
+        ],
+        "properties": {
+          "runtime": {
+            "required": [
+              "deployment_target"
+            ],
+            "properties": {
+              "deployment_target": {
+                "const": "owner-dedicated-personalspace-vps"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "hermes": {
+            "properties": {
+              "software_repo": {
+                "const": "Lazurio/hermes-agent"
+              }
+            }
+          }
         }
       },
       "additionalProperties": true

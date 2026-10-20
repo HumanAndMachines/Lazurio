@@ -18,9 +18,9 @@ kontroly konkrétní Organizace, každý upstream pull by je přepsal — a Orga
 by musela buď nepullovat, nebo o svoje kontroly přijít.
 
 Z toho plyne druhá půlka pravidla: **podřízený doctor musí být plnohodnotný
-samostatný program.** Nesmí předpokládat kořen nad sebou. Na Buddy VPS je
-personalspace doctor *tím* doctorem, který běží; root tam neexistuje a nikdy
-existovat nebude.
+samostatný program.** Nesmí předpokládat kořen nad sebou. V samostatném
+checkoutu Personalspace ani v Lazurio Folderu nad ním root není a personalspace
+doctor je *tím* doctorem, který běží.
 
 ## Kontrakt
 
@@ -140,8 +140,8 @@ s `fail` a exit 1.
 Kde ta vazba **žije**, je vlastnická otázka, ne stylová. Povinné svázání dělá
 `lazurio/runtime/doctor-children-lib.mjs` (`runBoundChildDoctor`), ne sdílený
 surface. Surface povinně porovnává jen to, co dítě samo nabídlo — a pro
-samostatně běžícího doctora je to správně, protože na Buddy VPS nad ním žádný
-rodič není a nemá koho přesvědčovat. Root si tu povinnost přidává, protože dítě
+samostatně běžícího doctora je to správně, protože nad ním žádný rodič není
+a nemá koho přesvědčovat. Root si tu povinnost přidává, protože dítě
 spustil kvůli konkrétnímu mountu; kdyby si ji přidal uvnitř sdíleného surfacu,
 byl by to fork kontraktu v konzumentovi.
 

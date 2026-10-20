@@ -15,11 +15,15 @@
       "path": "runtime/doctor-surface-lib.mjs",
       "baseline_path": "lazurio/runtime/doctor-surface-lib.mjs",
       "baseline_sha256": "0e5dd714e7506c28f5f4f62322a18b3ea7771bd41b4e32abbf0d8ce76a5c9b82",
-      "current_sha256": "6409f45284100bd64a92a2843b4f7e9b6ba5c820db6c6058744d666af9d8ecd3",
+      "current_sha256": "7df92162be8997d7c360221a689ead13692c42c10842e0ef5d8a007f9a79ecc1",
       "declared_delta": [
         {
           "summary": "Komentář pojmenovává sdílený root jako Lazurio; chování Doctor kontraktu se nemění.",
           "anchor": "Root doctor v kořeni Lazuria"
+        },
+        {
+          "summary": "Komentář zdůvodňuje samostatný běh Personalspace doctora bez Buddy VPS, která s decision 0210 skončila; chování Doctor kontraktu se nemění.",
+          "anchor": "v samostatném checkoutu ani v Lazurio Folderu"
         }
       ]
     },
@@ -39,7 +43,7 @@
       "path": "schemas/doctor-report.schema.json",
       "baseline_path": "lazurio/schemas/doctor-report.schema.json",
       "baseline_sha256": "0bdf0184dcb7fb1a95e312c01cec448d0deaaebf0acc7bd09c3afa5ec4380036",
-      "current_sha256": "f59f5dd737165e9a1497fb9b3e84542343c458e6409008f6510d8465687a5ebf",
+      "current_sha256": "a1499150990ed3504d55c042689237000f338dc7f5edfa9c6afc6cca4bd62614",
       "declared_delta": [
         {
           "summary": "Zobrazovaný titul schématu používá značku Lazurio; validační kontrakt se nemění.",
@@ -48,6 +52,10 @@
         {
           "summary": "Popis consumeru používá aktuální produktový název Lazurio Launchpad; validační kontrakt se nemění.",
           "anchor": "orchestrace Lazurio Launchpadu"
+        },
+        {
+          "summary": "Popis scope personalspace zdůvodňuje samostatný běh bez Buddy VPS, která s decision 0210 skončila; validační kontrakt se nemění.",
+          "anchor": "v samostatném checkoutu nebo v Lazurio Folderu je to jediný běžící doctor"
         }
       ]
     }

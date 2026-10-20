@@ -28,8 +28,7 @@ test("Buddy presentation projection oddělí UX metadata od kanonické technick�
     display_name: "Demo Buddy",
     application: { name: "Demo chat", type: "web" },
     runtime: {
-      deployment_target: "owner-dedicated-personalspace-vps",
-      local_execution: "forbidden",
+      deployment_target: "owner-personal-environment",
     },
   })).toEqual({
     display_name: "Demo Buddy",
@@ -56,12 +55,10 @@ function personalConfig(username, overrides = {}) {
         mount_strategy: "doctor-managed-nested-repo",
       },
       runtime: {
-        github_repo: "HumanAndMachines/Lazurio",
-        deployment_target: "owner-dedicated-personalspace-vps",
-        local_execution: "forbidden",
+        deployment_target: "owner-personal-environment",
       },
       hermes: {
-        software_repo: "NousResearch/hermes-agent",
+        software_repo: "Lazurio/hermes-agent",
         profile_format: "hermes-profile-distribution",
         profile_path: "buddy",
       },
@@ -656,128 +653,126 @@ test("versionovaný Buddy binding failuje bez private Hermes distribution kontra
   expect(result.apps).toHaveLength(0);
 });
 
-test("versionovaný Buddy binding failuje při localhost runtime nebo povoleném local execution", async () => {
-  const config = personalConfig("exampleuser", {
+// Jediný vlastníkův prostor s daným manifestem; vrací výsledek discovery.
+async function discoverOwnerSpace(config) {
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+  return discoverPersonalspace(root);
+}
+
+const forkGbrain = {
+  software: {
+    github_repo: "Lazurio/gbrain",
+    install_source: "github:Lazurio/gbrain",
+  },
+};
+
+// Dosavadní hostovaný blok z doby před decision 0210 (Buddy na dedikované VPS).
+const legacyHostedRuntime = {
+  github_repo: "HumanAndMachines/Lazurio",
+  deployment_target: "owner-dedicated-personalspace-vps",
+  local_execution: "forbidden",
+};
+
+test("Buddy v Osobním Prostředí podle decision 0210 je validní bez warningu", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", { gbrain: forkGbrain }));
+  expect(result.failures).toEqual([]);
+  expect(result.warnings).toEqual([]);
+  expect(result.spaces[0].config_valid).toBe(true);
+  expect(result.spaces[0].buddy.slug).toBe("exampleuser-buddy");
+});
+
+test("Buddy binding mimo Osobní Prostředí failuje (decision 0210)", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", {
     buddy: {
       runtime: {
         deployment_target: "localhost",
         local_execution: "allowed",
       },
     },
-  });
-  const root = await createPersonalspaceFixture({
-    localOwner: "exampleuser",
-    spaces: [{
-      dirName: "exampleuser_GEN3",
-      owner: "exampleuser",
-      config,
-      gbrainNotes: {},
-    }],
-  });
-
-  const result = await discoverPersonalspace(root);
-  expect(result.failures.some((failure) => failure.includes("buddy.runtime.deployment_target"))).toBe(true);
-  expect(result.failures.some((failure) => failure.includes("buddy.runtime.local_execution"))).toBe(true);
+  }));
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.deployment_target musí být owner-personal-environment"))).toBe(true);
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.local_execution skončilo s decision 0210"))).toBe(true);
   expect(result.apps).toHaveLength(0);
 });
 
-test("nasazený legacy Buddy binding je validní migrační warning a osobní slug nezávisí na názvu profilu", async () => {
-  const config = personalConfig("exampleuser", {
+test("blok 0210 odmítne pole skončeného hostovaného modelu i Hermes mimo fork", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", {
+    buddy: {
+      runtime: {
+        github_repo: "HumanAndMachines/Lazurio",
+        local_execution: "forbidden",
+      },
+      hermes: { software_repo: "NousResearch/hermes-agent" },
+    },
+    gbrain: forkGbrain,
+  }));
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.local_execution skončilo s decision 0210"))).toBe(true);
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.github_repo skončilo s decision 0210"))).toBe(true);
+  expect(result.failures.some((failure) => failure.includes("buddy.hermes.software_repo musí být fork Lazurio/hermes-agent"))).toBe(true);
+  expect(result.spaces[0].config_valid).toBe(false);
+});
+
+test("dosavadní hostovaný Buddy zůstává validní s deprecation warningem a osobní slug nezávisí na názvu profilu", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", {
     buddy: {
       slug: "my-buddy",
       repository: { github_repo: "exampleuser/private-profile" },
-      runtime: { github_repo: "HumanAndMachines/Buddy_GEN2" },
-      hermes: { software_repo: "Lazurio/hermes-agent" },
+      runtime: { ...legacyHostedRuntime, github_repo: "HumanAndMachines/Buddy_GEN2" },
+      hermes: { software_repo: "NousResearch/hermes-agent" },
     },
-    gbrain: {
-      software: {
-        github_repo: "Lazurio/gbrain",
-        install_source: "github:Lazurio/gbrain",
-      },
-    },
-  });
-  const root = await createPersonalspaceFixture({
-    localOwner: "exampleuser",
-    spaces: [{
-      dirName: "exampleuser_GEN3",
-      owner: "exampleuser",
-      config,
-      gbrainNotes: {},
-    }],
-  });
-
-  const result = await discoverPersonalspace(root);
+    gbrain: forkGbrain,
+  }));
   expect(result.failures).toEqual([]);
   expect(result.spaces[0].config_valid).toBe(true);
   expect(result.spaces[0].buddy.slug).toBe("my-buddy");
   expect(result.warnings).toEqual([
-    expect.stringContaining("HumanAndMachines/Buddy_GEN2 je známá nasazená legacy vazba"),
+    expect.stringContaining("dosavadního hostovaného Buddyho na dedikované VPS; tento model skončil s decision 0210"),
+  ]);
+  expect(result.warnings[0]).toContain("buddy.runtime.deployment_target owner-personal-environment");
+});
+
+test("dosavadní hostovaný blok musí zůstat úplný", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", {
+    buddy: {
+      runtime: { deployment_target: "owner-dedicated-personalspace-vps", github_repo: "HumanAndMachines/Lazurio" },
+    },
+    gbrain: forkGbrain,
+  }));
+  expect(result.failures.some((failure) => failure.includes("chybí buddy.runtime.local_execution"))).toBe(true);
+  expect(result.spaces[0].config_valid).toBe(false);
+});
+
+test("Personalspace bez Buddyho může používat přímý gbrain upstream bez warningu", async () => {
+  const config = personalConfig("exampleuser");
+  delete config.buddy;
+  const result = await discoverOwnerSpace(config);
+  expect(result.failures).toEqual([]);
+  expect(result.warnings).toEqual([]);
+  expect(result.spaces[0].config_valid).toBe(true);
+});
+
+test("Buddy s přímým gbrain upstreamem dostane warning, že Buddy bere gbrain z forku", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser"));
+  expect(result.failures).toEqual([]);
+  expect(result.warnings).toEqual([
+    expect.stringContaining("Buddy bere gbrain z forku Lazurio/gbrain (decision 0210)"),
   ]);
 });
 
-test("aktuální Resident binding je validní bez rollout warningu", async () => {
-  const config = personalConfig("exampleuser", {
-    buddy: {
-      hermes: { software_repo: "Lazurio/hermes-agent" },
-    },
-    gbrain: {
-      software: {
-        github_repo: "Lazurio/gbrain",
-        install_source: "github:Lazurio/gbrain",
-      },
-    },
-  });
-  const root = await createPersonalspaceFixture({
-    localOwner: "exampleuser",
-    spaces: [{
-      dirName: "exampleuser_GEN3",
-      owner: "exampleuser",
-      config,
-      gbrainNotes: {},
-    }],
-  });
-
-  const result = await discoverPersonalspace(root);
-  expect(result.failures).toEqual([]);
-  expect(result.warnings).toEqual([]);
-  expect(result.spaces[0].config_valid).toBe(true);
-});
-
-test("Personalspace bez Buddyho může používat přímý gbrain upstream bez Resident warningu", async () => {
-  const config = personalConfig("exampleuser");
-  delete config.buddy;
-  const root = await createPersonalspaceFixture({
-    localOwner: "exampleuser",
-    spaces: [{
-      dirName: "exampleuser_GEN3",
-      owner: "exampleuser",
-      config,
-      gbrainNotes: {},
-    }],
-  });
-
-  const result = await discoverPersonalspace(root);
-  expect(result.failures).toEqual([]);
-  expect(result.warnings).toEqual([]);
-  expect(result.spaces[0].config_valid).toBe(true);
-});
-
-test("neznámý Buddy runtime source zůstává fail-closed", async () => {
-  const config = personalConfig("exampleuser", {
-    buddy: { runtime: { github_repo: "exampleuser/unreviewed-runtime" } },
-  });
-  const root = await createPersonalspaceFixture({
-    localOwner: "exampleuser",
-    spaces: [{
-      dirName: "exampleuser_GEN3",
-      owner: "exampleuser",
-      config,
-      gbrainNotes: {},
-    }],
-  });
-
-  const result = await discoverPersonalspace(root);
-  expect(result.failures.some((failure) => failure.includes("buddy.runtime.github_repo"))).toBe(true);
+test("neznámý runtime source dosavadního hostovaného Buddyho zůstává fail-closed", async () => {
+  const result = await discoverOwnerSpace(personalConfig("exampleuser", {
+    buddy: { runtime: { ...legacyHostedRuntime, github_repo: "exampleuser/unreviewed-runtime" } },
+    gbrain: forkGbrain,
+  }));
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.github_repo dosavadního hostovaného Buddyho"))).toBe(true);
   expect(result.spaces[0].config_valid).toBe(false);
 });
 

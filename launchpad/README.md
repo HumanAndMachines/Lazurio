@@ -729,11 +729,16 @@ personalspace/*/gbrain/                        (Obsidian-compatible markdown vau
   gbrain), jen se nahlásí chyba.
 - Buddy binding je volitelný. Je-li přítomný, validuje se celý; není-li
   přítomný, vlastník dál používá osobní moduly i gbrain bez placeholder identity.
-- Verzovaný Buddy binding musí mít
-  `deployment_target: owner-dedicated-personalspace-vps` a
-  `local_execution: forbidden`. Buddy není personal app a Launchpad mu
-  neposkytuje Install/Start/Stop/Restart ani localhost fallback; smí zobrazit
-  pouze hosted prezentační metadata a schválený odkaz.
+- Verzovaný Buddy binding podle decision 0210 má
+  `runtime.deployment_target: owner-personal-environment` a
+  `hermes.software_repo: Lazurio/hermes-agent`, bez `runtime.github_repo`
+  a `runtime.local_execution`: Buddy běží v Osobním Prostředí svého člověka.
+  Dosavadní hostovaný blok (`owner-dedicated-personalspace-vps`,
+  `local_execution: forbidden`, `runtime.github_repo`) zůstává validní do
+  migrace své instalace a Doctor ho hlásí jako deprecation warning (DEV-6676).
+  Buddy není personal app a Launchpad mu neposkytuje
+  Install/Start/Stop/Restart; smí zobrazit pouze prezentační metadata
+  a schválený odkaz.
 - `modules.manifest.json` drží **identický kontrakt jako Organizace** (stejné
   `module_slots[]`, stejné readiness stavy `available`/`missing_access`/`planned_slot`).
   Modul bez lokálního checkoutu s deklarovaným repo je `missing_access`; jde o
