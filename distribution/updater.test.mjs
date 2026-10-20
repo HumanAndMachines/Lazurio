@@ -46,7 +46,7 @@ test("assisted updater installs, no-ops, upgrades and rolls back without moving 
     active: first.artifactId,
     previous: null,
     last_known_good: first.artifactId,
-    profile: "buddy",
+    profile: "workspace",
   });
   expect(await readlink(join(installRoot, "active"))).toBe(`versions/${first.artifactId}`);
 
@@ -69,12 +69,12 @@ test("assisted updater installs, no-ops, upgrades and rolls back without moving 
   expect(await readFile(join(installRoot, "active", "personalspace", "personal-sentinel.txt"), "utf8"))
     .toBe("private stays\n");
 
-  const status = await residentStatus({ installRoot, expectedProfile: "buddy" });
+  const status = await residentStatus({ installRoot, expectedProfile: "workspace" });
   expect(status).toMatchObject({
     active: second.artifactId,
     previous: first.artifactId,
     last_known_good: first.artifactId,
-    profile: "buddy",
+    profile: "workspace",
     health: { status: "pass", artifact_id: second.artifactId },
   });
   expect(status.installed).toEqual([first.artifactId, second.artifactId]);
@@ -82,7 +82,7 @@ test("assisted updater installs, no-ops, upgrades and rolls back without moving 
   const activeOrganizations = join(installRoot, "active", "organizations");
   await unlink(activeOrganizations);
   await symlink("../../state/personalspace", activeOrganizations, "dir");
-  const redirected = await residentStatus({ installRoot, expectedProfile: "buddy" });
+  const redirected = await residentStatus({ installRoot, expectedProfile: "workspace" });
   expect(redirected.health).toMatchObject({ status: "fail" });
   expect(redirected.health.error).toContain("mutable mount link must target");
   await unlink(activeOrganizations);
@@ -90,7 +90,7 @@ test("assisted updater installs, no-ops, upgrades and rolls back without moving 
 
   const rolledBack = await rollbackResidentArtifact({
     installRoot,
-    expectedProfile: "buddy",
+    expectedProfile: "workspace",
   });
   expect(rolledBack).toMatchObject({
     status: "rolled_back",
@@ -154,7 +154,7 @@ test("checksum, interrupted archive, incompatibility and health failures leave a
     archivePath: failedHealth.archivePath,
     checksumPath: failedHealth.checksumPath,
     installRoot,
-    expectedProfile: "buddy",
+    expectedProfile: "workspace",
     expectedChannel: "candidate",
     healthRunner: failAfterSwitch,
   })).rejects.toThrow("active was restored");
@@ -203,7 +203,7 @@ test("first install can adopt an existing Personalspace without copying or retar
 
   await unlink(join(installRoot, "state", "personalspace"));
   await symlink(await realpath(otherPersonalspace), join(installRoot, "state", "personalspace"), "dir");
-  const status = await residentStatus({ installRoot, expectedProfile: "buddy" });
+  const status = await residentStatus({ installRoot, expectedProfile: "workspace" });
   expect(status.health).toMatchObject({ status: "fail" });
   expect(status.health.error).toContain("declared target");
 });
@@ -233,17 +233,7 @@ test("an explicitly declared source can replace only an empty managed mount", as
     .toBe("must not hide\n");
 });
 
-test("Buddy profile refuses an external organizations mount", async () => {
-  if (process.platform === "win32") return;
-  const fixtureRoot = await temporary("lazurio-updater-org-boundary-fixtures-");
-  const installRoot = join(await temporary("lazurio-updater-org-boundary-parent-"), "lazurio");
-  const organizations = await temporary("lazurio-external-organizations-");
-  const fixture = await buildFixture(fixtureRoot, "0.3.2-candidate.1");
-  await expect(install(fixture, installRoot, { organizations }))
-    .rejects.toThrow("cannot adopt an organizations mount");
-});
-
-test("rollout compensation can revert an initial or updated activation without deleting versions", async () => {
+test("an activation revert undoes an initial or updated activation without deleting versions", async () => {
   if (process.platform === "win32") return;
   const fixtureRoot = await temporary("lazurio-updater-compensation-fixtures-");
   const first = await buildFixture(fixtureRoot, "0.3.3-candidate.1");
@@ -253,12 +243,12 @@ test("rollout compensation can revert an initial or updated activation without d
   await install(first, initialRoot);
   const initialRevert = await revertResidentActivation({
     installRoot: initialRoot,
-    expectedProfile: "buddy",
+    expectedProfile: "workspace",
     failedArtifactId: first.artifactId,
   });
   expect(initialRevert).toMatchObject({ status: "initial_activation_reverted", active: null });
   expect(await lstat(join(initialRoot, "active")).catch((error) => error.code)).toBe("ENOENT");
-  const initialStatus = await residentStatus({ installRoot: initialRoot, expectedProfile: "buddy" });
+  const initialStatus = await residentStatus({ installRoot: initialRoot, expectedProfile: "workspace" });
   expect(initialStatus.active).toBeNull();
   expect(initialStatus.installed).toEqual([first.artifactId]);
 
@@ -267,7 +257,7 @@ test("rollout compensation can revert an initial or updated activation without d
   await install(second, updateRoot);
   const updateRevert = await revertResidentActivation({
     installRoot: updateRoot,
-    expectedProfile: "buddy",
+    expectedProfile: "workspace",
     failedArtifactId: second.artifactId,
   });
   expect(updateRevert).toMatchObject({
@@ -310,7 +300,7 @@ async function install(fixture, installRoot, mutableMountSources = {}) {
     archivePath: fixture.archivePath,
     checksumPath: fixture.checksumPath,
     installRoot,
-    expectedProfile: "buddy",
+    expectedProfile: "workspace",
     expectedChannel: "candidate",
     mutableMountSources,
   });
@@ -318,7 +308,7 @@ async function install(fixture, installRoot, mutableMountSources = {}) {
 
 async function buildFixture(root, version, target = currentResidentTarget()) {
   const [os, arch] = target.split("-");
-  const artifactId = `lazurio-resident-buddy-${version}-${target}`;
+  const artifactId = `lazurio-resident-workspace-${version}-${target}`;
   const [hermesPinBytes, gbrainPinBytes, toolchainPinBytes] = await Promise.all([
     readFile(join(import.meta.dir, "dependencies", "hermes.json")),
     readFile(join(import.meta.dir, "dependencies", "gbrain.json")),
@@ -328,7 +318,7 @@ async function buildFixture(root, version, target = currentResidentTarget()) {
   const gbrainPin = JSON.parse(gbrainPinBytes.toString("utf8"));
   const toolchainPin = JSON.parse(toolchainPinBytes.toString("utf8"));
   const entries = new Map([
-    ["AGENTS.md", { bytes: Buffer.from("<!-- generated:lazurio-resident-profile=buddy -->\n# Buddy\n"), mode: "0644" }],
+    ["AGENTS.md", { bytes: Buffer.from("<!-- generated:lazurio-resident-profile=workspace -->\n# Workspace\n"), mode: "0644" }],
     ["package.json", { bytes: Buffer.from(`${JSON.stringify({
       private: true,
       type: "module",
@@ -342,23 +332,10 @@ async function buildFixture(root, version, target = currentResidentTarget()) {
       bytes: await readFile(join(import.meta.dir, "..", "lazurio", "core", "resident-manifest-lib.mjs")),
       mode: "0644",
     }],
-    ["resident/profile.json", { bytes: Buffer.from(`${JSON.stringify({ schema_version: "lazurio.resident.profile.v1", id: "buddy" }, null, 2)}\n`), mode: "0644" }],
+    ["resident/profile.json", { bytes: Buffer.from(`${JSON.stringify({ schema_version: "lazurio.resident.profile.v1", id: "workspace" }, null, 2)}\n`), mode: "0644" }],
     ["resident/dependencies/hermes.json", { bytes: hermesPinBytes, mode: "0644" }],
     ["resident/dependencies/gbrain.json", { bytes: gbrainPinBytes, mode: "0644" }],
     ["resident/dependencies/toolchain.json", { bytes: toolchainPinBytes, mode: "0644" }],
-    ["resident/services/buddy-bridge.service.template", {
-      bytes: Buffer.from("[Service]\nUser=buddy-bridge\nRestartPreventExitStatus=78\n"),
-      mode: "0644",
-    }],
-    ["resident/services/hermes-lazurio-root.conf.template", {
-      bytes: Buffer.from("[Service]\nEnvironment=TERMINAL_CWD=/opt/lazurio/active\n"),
-      mode: "0644",
-    }],
-    ["resident/buddy-service-lib.mjs", { bytes: Buffer.from("export {};\n"), mode: "0644" }],
-    ["resident/buddy-service.mjs", { bytes: Buffer.from("#!/usr/bin/env bun\n"), mode: "0755" }],
-    ["resident/buddy-rollout-lib.mjs", { bytes: Buffer.from("export {};\n"), mode: "0644" }],
-    ["resident/buddy-rollout.mjs", { bytes: Buffer.from("#!/usr/bin/env bun\n"), mode: "0755" }],
-    ["bridge/run.ts", { bytes: Buffer.from("export const fixtureBridge = true;\n"), mode: "0644" }],
     ["fixture/version.txt", { bytes: Buffer.from(`${version}\n`), mode: "0644" }],
   ]);
   const payload = [...entries.entries()]
@@ -374,7 +351,7 @@ async function buildFixture(root, version, target = currentResidentTarget()) {
     artifact_id: artifactId,
     artifact_version: version,
     channel: "candidate",
-    profile: "buddy",
+    profile: "workspace",
     role_overlays: [],
     target: { os, arch },
     source: {

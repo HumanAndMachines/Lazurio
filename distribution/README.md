@@ -1,7 +1,11 @@
 # Lazurio resident distributions
 
-> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](../manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
-
+> **Buddy nemá Resident profil (decision 0210).** Buddy je Hermes Agent
+> v Osobním Prostředí svého člověka ([manuál Buddyho](../manual/buddy.md)).
+> Profil `buddy`, jeho Zulip bridge, service a rollout příkazy a operator plane
+> pro jeho hosty se z tohoto source odstranily. Dosavadní hostované instalace
+> Buddyho běží dál ze svých nainstalovaných artefaktů podle pravidel svého
+> hostu, dokud je někdo nemigruje.
 
 Tato vrstva skládá celý non-Git Lazurio Root z exact commitu společného source.
 Sdílený produkt zůstává v běžných adresářích rootu; nevzniká paralelní
@@ -16,12 +20,6 @@ Kurátorovaný přechod ze starších produktových repozitářů drží
 `migrations/`. Inventář zapisuje exact source commit a disposition každé
 skupiny; není to svolení ke kopii privátního repozitáře ani vstup buildu.
 
-Příprava celé Mašiny je oddělený source-only operator plane pod
-`provisioning/`. Do resident artefaktu nevstupuje. Jeho Ansible role mohou
-oficiální updater explicitně zavolat, ale nevlastní algoritmus aktivace ani
-rollbacku. Postup pro už nainstalovaný Resident drží
-`manual/update-installed-resident.md`.
-
 Profilový fragment se záměrně jmenuje `root-instructions.md`, nikoli
 `AGENTS.md`. V source checkoutu proto není aktivní instrukční scope. Builder z
 něj vytvoří jediný root `AGENTS.md` až ve výsledném artefaktu.
@@ -34,7 +32,7 @@ Kanonická identita source repozitáře je verzovanou součástí build kontrakt
 nikoli hodnotou odvozenou z lokálního `remote.origin.url`.
 
 ```sh
-bun run resident:build -- --profile buddy --target linux-x64 \
+bun run resident:build -- --profile workspace --target linux-x64 \
   --version 0.1.0-candidate.1 --channel candidate
 ```
 
@@ -71,33 +69,25 @@ nečte ani nehashuje.
 
 ## Assisted install, update a rollback
 
-Updater v1 je explicitní operátorský příkaz, ne daemon. Před prvním během se
-spouští z exact reviewovaného source/release operator kitu; po instalaci je
-stejný updater součástí immutable rootu pod `resident/`. Buddyho mašina proto
-nepotřebuje Git checkout Lazuria.
-
-Samotný updater řeší atomický root. Produkční Buddy cutover používá vyšší
-`buddy-rollout`, který k němu přidá Hermes a bridge service gates; při jejich
-selhání vrátí aktivaci rootu a pro update znovu nastartuje předchozí služby.
+Updater v1 je explicitní operátorský příkaz, ne daemon. Spouští se z exact
+reviewovaného operator kitu mimo instalovaný artefakt: kit nese
+`package.json`, `distribution/runtime/updater-lib.mjs`,
+`distribution/runtime/integrity.mjs` a `lazurio/core/resident-manifest-lib.mjs`
+z jednoho source commitu. Tímto kitem instaluje a kontroluje Workspace
+Residenta Machines. Instalovaná Mašina proto nepotřebuje Git checkout Lazuria
+a samotný artefakt updater nenese.
 
 ```sh
 bun distribution/runtime/updater.mjs install \
-  --archive /staging/lazurio-resident-buddy-<version>-linux-x64.tar \
-  --checksum /staging/lazurio-resident-buddy-<version>-linux-x64.tar.sha256 \
-  --install-root /opt/lazurio --profile buddy --channel candidate \
-  --mount-source personalspace=/srv/conglomerate/personalspace
+  --archive /staging/lazurio-resident-workspace-<version>-linux-x64.tar \
+  --checksum /staging/lazurio-resident-workspace-<version>-linux-x64.tar.sha256 \
+  --install-root /opt/lazurio --profile workspace --channel candidate
 
-sudo bun /staging/<artifact-id>/resident/buddy-rollout.mjs install \
-  --archive /staging/lazurio-resident-buddy-<version>-linux-x64.tar \
-  --checksum /staging/lazurio-resident-buddy-<version>-linux-x64.tar.sha256 \
-  --install-root /opt/lazurio --channel candidate \
-  --mount-source personalspace=/srv/conglomerate/personalspace
+bun distribution/runtime/updater.mjs status \
+  --install-root /opt/lazurio --profile workspace
 
-bun /opt/lazurio/active/resident/updater.mjs status \
-  --install-root /opt/lazurio --profile buddy
-
-bun /opt/lazurio/active/resident/updater.mjs rollback \
-  --install-root /opt/lazurio --profile buddy
+bun distribution/runtime/updater.mjs rollback \
+  --install-root /opt/lazurio --profile workspace
 ```
 
 Lifecycle layout je záměrně malý:
@@ -130,79 +120,17 @@ První instalace může explicitním `--mount-source NAME=/absolute/path` adopto
 existující mutable strom bez kopie nebo přesunu. Updater uloží resolved target
 do mode-0600 `mounts.v1.json`; každý další update, status i rollback ověřuje,
 že lokální link stále míří přesně tam. Jiný target se odmítne a neprázdný
-managed adresář se nikdy neschová pod externím mountem. Pro existující Buddy
-host je deklarace `personalspace` povinnou součástí rollout preflightu.
+managed adresář se nikdy neschová pod externím mountem.
 
 V1 používá POSIX atomic-symlink adapter pro Linux a macOS. Windows Kolegové
 zůstávají na stávajícím Git checkoutu a Windows resident lifecycle se
 nezapne, dokud nebude mít vlastní atomický pointer adapter a failure testy.
 
-## Buddy bridge
-
-Buddy artefakt nese veřejně bezpečné, runtime-neutrální bridge jádro pod
-`bridge/` a systemd template pod `resident/services/`. Bridge long-polluje
-Zulip, nevystavuje příchozí port, posílá každý turn přes `AGENT_RUNTIME_*`
-šev a před síťovým přístupem fail-closed ověří privátní profil. Jeho fronta,
-poller stav, Zulip credential, runtime bearer a profil nejsou payload; zůstávají
-v host custody a připojí je service EnvironmentFile.
-
-Nasazení předpokládá privátní one-Principal Zulip realm: membership,
-credentials a síťový access plane jsou skutečná vstupní hranice Buddyho.
-Technická identita botu není další Principál a bridge sám nevytváří druhý IAM.
-Principál zároveň vlastní Mašinu a smí Lazurio lokálně měnit; manifest a Doctor
-změnu zviditelní jako drift, ale neblokují ji. Co smí běžící Agent dělat, určuje
-Hermes sandbox. Jde o tři samostatné odpovědnosti — komunikaci, vlastnictví
-Mašiny a agentní relaci — ne o tři překrývající se autorizační vrstvy.
-
-Přenesené behaviorální testy drží cold-start bez přehrání historie, pořadí
-durable record → watermark → acknowledgement, id-based routing, self-echo
-filtr, singleton, rate breaker, profilovou custody hranici, celé instrukce na
-wire a session recovery. Host service seam znovu nepřenáší secrets: ověří
-existující root-owned `EnvironmentFile`, profil a runtime UID, uchová přesnou
-původní unit a ověří její typově správný baseline. Už resident predecessor
-musí mít durable poller stav; unmanaged legacy unit dokládá svůj původní
-enabled/active systemd stav a nový poller se po ní nevyžaduje. Seam pak atomicky
-nasadí unit mířící na `active`, restartuje ji a za
-úspěch považuje až čerstvou registraci polleru. Při chybě vrátí původní unit.
-Stejná transakce přidá Hermes gatewayi `TERMINAL_CWD=<active-root>`, takže
-pinned Hermes načte profilový root `AGENTS.md` do každé nově sestavené session;
-privátní ústava a mandáty zůstávají samostatnou vrstvou bridge system message.
-Před restartem seam ověří exact Hermes commit, tracked bytes nezávisle na Git
-indexu i digest `uv.lock` a po něm jeho HTTP health.
-
-Bun zapsaný do unit se resolveuje na přesnou spustitelnou binárku a preflight
-ověří, že ji runtime účet umí použít. Nemusí být root-owned: konkrétní host
-dependency volí Principál přes `--bun PATH` a installer ji nekopíruje ani
-neopravuje. Bun ani Hermes checkout však nesmí být vlastněný, zapisovatelný či
-nahraditelný účty `buddy` a `buddy-bridge`: sandbox nesmí umět přepsat sám
-sebe. Vlastníkem může dál být Principál nebo jím řízená maintenance identita,
-která nespouští agentní relaci.
-Privilegované instalační subprocessy nepoužívají ambientní `PATH` nebo
-checkout-local Git hooky; tyto kontroly chrání instalační krok a integritu
-sandboxu, nikoli Lazurio před Principálem.
-
-Bridge běží jako neprivilegovaná služba a k deklarovanému profilu přistupuje
-přes běžná host oprávnění; nestaví nad Personalspace druhý sandbox ani vlastní
-ACL. Hranici nástrojů a souborů dostupných v agentní relaci drží existující
-Hermes sandbox. Systemd service hardening chrání pouze samotný proces před
-náhodnou self-mutací a není zámkem proti Principálovi.
-
-```sh
-sudo bun /opt/lazurio/active/resident/buddy-service.mjs preflight \
-  --install-root /opt/lazurio
-```
-
-Ruční `buddy-service install` je servisní/recovery seam; běžný install a update
-volá `buddy-rollout`, aby pointer a obě služby netvořily dvě nezávislé půlky.
-
-Nová Hermes/gbrain materializace zůstává dalším explicitním parity gatem.
-
 ## Stav první fáze
 
-Build contract v1 vydává pouze profil `buddy`. Schema, builder, integrity
+Build contract v1 vydává pouze profil `workspace`. Schema, builder, integrity
 engine a updater jsou profilově neutrální; každý další runtime profil nebo
 overlay se publikuje teprve s vlastním reviewovaným kontraktem a ověřením.
-Build ani updater sám neopravňuje přístup na živý host, Release nebo production
-cutover.
-
-Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
+Manifest v1 dál nese exact piny Hermesu, GBrainu a toolchainu: Resident Doctor
+je ověřuje a CLI provenance bez nich manifest nepřijme. Build ani updater sám
+neopravňuje přístup na živý host, Release nebo production cutover.

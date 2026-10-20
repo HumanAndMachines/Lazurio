@@ -54,10 +54,6 @@ export async function installResidentArtifact({
   if (!archivePath || !checksumPath || !installRoot || !expectedProfile) {
     throw new Error("install requires archivePath, checksumPath, installRoot and expectedProfile");
   }
-  if (expectedProfile === "buddy"
-    && Object.hasOwn(mutableMountSources ?? {}, "organizations")) {
-    throw new Error("Buddy Personalspace hosts cannot adopt an organizations mount");
-  }
 
   const archive = await readVerifiedArchive(archivePath, checksumPath);
   const parsed = parseResidentArchive(archive.bytes);
@@ -570,9 +566,6 @@ function assertInstallCompatibility(manifest, {
   }
   if (!SUPPORTED_ROOT_COMPATIBILITY.has(manifest.compatibility.resident_root)) {
     throw new Error(`unsupported resident root compatibility ${manifest.compatibility.resident_root}`);
-  }
-  if (expectedProfile === "buddy" && manifest.role_overlays.length !== 0) {
-    throw new Error("Buddy artifact cannot carry role overlays");
   }
 }
 

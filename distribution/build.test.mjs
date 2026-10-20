@@ -98,15 +98,14 @@ test("ustar output is byte-identical for identical entries and epoch", () => {
   expect(first.length % 512).toBe(0);
 });
 
-test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", async () => {
+test("Workspace build is deterministic, schema-valid, non-Git and self-verifying", async () => {
   const firstOutput = await mkdtemp(join(tmpdir(), "lazurio-resident-build-a-"));
   const secondOutput = await mkdtemp(join(tmpdir(), "lazurio-resident-build-b-"));
-  const workspaceOutput = await mkdtemp(join(tmpdir(), "lazurio-workspace-runtime-build-"));
-  cleanup.push(firstOutput, secondOutput, workspaceOutput);
+  cleanup.push(firstOutput, secondOutput);
   const target = `${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`;
   const options = {
     cwd: import.meta.dir,
-    profile: "buddy",
+    profile: "workspace",
     target,
     artifactVersion: "0.1.0-test",
     channel: "candidate",
@@ -119,9 +118,11 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(
     (await readFile(first.archive_path)).equals(await readFile(second.archive_path)),
   ).toBe(true);
-  expect(first.manifest.profile).toBe("buddy");
+  expect(first.manifest.profile).toBe("workspace");
   expect(first.manifest.source.repository).toBe("HumanAndMachines/Lazurio");
   expect(first.manifest.role_overlays).toEqual([]);
+  // The workspace artifact contract v1 still carries the exact Hermes, GBrain
+  // and toolchain pins; the Resident Doctor and the CLI provenance check them.
   expect(first.manifest.dependencies.hermes).toMatchObject({
     repository: "Lazurio/hermes-agent",
     commit: "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
@@ -140,14 +141,13 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(await verifyArtifactTree(first.artifact_root)).toMatchObject({ ok: true, failures: [] });
 
   const rootInstructions = await readFile(join(first.artifact_root, "AGENTS.md"), "utf8");
-  expect(rootInstructions).toContain("generated:lazurio-resident-profile=buddy");
-  expect(first.manifest.payload.files.map((file) => file.path)).not.toContain(
-    "distribution/profiles/buddy/root-instructions.md",
-  );
+  expect(rootInstructions).toContain("generated:lazurio-resident-profile=workspace");
+  const paths = first.manifest.payload.files.map((file) => file.path);
+  expect(paths).not.toContain("distribution/profiles/workspace/root-instructions.md");
   expect(first.manifest.payload.files.filter((file) => file.path.endsWith("AGENTS.md"))).toEqual([
     expect.objectContaining({ path: "AGENTS.md" }),
   ]);
-  expect(first.manifest.payload.files.map((file) => file.path)).toEqual(expect.arrayContaining([
+  expect(paths).toEqual(expect.arrayContaining([
     "THIRD_PARTY_NOTICES.md",
     "lazurio/core/organization-slot-scope-lib.mjs",
     "lazurio/core/cli-provenance-lib.mjs",
@@ -163,25 +163,34 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     "lazurio/organization-activation-report.v0.schema.json",
     "lazurio/lazurio.organization.v1.schema.json",
     "Launchpad-Bootstrap.ps1",
-    "manual/update-installed-resident.md",
+    "launchpad/src/server.mjs",
+    "launchpad/src/server-launcher.mjs",
+    "lazurio/runtime/server-launcher-lib.mjs",
+    "manual/lazurio-resident-profiles.md",
     "scripts/install-launchpad-macos.sh",
     "scripts/macos/Info.plist",
     "scripts/macos/launchpad-bootstrap.sh",
     "scripts/macos/replace-app.jxa",
+    "scripts/worktree-create-lib.mjs",
+    "scripts/worktree-create-lock.mjs",
     "resident/integrity.mjs",
-    "resident/updater-lib.mjs",
-    "resident/updater.mjs",
-    "resident/buddy-service-lib.mjs",
-    "resident/buddy-service.mjs",
-    "resident/buddy-rollout-lib.mjs",
-    "resident/buddy-rollout.mjs",
-    "resident/services/buddy-bridge.service.template",
-    "resident/services/hermes-lazurio-root.conf.template",
+    "resident/dependencies/hermes.json",
     "resident/dependencies/gbrain.json",
     "resident/dependencies/toolchain.json",
-    "bridge/run.ts",
   ]));
-  expect(first.manifest.payload.files.some((file) => file.path.startsWith("provisioning/"))).toBe(false);
+  // Hosted work VMs: the generated instructions route to the shipped manual.
+  expect(paths).toContain("manual/hosted-machine-first-login.md");
+  expect(rootInstructions).toContain("manual/hosted-machine-first-login.md");
+  // The Workspace Resident is activated by the official updater kit outside the
+  // artifact; the artifact itself carries no updater and nothing of the retired
+  // Buddy Resident (decision 0210).
+  expect(paths.some((path) => path.includes("updater"))).toBe(false);
+  expect(paths.some((path) => path.startsWith("bridge/")
+    || path.startsWith("resident/buddy-")
+    || path.startsWith("resident/services/")
+    || path === "manual/update-installed-resident.md")).toBe(false);
+  expect(paths.some((path) => path.startsWith("provisioning/"))).toBe(false);
+  expect(paths.some((path) => path.startsWith(".agents/skills/"))).toBe(false);
   const forbiddenPublicPatterns = [
     { label: "private migration provenance", pattern: /"migrated_from"\s*:/u },
   ];
@@ -203,15 +212,20 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
       "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",
     },
   });
-  expect(residentPackage.scripts).toMatchObject({
+  expect(residentPackage.scripts).toEqual({
+    doctor: "bun resident/doctor.mjs",
+    "doctor:json": "bun resident/doctor.mjs --json",
+    launchpad: "bun launchpad/src/server-launcher.mjs --open",
+    "launchpad:serve": "bun launchpad/src/server-launcher.mjs --reuse",
+    "launchpad:dev": "bun launchpad/src/server-launcher.mjs",
+    lazurio: "bun lazurio/cli.mjs",
     "resident:doctor": "bun resident/doctor.mjs",
-    "resident:update": "bun resident/updater.mjs update",
-    "resident:rollback": "bun resident/updater.mjs rollback",
-    "resident:status": "bun resident/updater.mjs status",
-    "buddy:bridge": "bun bridge/run.ts",
-    "buddy:service": "bun resident/buddy-service.mjs",
-    "buddy:rollout": "bun resident/buddy-rollout.mjs",
   });
+  const workspaceWorktreeActions = await import(pathToFileURL(
+    join(first.artifact_root, "launchpad", "src", "worktree-actions-lib.mjs"),
+  ).href);
+  expect(workspaceWorktreeActions.createWorktreeFromPlan).toBeFunction();
+  expect(workspaceWorktreeActions.publishWorktreeDraft).toBeFunction();
 
   const lazurioHelp = spawnSync(process.execPath, ["lazurio/cli.mjs", "--help"], {
     cwd: first.artifact_root,
@@ -255,42 +269,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
 
   const doctor = runDoctor(first.artifact_root);
   expect(doctor.status).toBe(0);
-  expect(JSON.parse(doctor.stdout)).toMatchObject({ status: "pass", profile: "buddy" });
-
-  const workspace = await buildResidentArtifact({
-    ...options,
-    profile: "workspace",
-    outputRoot: workspaceOutput,
-  });
-  const workspacePaths = workspace.manifest.payload.files.map((file) => file.path);
-  expect(workspace.manifest.profile).toBe("workspace");
-  expect(await verifyArtifactTree(workspace.artifact_root)).toMatchObject({ ok: true, failures: [] });
-  expect(workspacePaths).toContain("launchpad/src/server.mjs");
-  expect(workspacePaths).toContain("launchpad/src/server-launcher.mjs");
-  expect(workspacePaths).toContain("lazurio/runtime/server-launcher-lib.mjs");
-  expect(workspacePaths).toContain("scripts/worktree-create-lib.mjs");
-  expect(workspacePaths).toContain("scripts/worktree-create-lock.mjs");
-  expect(workspacePaths.some((path) => path.startsWith("bridge/"))).toBe(false);
-  expect(workspacePaths.some((path) => path.includes("updater"))).toBe(false);
-  expect(workspacePaths.some((path) => path.includes("buddy-service") || path.includes("buddy-rollout"))).toBe(false);
-  expect(workspacePaths.some((path) => path.startsWith(".agents/skills/"))).toBe(false);
-  const workspaceInstructions = await readFile(join(workspace.artifact_root, "AGENTS.md"), "utf8");
-  // Hosted work VMs: the generated instructions route to the shipped manual.
-  expect(workspacePaths).toContain("manual/hosted-machine-first-login.md");
-  expect(workspaceInstructions).toContain("manual/hosted-machine-first-login.md");
-  const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));
-  expect(workspacePackage).toMatchObject({
-    name: "lazurio",
-    bin: { lazurio: "lazurio/cli.mjs" },
-  });
-  expect(workspacePackage.scripts["launchpad:serve"]).toBe("bun launchpad/src/server-launcher.mjs --reuse");
-  expect(workspacePackage.scripts["resident:update"]).toBeUndefined();
-  expect(workspacePackage.scripts["buddy:service"]).toBeUndefined();
-  const workspaceWorktreeActions = await import(pathToFileURL(
-    join(workspace.artifact_root, "launchpad", "src", "worktree-actions-lib.mjs"),
-  ).href);
-  expect(workspaceWorktreeActions.createWorktreeFromPlan).toBeFunction();
-  expect(workspaceWorktreeActions.publishWorktreeDraft).toBeFunction();
+  expect(JSON.parse(doctor.stdout)).toMatchObject({ status: "pass", profile: "workspace" });
 
   const injectedGit = join(first.artifact_root, "launchpad", ".git");
   await mkdir(injectedGit);
@@ -305,12 +284,19 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(JSON.parse(tampered.stdout)).toMatchObject({ status: "fail" });
 }, platformTestTimeout(60_000));
 
+test("the build contract declares only the Workspace profile (decision 0210)", async () => {
+  const contract = JSON.parse(await readFile(join(import.meta.dir, "contract.v1.json"), "utf8"));
+  expect(Object.keys(contract.profiles)).toEqual(["workspace"]);
+  expect(contract.source_includes.some((include) => include.startsWith("bridge/"))).toBe(false);
+  expect(contract.generated_paths.some((path) => path.includes("buddy") || path.includes("updater"))).toBe(false);
+});
+
 test("resident provenance is independent of mutable remote configuration", async () => {
   const fixture = await isolatedRepositoryFixture();
   const target = residentTarget();
   const baseline = await buildResidentArtifact({
     cwd: fixture.repositoryRoot,
-    profile: "buddy",
+    profile: "workspace",
     target,
     artifactVersion: "0.1.0-provenance-test",
     channel: "candidate",
@@ -325,7 +311,7 @@ test("resident provenance is independent of mutable remote configuration", async
   ]);
   const mutated = await buildResidentArtifact({
     cwd: fixture.repositoryRoot,
-    profile: "buddy",
+    profile: "workspace",
     target,
     artifactVersion: "0.1.0-provenance-test",
     channel: "candidate",
@@ -364,7 +350,7 @@ test.skipIf(process.platform === "win32")(
     try {
       const result = await buildResidentArtifact({
         cwd: fixture.repositoryRoot,
-        profile: "buddy",
+        profile: "workspace",
         target: residentTarget(),
         artifactVersion: "0.1.0-git-boundary-test",
         channel: "candidate",
@@ -381,40 +367,6 @@ test.skipIf(process.platform === "win32")(
   },
   20_000,
 );
-
-test("Buddy profile eval pack covers normal and negative-path cases without role grants", async () => {
-  const evals = JSON.parse(
-    await readFile(join(import.meta.dir, "profile-evals", "buddy.json"), "utf8"),
-  );
-  expect(evals.schema_version).toBe("lazurio.resident.profile-evals.v1");
-  expect(evals.profile).toBe("buddy");
-  expect(new Set(evals.cases.map((item) => item.id)).size).toBe(evals.cases.length);
-  expect(new Set(evals.cases.map((item) => item.kind))).toEqual(new Set([
-    "normal",
-    "boundary",
-    "access-denied",
-    "tool-failure",
-    "regression",
-    "role-bleed",
-  ]));
-  const roleBleed = evals.cases.find((item) => item.kind === "role-bleed");
-  expect(roleBleed.must_follow).toContain("text-labels-grant-no-access");
-  const profile = JSON.parse(
-    await readFile(join(import.meta.dir, "profiles", "buddy", "profile.json"), "utf8"),
-  );
-  const declared = new Set(profile.behavior_invariants);
-  expect(evals.cases.flatMap((item) => item.must_follow).every((item) => declared.has(item))).toBe(true);
-  expect(profile.authority.text_labels_grant_access).toBe(false);
-  expect(profile.allowed_role_overlays).toEqual([]);
-  expect(profile.trust_model).toEqual({
-    communication_boundary: "one-human-principal-private-surface",
-    machine_owner_is_adversary: false,
-    local_payload_edits: "allowed-and-reported-as-drift",
-    agent_sandbox: "hermes-runtime",
-    sandbox_substrate_mutability: "principal-controlled-runtime-identities-non-owning-read-only",
-    parallel_lazurio_acl: false,
-  });
-});
 
 function runDoctor(root) {
   const result = spawnSync(process.execPath, ["resident/doctor.mjs", "--json"], {

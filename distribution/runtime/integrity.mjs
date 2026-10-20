@@ -160,26 +160,6 @@ export async function verifyArtifactTree(artifactRoot, {
     agents.length === 1 && agents[0] === "AGENTS.md",
     "exactly one root AGENTS.md must exist",
   );
-  if (manifest.profile === "buddy") {
-    const buddyPayload = new Set(manifest.payload.files.map((file) => file.path));
-    const bridgeRequired = [
-      "bridge/run.ts",
-      "resident/buddy-service-lib.mjs",
-      "resident/buddy-service.mjs",
-      "resident/buddy-rollout-lib.mjs",
-      "resident/buddy-rollout.mjs",
-      "resident/services/buddy-bridge.service.template",
-      "resident/services/hermes-lazurio-root.conf.template",
-    ];
-    const bridgeComplete = bridgeRequired.every((path) => buddyPayload.has(path));
-    check(
-      "buddy-bridge-contract",
-      bridgeComplete && manifest.role_overlays.length === 0,
-      bridgeComplete && manifest.role_overlays.length === 0
-        ? "Buddy bridge entrypoint and service template are immutable payload with no role overlay"
-        : "Buddy bridge payload is incomplete or carries a forbidden role overlay",
-    );
-  }
 
   try {
     const profile = JSON.parse(

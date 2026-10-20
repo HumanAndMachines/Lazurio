@@ -54,7 +54,7 @@ export function normalizeTarget(value = `${normalizeOperatingSystem(process.plat
 
 export async function buildResidentArtifact({
   cwd = process.cwd(),
-  profile = "buddy",
+  profile = "workspace",
   target,
   artifactVersion,
   channel = "candidate",
@@ -145,9 +145,8 @@ export async function buildResidentArtifact({
   }
 
   const entries = selectSourceEntries(repositoryRoot, tree, contract);
-  if (profile === "workspace") pruneWorkspaceRuntimeSources(entries);
   addGeneratedEntry(entries, "AGENTS.md", readBlob(repositoryRoot, tree, profileContract.root_instructions), "0644");
-  addGeneratedEntry(entries, "package.json", residentPackageJson(profile), "0644");
+  addGeneratedEntry(entries, "package.json", residentPackageJson(), "0644");
   addGeneratedEntry(
     entries,
     "resident/doctor.mjs",
@@ -160,56 +159,6 @@ export async function buildResidentArtifact({
     readBlob(repositoryRoot, tree, "distribution/runtime/integrity.mjs"),
     "0644",
   );
-  if (profile !== "workspace") {
-    addGeneratedEntry(
-      entries,
-      "resident/updater-lib.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/updater-lib.mjs"),
-      "0644",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/updater.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/updater.mjs"),
-      "0755",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/services/buddy-bridge.service.template",
-      readBlob(repositoryRoot, tree, "distribution/runtime/buddy-bridge.service.template"),
-      "0644",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/services/hermes-lazurio-root.conf.template",
-      readBlob(repositoryRoot, tree, "distribution/runtime/hermes-lazurio-root.conf.template"),
-      "0644",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/buddy-service-lib.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/buddy-service-lib.mjs"),
-      "0644",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/buddy-service.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/buddy-service.mjs"),
-      "0755",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/buddy-rollout-lib.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/buddy-rollout-lib.mjs"),
-      "0644",
-    );
-    addGeneratedEntry(
-      entries,
-      "resident/buddy-rollout.mjs",
-      readBlob(repositoryRoot, tree, "distribution/runtime/buddy-rollout.mjs"),
-      "0755",
-    );
-  }
   addGeneratedEntry(
     entries,
     "resident/manifest.schema.json",
@@ -387,14 +336,6 @@ function isSourceExcluded(path, exclusions = {}) {
   return (exclusions.suffixes ?? []).some((suffix) => path.endsWith(suffix));
 }
 
-function pruneWorkspaceRuntimeSources(entries) {
-  for (const path of [...entries.keys()]) {
-    if (path.startsWith("bridge/") || path === "manual/update-installed-resident.md") {
-      entries.delete(path);
-    }
-  }
-}
-
 export function addGeneratedEntry(entries, path, value, mode) {
   const normalized = normalizeArtifactPath(path);
   if (entries.has(normalized)) throw new Error(`artifact path collision: ${normalized}`);
@@ -402,8 +343,7 @@ export function addGeneratedEntry(entries, path, value, mode) {
   entries.set(normalized, { bytes, mode });
 }
 
-function residentPackageJson(profile) {
-  const workspace = profile === "workspace";
+function residentPackageJson() {
   return `${JSON.stringify({
     name: "lazurio",
     private: true,
@@ -422,15 +362,6 @@ function residentPackageJson(profile) {
       "launchpad:dev": "bun launchpad/src/server-launcher.mjs",
       lazurio: "bun lazurio/cli.mjs",
       "resident:doctor": "bun resident/doctor.mjs",
-      ...(!workspace ? {
-        "resident:install": "bun resident/updater.mjs install",
-        "resident:update": "bun resident/updater.mjs update",
-        "resident:rollback": "bun resident/updater.mjs rollback",
-        "resident:status": "bun resident/updater.mjs status",
-        "buddy:bridge": "bun bridge/run.ts",
-        "buddy:service": "bun resident/buddy-service.mjs",
-        "buddy:rollout": "bun resident/buddy-rollout.mjs",
-      } : {}),
     },
   }, null, 2)}\n`;
 }
