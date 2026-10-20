@@ -318,6 +318,54 @@ HumanAndMachines/Lazurio#467).
 - App nezapisuje mimo svůj Modul a `XDG_STATE_HOME`/`XDG_CACHE_HOME`
   Environmentu.
 
+### 4.5 Sestavená verze z `main` (`build_output`)
+
+Otevření Modulu z `main` spouští **sestavenou verzi** aktuálního commitu a
+vývojový server s hot reloadem běží jen pro náhled z worktree (rozhodnutí
+0195 bod 19, LazurioPlatform F58). App se statickým výstupem (Astro bez SSR,
+Vite bez vlastního serveru) k tomu v `lazurio.runtime` deklaruje:
+
+- **`build_output`**: relativní adresář výstupu v balíčku App, například
+  `dist`. Segmenty se oddělují `/`, každý odpovídá
+  `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (žádné `.`, `..`, úvodní tečka, absolutní
+  cesta ani zpětné lomítko), nejvýše 200 znaků.
+- **`static_fallback`** (volitelně, jen s `build_output`): `"404"` (výchozí;
+  neznámá cesta dostane `404.html` sestavení se stavem 404, pokud ho
+  sestavení má) nebo `"spa"` (neznámá cesta, jejíž poslední segment nemá
+  tečku, dostane `index.html` se stavem 200).
+
+Kdo deklaruje `build_output`, splňuje zároveň:
+
+1. `build_script` je deklarovaný a jmenuje neprázdný skript v `scripts`.
+2. App má právě jeden listener (entrypoint) s `protocol: "http"` a
+   `health.kind: "http"`.
+3. App nemá `secrets` ani `optional_secrets`.
+4. Konfigurace App čte listener jen při servírování (`dev`, `preview`), nikdy
+   při `build`: sestavení listener ani origin nedostane. Vzorem je
+   `astro.config.ts` Knowledgebase referenční Organizace. Konfigurace, která
+   listener při sestavení potřebuje, skončí nálezem `build-script-failed`.
+5. Po sestavení je `build_output` adresář a cesta health entrypointu se
+   v něm vyřeší na soubor se stavem 200 (přesný soubor, `<cesta>.html`, pak
+   `<cesta>/index.html`; cesta končící `/` je její `index.html`). Přesměrování
+   ani stránka 404 se nepočítají a takové sestavení se nepoužije
+   (`build-output-unservable`).
+
+Sestavení spouští Launchpad jako `bun --no-env-file run <build_script>`
+v adresáři balíčku App, po běžné přípravě (kap. 3), s uzavřeným prostředím
+Modulu (F26) a `NODE_ENV=production`. Výstup každého commitu uloží mimo
+checkout a servíruje ho vlastním malým statickým serverem na listeneru App,
+takže App k sestavené verzi nepotřebuje žádný vlastní kód ani server.
+Klíčem sestavení je commit Modulu spolu s commity jeho datového repa a
+deklarovaných slotů. Po změně `main` Launchpad nový commit sestaví na pozadí,
+po jednom a s nízkou prioritou, do té doby servíruje předchozí sestavení a
+pak ho vymění. Neúspěšné sestavení nechá běžet předchozí verzi; vývojovou
+verzi spustí jen výslovná volba člověka nebo `lazurio module start --dev`.
+
+App s vlastním serverem (Bun server, Vite s API v dev pluginech) zatím
+`build_output` nedeklaruje a dál běží přes `dev` skript; její produkční start
+(`start_script`) přijde jako druhá fáze. App, jejíž API žije jen ve
+vývojovém serveru, převede Agent po Modulech podle návodu (0173).
+
 ## 5. Hranice a závislosti
 
 - App importuje jen ze svého repozitáře a z deklarovaných závislostí
@@ -365,7 +413,7 @@ HumanAndMachines/Lazurio#467).
 | Druh App | Stack | Poznámka |
 | --- | --- | --- |
 | UI / datová aplikace | Vite + React + TypeScript, data přes repository-db v3 | výchozí pro Deals, Pricebook, Warehouse, Clients… |
-| Web, dokumentace, knowledgebase | Astro (Starlight pro KB), TS config | statický build je příprava |
+| Web, dokumentace, knowledgebase | Astro (Starlight pro KB), TS config | statický výstup deklaruje `build_output` (kap. 4.5) |
 | Služba / API / automatizace | Bun (`Bun.serve`) + TypeScript | bez frameworku; `@lazurio/module-kit` pro listener/health |
 | Python (kap. 7) | `uv` + `pyproject.toml` | první reálný modul zapne adaptér Platformy |
 
@@ -445,6 +493,11 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 
 - příprava před startem (`check_script` → `prepare_script`), start `dev`
   skriptu s uzavřeným env (F26), `umask 077`, loopback;
+- **sestavená verze z `main`** u App s `build_output` (kap. 4.5): sestavení
+  po jednom a s nízkou prioritou, servírování výstupu vlastním statickým
+  serverem, přestavění na pozadí po změně `main` a výměna, až je nové
+  sestavení hotové; náhled z worktree a App bez `build_output` běží přes
+  `dev` skript;
 - **adresy deklarovaných sousedů**: při každém startu předá za každý
   deklarovaný slot Modulu `workspace/<slug>` vlastní Organizace
   `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` z leasu výchozí App souseda
@@ -467,7 +520,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 Launchpad **nedělá**: nedědí PATH ani env operátora, nečte `.env`,
 nepíše tajemství do logů ani souborů, nespouští souseda kvůli volání jiné App
 a volání mezi Moduly neproxuje,
-nespouští build ani supervizory za App, nepřebírá porty, nenabízí legacy
+nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s `build_output` podle kap. 4.5), nepřebírá porty, nenabízí legacy
 `LAZURIO_RUNTIME_HOST/PORT` (odstraní jedno vydání po dokončení W2 migrace).
 
 ## 11. Konformance: `lazurio module setup`

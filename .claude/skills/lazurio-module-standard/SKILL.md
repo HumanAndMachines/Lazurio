@@ -166,6 +166,16 @@ ani pro productionspace repa (decision 0041).
       Launchpadu redirecty nenásleduje (`/cs/`, ne `/` s 301); ověř, že
       `curl -s -o /dev/null -w '%{http_code}' --max-redirs 0 <url>` vypíše
       přesně `200` (samotný návratový kód curl je 0 i při 301).
+   7. **Sestavená verze** (kap. 4.5, rozhodnutí 0195 bod 19): App se
+      statickým výstupem (Astro bez SSR, Vite bez vlastního serveru)
+      deklaruje v `lazurio.runtime` `build_output` (adresář výstupu, např.
+      `dist`) a u SPA `static_fallback: "spa"`. Musí mít `build_script`,
+      právě jeden HTTP listener s HTTP health a žádné `secrets`; konfigurace
+      čte listener jen při servírování (`dev`, `preview`), nikdy při
+      `build`. Ověř, že sestavení projde bez listeneru a že health cesta je
+      ve výstupu soubor se stavem 200. App s API ve vývojovém serveru
+      (Vite pluginy) nebo vlastním Bun serverem `build_output` nedeklaruje;
+      v PR uveď, že čeká na druhou fázi (`start_script`).
 2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom
    `bun run check && bun test` a skutečný start přes Launchpad
    (`lazurio module start`, otevři URL, `lazurio module stop`).
