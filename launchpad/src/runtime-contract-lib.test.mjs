@@ -236,3 +236,42 @@ test("runtime scripts fail closed when Launchpad listener injection is missing",
   });
   expect(safe).toEqual([]);
 });
+
+function builtRuntime(overrides = {}) {
+  return runtime({
+    build_script: "build",
+    build_output: "dist",
+    listeners: [
+      { id: "app", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } },
+    ],
+    ...overrides,
+  });
+}
+const builtScripts = { scripts: { dev: "astro dev", build: "astro build" } };
+
+test("accepts a static App that declares its built version (Module Standard 4.5)", () => {
+  expect(validateDeclaredRuntime({ runtime: builtRuntime(), packageJson: builtScripts })).toEqual([]);
+  expect(validateDeclaredRuntime({
+    runtime: builtRuntime({ build_output: "app/dist", static_fallback: "spa" }),
+    packageJson: builtScripts,
+  })).toEqual([]);
+});
+
+test("rejects a built version the Platform could not serve", () => {
+  const issues = (overrides, packageJson = builtScripts) =>
+    validateDeclaredRuntime({ runtime: builtRuntime(overrides), packageJson }).join("\n");
+  expect(issues({ build_output: "../dist" })).toContain("build_output musí být relativní adresář");
+  expect(issues({ build_output: "/abs" })).toContain("build_output musí být relativní adresář");
+  expect(issues({ build_output: ".hidden" })).toContain("build_output musí být relativní adresář");
+  expect(issues({ static_fallback: "index" })).toContain('static_fallback musí být "404" nebo "spa"');
+  expect(issues({ build_script: undefined })).toContain("build_output vyžaduje build_script");
+  expect(issues({}, { scripts: { dev: "astro dev" } })).toContain("build_output vyžaduje build_script");
+  expect(issues({ secrets: ["API_KEY"] })).toContain("build_output nedovoluje secrets");
+  expect(issues({
+    listeners: [
+      { id: "app", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } },
+      { id: "api", role: "auxiliary", lease: "api", protocol: "http", health: { kind: "http", path: "/" } },
+    ],
+  })).toContain("build_output vyžaduje právě jeden listener");
+  expect(issues({ build_output: undefined, static_fallback: "spa" })).toContain("static_fallback smí být jen spolu s build_output");
+});

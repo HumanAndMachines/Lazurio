@@ -24,6 +24,17 @@
     "dev_script": { "type": "string", "minLength": 1 },
     "preview_script": { "type": "string", "minLength": 1 },
     "build_script": { "type": "string", "minLength": 1 },
+    "build_output": {
+      "description": "Adresář statického výstupu sestavení v balíčku App (Module Standard 4.5, rozhodnutí 0195 bod 19). Platforma ho po sestavení z main servíruje sama.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$"
+    },
+    "static_fallback": {
+      "description": "Co dostane neznámá cesta: 404 = 404.html sestavení se stavem 404, spa = index.html. Jen spolu s build_output.",
+      "enum": ["404", "spa"]
+    },
     "required_module_slots": {
       "description": "Organization-relative module sloty, které musí být materializované před spuštěním runtime.",
       "type": "array",
