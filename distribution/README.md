@@ -69,13 +69,20 @@ nečte ani nehashuje.
 
 ## Assisted install, update a rollback
 
-Updater v1 je explicitní operátorský příkaz, ne daemon. Spouští se z exact
-reviewovaného operator kitu mimo instalovaný artefakt: kit nese
-`package.json`, `distribution/runtime/updater-lib.mjs`,
-`distribution/runtime/integrity.mjs` a `lazurio/core/resident-manifest-lib.mjs`
-z jednoho source commitu. Tímto kitem instaluje a kontroluje Workspace
-Residenta Machines. Instalovaná Mašina proto nepotřebuje Git checkout Lazuria
-a samotný artefakt updater nenese.
+Updater v1 je explicitní operátorský příkaz, ne daemon, a vždy běží mimo
+instalovaný artefakt, který updater nenese. Existují dvě cesty, obě z exact
+reviewovaného source commitu, ze kterého artefakt vznikl:
+
+- **Ručně ze source checkoutu** přes CLI `distribution/runtime/updater.mjs`
+  (totéž dělají `bun run resident:install|update|status|rollback`); příkazy
+  níže.
+- **Machines** CLI nespouští. Jeho operator kit nese jen knihovní uzávěr
+  updateru: `package.json`, `distribution/runtime/updater-lib.mjs`,
+  `distribution/runtime/integrity.mjs` a
+  `lazurio/core/resident-manifest-lib.mjs`. Z vlastní role Workspace Residenta
+  volá přímo `updater-lib.mjs`.
+
+Instalovaná Mašina proto nepotřebuje Git checkout Lazuria.
 
 ```sh
 bun distribution/runtime/updater.mjs install \
