@@ -156,8 +156,9 @@ provider gate nepředstírá.
 
 Resident má dlouhodobý vztah, paměť a mandát. Agent dostane konkrétní úkol,
 pracuje v ohraničené relaci a odevzdá atribuovaný výsledek. Resident může práci
-Agentovi delegovat a Agent se může Residenta poradit; jejich identity se tím
-neslučují.
+Agentovi delegovat; jejich identity se tím neslučují. Buddy svou vlastní práci
+deleguje botům MausBotu a agenti ve vláknech T3 Code ho sami neoslovují
+(dodatek 0210 z 2026-10-20 noc).
 
 ### 4. Lazurio není povinný prostředník
 
