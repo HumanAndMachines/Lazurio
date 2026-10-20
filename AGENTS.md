@@ -642,7 +642,14 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    (`tailscale status --json` → `CurrentTailnet.Name`). Hláška „host key
    changed" na tailnet adrese znamená nejdřív „jiný aktivní tailnet", ne důvod
    klíč přepsat nebo znovu přijmout. Profil bez souhlasu Operátora
-   nepřepínej — přepneš ho všem ostatním agentům.
+   nepřepínej — přepneš ho všem ostatním agentům. Provozuje-li Operátor pro
+   některý tailnet headless klienta (uzel `<login>-<zařízení>-cli`, userspace
+   `tailscaled` s vlastním stavem a socketem), do toho tailnetu se připojuj
+   jen přes něj (`ProxyCommand tailscale --socket=<socket> nc %h %p`; pinnutý
+   host klíč platí stejně) a tailnet ověř na jeho socketu
+   (`tailscale --socket=<socket> status --json` → `CurrentTailnet.Name`).
+   Globální profil kvůli tomuto tailnetu nikdy nepřepínej; když klient
+   neběží, řekni to Operátorovi.
 
 Root upravuj jen když se mění:
 
