@@ -173,6 +173,18 @@
               }
             }
           }
+        },
+        "access_requests": {
+          "description": "Access requests (decision 0204, addendum 2026-10-17 afternoon, point b): a setting of the Lazurio Dashboard alone. No Environment receives, applies or reports it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether a signed-in Lazurio account without membership may ask the Organization for access through its join link on the Dashboard. Absent or false is off."
+            }
+          }
         }
       }
     },
