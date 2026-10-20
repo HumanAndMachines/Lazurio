@@ -638,18 +638,21 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    tailnetu opakují a znamenají pokaždé jinou Mašinu. Nepřipojuj se na holou
    tailnet adresu ani přes obecný `~/.ssh/known_hosts`: identitu ber z Machine
    Recordu owning Organizace (pinnutý host klíč přes `HostKeyAlias`
-   a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet
-   (`tailscale status --json` → `CurrentTailnet.Name`). Hláška „host key
-   changed" na tailnet adrese znamená nejdřív „jiný aktivní tailnet", ne důvod
-   klíč přepsat nebo znovu přijmout. Profil bez souhlasu Operátora
-   nepřepínej — přepneš ho všem ostatním agentům. Provozuje-li Operátor pro
-   některý tailnet headless klienta (uzel `<login>-<zařízení>-cli`, userspace
-   `tailscaled` s vlastním stavem a socketem), do toho tailnetu se připojuj
-   jen přes něj (`ProxyCommand tailscale --socket=<socket> nc %h %p`; pinnutý
-   host klíč platí stejně) a tailnet ověř na jeho socketu
-   (`tailscale --socket=<socket> status --json` → `CurrentTailnet.Name`).
-   Globální profil kvůli tomuto tailnetu nikdy nepřepínej; když klient
-   neběží, řekni to Operátorovi.
+   a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet:
+   `ControlURL` z `tailscale debug prefs` musí být login server Headscale,
+   který owning Organizace deklaruje. `CurrentTailnet.Name` z
+   `tailscale status --json` je jen popisek; použij ho, jen když prefs nejsou
+   dostupné, a nepřipojuj se, pokud se přesně neshoduje s hostem login
+   serveru. Hláška „host key changed" na tailnet adrese znamená nejdřív „jiný
+   aktivní tailnet", ne důvod klíč přepsat nebo znovu přijmout. Profil bez
+   souhlasu Operátora nepřepínej — přepneš ho všem ostatním agentům.
+   Provozuje-li Operátor pro některý tailnet headless klienta (uzel
+   `<login>-<zařízení>-cli`, userspace `tailscaled` s vlastním stavem
+   a socketem), do toho tailnetu se připojuj jen přes něj
+   (`ProxyCommand tailscale --socket=<socket> nc %h %p`; pinnutý host klíč
+   platí stejně) a tailnet ověř stejně na jeho socketu
+   (`tailscale --socket=<socket> debug prefs`). Globální profil kvůli tomuto
+   tailnetu nikdy nepřepínej; když klient neběží, řekni to Operátorovi.
 
 Root upravuj jen když se mění:
 
