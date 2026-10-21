@@ -98,9 +98,9 @@ autoritu.
    `--force-with-lease`, který gate vypíše. Po pushi ověř na GitHubu PR base
    `main`, exact head, mergeability a checks.
 9. Commituj a pushuj do PR branche průběžně — po každém uzavřeném pracovním
-   kroku, nejpozději před každou odpovědí Operátorovi, která ohlašuje stav
+   kroku, nejpozději před každou odpovědí uživateli, která ohlašuje stav
    práce. Po prvním pushi branch hned otevři PR proti správné base branchi
-   jako GitHub Draft PR. Pokud Operátor výslovně zakázal PR otevřít,
+   jako GitHub Draft PR. Pokud uživatel výslovně zakázal PR otevřít,
    nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
    koncem práce si nástrojem na otázky vyžádej rozhodnutí: Draft zahodit,
    nebo PR povolit —
@@ -125,27 +125,27 @@ autoritu.
    textem zprávy. Pod ním polož nástrojem na otázky (decision 0211)
    standardizovanou dvojotázku „Mám změny Publikovat vaším jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — obě volby vždy nabídni,
-   žádnou neoznačuj jako doporučenou a nedomýšlej volbu za Operátora. Na
+   žádnou neoznačuj jako doporučenou a nedomýšlej volbu za uživatele. Na
    týmovém Environmentu místo dvojotázky polož stejně nástrojem otázku
    „Komu mám říct, aby tyhle změny publikoval?", nikdy nemerguj (ani na
    „Publikuj") a pokračuj předáním níže (decision 0148, dodatek
    z 2026-10-05). Bez nástroje na otázky se zeptej textem s očíslovanými
    volbami a napiš, že čekáš na odpověď. Před otázkou zjisti
-   živá GitHub práva Operátora a řiď se jimi, ne textovým labelem role —
+   živá GitHub práva uživatele a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
    `gh repo view <owner>/<repo> --json
    rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed`,
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
-   Když Operátor v threadu zvolí Publikaci (v nástroji na otázky nebo
+   Když uživatel v threadu zvolí Publikaci (v nástroji na otázky nebo
    explicitním „Publikuj"), PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
    `AGENTS.md` nedeklaruje jinak; synchronizaci šablony slučuj merge commitem
    až po ověření `git merge-base --is-ancestor <commit šablony> <head>` a
    povoleného merge commitu, jinak nesluč a nahlas to — decision 0174), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
-   v kroku 13. Když Operátor zvolí předání, nebo mu GitHub merge
-   nedovoluje, vyžádej review Kolegy, kterého Operátor zvolil, PR mu zároveň
+   v kroku 13. Když uživatel zvolí předání, nebo mu GitHub merge
+   nedovoluje, vyžádej review Kolegy, kterého uživatel zvolil, PR mu zároveň
    přiřaď a @zmínkou mu výslovně předej odpovědnost za dotažení
    (`gh pr edit --add-reviewer <login> --add-assignee <login>` + komentář PR).
    Reviewer request znamená kontrolu; assignee je owner další práce. Když
@@ -161,9 +161,9 @@ autoritu.
    nebo ji předá dalšímu oprávněnému assignee s konkrétním stavem. Assignment
    nevytváří GitHub práva ani neobchází review a branch rules. Samostatný
    Release, infra apply a změny přístupů mají vlastní podmínky.
-   Pokud Operátor nikoho neurčil, polož mu volbu nástrojem na otázky
+   Pokud uživatel nikoho neurčil, polož mu volbu nástrojem na otázky
    — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
-   rozhodující osobu určuje politika repa. Předej Operátorovi, kdo teď
+   rozhodující osobu určuje politika repa. Předej uživateli, kdo teď
    dotažení vlastní. Merge neobcházej ani na
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává
    otevřený a nic se neděje.

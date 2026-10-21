@@ -57,7 +57,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 
 ## Kdy použít
 
-- Operátor chce nový Modul nebo novou App v Modulu.
+- Uživatel chce nový Modul nebo novou App v Modulu.
 - Modul má být převeden na standard (program DEV-6634, wave W1–W2).
 - Před každým PR do Modulu (konformance je součást preflightu).
 - Launchpad hlásí `module-nonconformant` nebo Diagnostika `warn` u Modulu.
@@ -121,7 +121,7 @@ ani pro productionspace repa (decision 0041).
       ani do vlastního souboru: deklaruje jejich jména
       v `lazurio.runtime.secrets` (`["EXTERNAL_API_KEY"]`), čte je
       fail-closed z `LAZURIO_RUNTIME_SECRET_<NAME>` (bez proměnné exit 2)
-      a hodnotu Operátor uloží do kolekce Environmentu v trezoru
+      a hodnotu uživatel uloží do kolekce Environmentu v trezoru
       Organizace; Launchpad ji předá při startu, chybějící tajemství
       start zastaví (kap. 4.3, decision 0177). Dokud Platform Launchpad
       deklaraci nečte, hlásí ji `MS-03` jako `warn` a App s ní nestartuje;
