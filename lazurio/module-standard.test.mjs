@@ -8,6 +8,7 @@ import {
   MODULE_STANDARD_CHECKS,
   bunEnvFileFindings,
   bunInvocations,
+  developmentServerFindings,
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
@@ -289,6 +290,90 @@ test("MS-05 follows the dev script chain in a real Module", async () => {
     },
   });
   expect(check(await setupModule(fixture), "MS-05")).toMatchObject({ status: "fail" });
+});
+
+test("MS-05 knows a development server from a production start (kap. 4.6)", () => {
+  for (const [command, finding] of [
+    ["vite", "vite"],
+    ["vite --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\" --strictPort", "vite"],
+    ["bun --no-env-file ./node_modules/vite/bin/vite.js --port \"$LAZURIO_RUNTIME_LISTENER_APP_PORT\"", "vite"],
+    ["astro dev", "astro dev"],
+    ["bun --no-env-file ./node_modules/astro/astro.js dev", "astro dev"],
+    ["bun --no-env-file --hot src/server.ts", "--hot"],
+    ["bun --no-env-file --watch run src/server.ts", "--watch"],
+  ]) {
+    expect(developmentServerFindings(command)).toContain(finding);
+  }
+  for (const command of [
+    "bun --no-env-file run src/server.ts",
+    "bun --no-env-file run src/vite-server.ts",
+    "bun --no-env-file src/vite.ts",
+    "bun --no-env-file run server/astro-pages.ts",
+    "vite preview",
+    "vite build",
+    "astro build",
+  ]) {
+    expect(developmentServerFindings(command)).toEqual([]);
+  }
+});
+
+test("an App with its own server holds its start_script to the start-path checks", async () => {
+  const declare = (start, scripts = {}) => (pkg) => {
+    pkg.scripts = { ...pkg.scripts, ...scripts };
+    pkg.lazurio.runtime.start_script = start;
+  };
+  // The development script that already is the production server.
+  expect((await setupModule(await conformantFixture({ mutatePackage: declare("dev") }))).status).toBe("current");
+  // A separate start script, with a client built by build_script.
+  const client = await conformantFixture({
+    mutatePackage: (pkg) => {
+      declare("start", { start: "bun --no-env-file run src/server.ts", build: "vite build" })(pkg);
+      Object.assign(pkg.lazurio.runtime, { build_script: "build", build_output: "dist" });
+    },
+  });
+  expect((await setupModule(client)).status).toBe("current");
+
+  // A start script that is not a script of the package: the runtime contract
+  // refuses it, and MS-03 names it.
+  const missingFixture = await conformantFixture({ mutatePackage: declare("start") });
+  expect(JSON.stringify((await setupModule(missingFixture)).issues)).toContain("start_script start neexistuje v scripts");
+  const evaluation = await evaluateModuleStandard({
+    moduleRoot: missingFixture.moduleRoot,
+    slotPath: "workspace/portal",
+    manifest: await readJson(join(missingFixture.moduleRoot, "lazurio.module.json")),
+    packages: new Map([["app/v1/package.json", await readJson(join(missingFixture.appRoot, "package.json"))]]),
+    organization: { slug: "Acme", module_port_pool: { start: 24_000, end: 24_099 } },
+    organizations: [{ slug: "Acme", module_port_pool: { start: 24_000, end: 24_099 } }],
+    modules: [],
+  });
+  expect(evaluation.checks.find((item) => item.id === "MS-03")).toMatchObject({
+    status: "fail",
+    details: ["app/v1/package.json: start_script start neexistuje v scripts"],
+  });
+
+  const devServer = await setupModule(await conformantFixture({
+    mutatePackage: declare("start", { start: "bun --no-env-file run serve", serve: "astro dev" }),
+  }));
+  expect(check(devServer, "MS-05").details).toEqual([
+    "app/v1/package.json: start_script start spouští vývojový server (astro dev): astro dev",
+  ]);
+  // The development script itself may stay a development server.
+  expect(check(await setupModule(await conformantFixture({
+    mutatePackage: (pkg) => { pkg.scripts.dev = "astro dev"; },
+  })), "MS-05")).toMatchObject({ status: "pass" });
+
+  const chained = await setupModule(await conformantFixture({
+    mutatePackage: declare("start", { start: "bun run build && bun src/server.ts", build: "vite build" }),
+  }));
+  // The chain of the start script, followed into `build`, as for dev.
+  expect(check(chained, "MS-05").details).toEqual([
+    "app/v1/package.json: start obsahuje &&: bun run build && bun src/server.ts",
+    "app/v1/package.json: start obsahuje build: bun run build && bun src/server.ts",
+    "app/v1/package.json: start obsahuje build: vite build",
+  ]);
+  expect(check(chained, "MS-07").details).toEqual([
+    "app/v1/package.json: start spouští Bun bez --no-env-file: bun run build && bun src/server.ts",
+  ]);
 });
 
 test("MS-06 finds legacy host/port authority in App sources but not in tests", async () => {
