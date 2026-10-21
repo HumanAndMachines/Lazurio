@@ -2,7 +2,7 @@
 
 [![Testy](https://github.com/HumanAndMachines/Lazurio/actions/workflows/checks.yml/badge.svg?branch=main&event=push)](https://github.com/HumanAndMachines/Lazurio/actions/workflows/checks.yml)
 
-**Lazurio je lokální pracovní systém, ve kterém lidé a AI spolupracují na
+**Lazurio je lokální pracovní systém, ve kterém uživatelé a AI spolupracují na
 firmách, projektech i osobní agendě — s jasným kontextem, oddělenými přístupy
 a vědomou kontrolou nad tím, co se zveřejní.**
 
@@ -14,10 +14,10 @@ příkazové nástroje, diagnostika a Git udržují stav a dohledatelnou histori
 Každý úkol začíná jednoznačným kontextem: pro koho se pracuje, které firmy nebo
 projektu se týká, jaká data smí AI nástroj použít a kdo může výsledek schválit
 nebo zveřejnit. Výsledek zůstává editovatelný a kontrolovatelný, dokud jej
-oprávněný člověk nebo AI spolupracovník vědomě neposune dál.
+oprávněný uživatel nebo AI spolupracovník vědomě neposune dál.
 
 Lazurio není nový AI model ani společné cloudové úložiště všech dat. Je to
-koordinační vrstva, která propojuje lidi, AI nástroje, repozitáře a aplikace
+koordinační vrstva, která propojuje uživatele, AI nástroje, repozitáře a aplikace
 pod jednou sadou srozumitelných pravidel.
 
 Projekt je určený technickým zakladatelům, vývojářům a týmům, které chtějí
@@ -37,7 +37,7 @@ zkontrolovat a upravit — ne pomocí neviditelné agentní magie.
 
 Lazurio používá malý počet záměrně přesných pojmů pro role, pracovní prostory
 a rozhodování. Nejsou to jen interní názvy. **Společný slovník je součástí
-fungování Lazuria:** zajišťuje, aby lidé i AI nástroje stejně rozuměli tomu,
+fungování Lazuria:** zajišťuje, aby uživatelé i AI nástroje stejně rozuměli tomu,
 pro koho se pracuje, kdo má jaká oprávnění, kde končí hranice dat a kdy je
 výsledek jen připravený ke kontrole, nebo už skutečně publikovaný.
 
@@ -45,15 +45,15 @@ Bez společných definic mohou běžná slova jako „agent“, „uživatel“,
 nebo „schválení“ znamenat pro každého něco jiného. Od tohoto místa proto README
 používá následující pojmy s jejich přesným významem.
 
-### Lidé a agentní role
+### Uživatelé a agentní role
 
 | Pojem | Co znamená běžnou řečí |
 | --- | --- |
-| **Operátor** | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští: Agent pracuje pro něj, vychází z jeho oprávnění a poslední slovo má Operátor. Operátorem je vždy člověk. |
-| **Kolega** | Člověk v Organizaci zapojený do práce podle svých firemních rolí a oprávnění. |
+| **Uživatel** | Člověk, pro kterého a se kterým Agenti pracují. Ovládá Environment, a tím i Agenty, které v něm spouští: Agent pracuje pro něj, vychází z jeho oprávnění a poslední slovo má uživatel. Starší záznamy mu říkají Operátor; není to role User v Organizaci. |
+| **Kolega** | Uživatel v Organizaci zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého Operátora řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
-| **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
+| **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého uživatele řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
+| **Buddy** | Osobní AI zástupce právě jednoho uživatele. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
 ### Prostory a práce
 
@@ -61,12 +61,12 @@ používá následující pojmy s jejich přesným významem.
 | --- | --- |
 | **Mašina** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to typ hardwaru ani nový IAM objekt. |
 | **Organizace** | Jedna firma, její GitHub organizace a samostatná hranice repozitářů, dat a přístupů. |
-| **Personalspace** | Soukromý prostor jednoho člověka a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
+| **Personalspace** | Soukromý prostor jednoho uživatele a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
 | **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
-| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného Operátora. |
+| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného uživatele. |
 
 Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
-[pravidla pro Agenty](AGENTS.md#model-spolupráce-operátor-a-agenti) a cílové
+[pravidla pro Agenty](AGENTS.md#model-spolupráce-uživatel-a-agenti) a cílové
 vztahy mezi rolemi, prostory a runtime popisuje [architektura](ARCHITECTURE.md).
 
 ## Proč Lazurio vzniká
@@ -82,10 +82,10 @@ Lazurio nad tím staví malý počet pevných pravidel:
   systém oprávnění;
 - **každá Organizace je samostatná hranice** a samostatný Git repozitář;
 - **Personalspace je privátní** a nikdy se automaticky nesdílí s Organizací;
-- **Agent pracuje pro svého Operátora** a odevzdává editovatelný Draft;
-- **publikace zůstává vědomým rozhodnutím oprávněného Operátora**.
+- **Agent pracuje pro svého uživatele** a odevzdává editovatelný Draft;
+- **publikace zůstává vědomým rozhodnutím oprávněného uživatele**.
 
-Výsledkem má být pracovní prostředí, ve kterém lidé i AI Kolegové používají
+Výsledkem má být pracovní prostředí, ve kterém uživatelé i AI Kolegové používají
 stejnou organizační strukturu, stejné zdroje pravdy a stejné kontrolovatelné
 procesy.
 
@@ -133,7 +133,7 @@ Launchpad ho nenahrazuje.
 | --- | --- |
 | **Lazurio CLI/Core** | Headless kontrakt pro kontext, diagnostiku, synchronizaci, instalaci a reportování. Současné CLI v0 je interní a nestabilní. |
 | **Launchpad** | Builder-first grafický povrch nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
-| **Guide** | Netechnický průvodce spoluprací lidí, AI Kolegů a digitálních kanceláří. |
+| **Guide** | Netechnický průvodce spoluprací uživatelů, AI Kolegů a digitálních kanceláří. |
 | **Personalspace** | Privátní prostor právě jednoho vlastníka a jeho případného Buddyho; neleží uvnitř firemní Organizace. |
 | **Organizace** | Jedna firma, jedna GitHub Organization, jeden samostatný super-repozitář a jedna access hranice. |
 | **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
@@ -271,7 +271,7 @@ Folder spravovaný LazurioPlatform. Aktuální build rezidentních artefaktů po
   Hostu zůstává vyšší doménou kompromitace a obnovy.
 
 Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#1-jedna-mašina-je-jedna-bezpečnostní-hranice),
-[pravidlech pro Agenty](AGENTS.md#model-spolupráce-operátor-a-agenti) a
+[pravidlech pro Agenty](AGENTS.md#model-spolupráce-uživatel-a-agenti) a
 [standardu lokálního držení secrets](manual/security/local-secret-custody.md).
 Bezpečnostní problém nepublikuj do veřejného issue spolu s citlivými daty;
 nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
