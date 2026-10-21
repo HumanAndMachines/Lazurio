@@ -8,8 +8,9 @@ const MODULE_SLOT = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$
 // from the Environment vault.
 const SECRET_NAME = /^[A-Z][A-Z0-9_]*$/;
 // The built version of a static App (decision 0195 point 19, Module
-// Standard 4.5, LazurioPlatform F58): a relative directory of the App's
-// package, each segment safe, at most 200 characters.
+// Standard 4.5, LazurioPlatform F58), or the client of an App with its own
+// server (decision 0195 point 24, Module Standard 4.6): a relative directory
+// of the App's package, each segment safe, at most 200 characters.
 const BUILD_OUTPUT_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 const STATIC_FALLBACKS = new Set(["404", "spa"]);
 const SURFACES = new Set(["internal", "manual", "admin", "public-preview"]);
@@ -22,6 +23,7 @@ const RUNTIME_KEYS = new Set([
   "module",
   "surface",
   "dev_script",
+  "start_script",
   "preview_script",
   "build_script",
   "build_output",
@@ -163,7 +165,7 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
   validatePattern(runtime.company, COMPANY_ID, `${label}.company`, issues);
   validatePattern(runtime.module, MODULE_ID, `${label}.module`, issues);
   if (!SURFACES.has(runtime.surface)) issues.push(`${label}.surface není podporovaný`);
-  for (const key of ["dev_script", "preview_script", "build_script"]) {
+  for (const key of ["dev_script", "start_script", "preview_script", "build_script"]) {
     if (runtime[key] === undefined) continue;
     validateNonEmpty(runtime[key], `${label}.${key}`, issues);
     if (typeof runtime[key] === "string" && !packageJson?.scripts?.[runtime[key]]) {
@@ -252,12 +254,20 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
   return issues;
 }
 
-// Module Standard 4.5: what a static App declares to open from main as its
-// build. The Platform serves the output itself, so the App has one HTTP
-// listener, no secrets, and a build script.
+// Module Standard 4.5 and 4.6: what an App declares to open from main as its
+// build. A static App is served by the Platform itself, so it has one HTTP
+// listener, no secrets, and a build script. An App with its own server
+// (`start_script`) runs its own process with its listeners and secrets, as
+// its development run does, and routes its own requests: its `build_output`
+// is its client, still built by `build_script` without any listener or
+// secret, and `static_fallback` means nothing for it.
 function validateBuiltVersion(runtime, packageJson, label, issues) {
+  const server = runtime.start_script !== undefined;
+  if (server && runtime.static_fallback !== undefined) {
+    issues.push(`${label}.static_fallback nesmí být spolu se start_script (App s vlastním serverem směruje požadavky sama)`);
+  }
   if (runtime.build_output === undefined) {
-    if (runtime.static_fallback !== undefined) {
+    if (!server && runtime.static_fallback !== undefined) {
       issues.push(`${label}.static_fallback smí být jen spolu s build_output`);
     }
     return;
@@ -271,11 +281,12 @@ function validateBuiltVersion(runtime, packageJson, label, issues) {
   ) {
     issues.push(`${label}.build_output musí být relativní adresář balíčku App (segmenty [A-Za-z0-9_][A-Za-z0-9._-]*, nejvýše 200 znaků)`);
   }
-  if (runtime.static_fallback !== undefined && !STATIC_FALLBACKS.has(runtime.static_fallback)) {
-    issues.push(`${label}.static_fallback musí být "404" nebo "spa"`);
-  }
   if (typeof runtime.build_script !== "string" || !packageJson?.scripts?.[runtime.build_script]) {
     issues.push(`${label}.build_output vyžaduje build_script, který existuje v scripts`);
+  }
+  if (server) return;
+  if (runtime.static_fallback !== undefined && !STATIC_FALLBACKS.has(runtime.static_fallback)) {
+    issues.push(`${label}.static_fallback musí být "404" nebo "spa"`);
   }
   const listeners = Array.isArray(runtime.listeners) ? runtime.listeners : [];
   if (listeners.length !== 1 || listeners[0]?.protocol !== "http" || listeners[0]?.health?.kind !== "http") {
