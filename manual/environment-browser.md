@@ -277,8 +277,9 @@ Bot pracuje jako vlákno T3 Code (0191 body 34 a 41–43, Matěj 2026-10-19):
   2026-10-05-510);
 - **nastavení agent-browseru** patří Platformě: MausBot nespouští démony s vlastním
   `AGENT_BROWSER_CONFIG` ani nemění limit nečinnosti (C7);
-- **programy na obrazovce Environmentu** (například Blender) ovládají boti přes Computer Use na ploše,
-  střídavě s ostatními agenty (0191 bod 42, druhá vlna).
+- **programy na obrazovce Environmentu** (například Blender) ovládají boti přes Computer Use,
+  službu Environmentu, kterou Platforma nabízí každému agentovi jako nástroj `computer`, střídavě
+  s ostatními agenty; MausBot pro ni nemá vlastní mechanismus (0191 body 42 a 44).
 
 Do přechodu používá MausBot vlastní démony `agent-browser` s headless Chromem podle upstreamu a vlastní
 živý pohled; obojí z kódu odejde. Zásady, podle kterých se MausBot upravuje, drží `LAZURIO.md` forku
@@ -415,6 +416,6 @@ prohlížeč takto:
   (Matěj 2026-10-11; DEV-6656 úkol 943, čeká na spike 916). Do té doby karty vlákna, které stojí,
   ale není archivované, drží jeho lišta.
 - Jména uživatelů u karet: přijdou s účty Lazuria (0192). Přihlášení přes bránu identitu neříká.
-- Plocha a Computer Use (druhá vlna 0191).
+- Plocha (druhá vlna 0191); Computer Use ji podle bodu 44 předbíhá (plán DEV-6673).
 - Jak při refreshi na stable 0.0.46 napojit serverový prohlížeč upstreamu na prohlížeč
   Environmentu: buď ho fork vypne, nebo ho nasměruje na DevTools na 9222.
