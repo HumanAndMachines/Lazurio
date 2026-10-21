@@ -427,8 +427,8 @@ klienta nic tajného nezapeče.
   0195 bod 6).
 
 **Mezikrok.** `start_script` zná LazurioPlatform od vydání s
-Lazurio/LazurioPlatform#579 a #573; starší vydání neznámé klíče
-`lazurio.runtime` odmítá a App by nespustilo. Modul ho proto deklaruje až
+Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573; starší vydání
+neznámé klíče `lazurio.runtime` odmítá a App by nespustilo. Modul ho proto deklaruje až
 tam, kde takové vydání běží na všech Prostředích, která ho spouštějí,
 s referenční Organizací (0204) napřed. Launchpad tohoto repa
 (`lazurio launchpad serve`, `lazurio module start`) klíč přijme, ale App
