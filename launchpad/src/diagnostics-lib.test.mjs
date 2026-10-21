@@ -95,7 +95,7 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
 
   expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
-  expect(mismatch.message).toContain("Principála");
+  expect(mismatch.message).toContain("uživatele");
   expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.2", "required: 1.4.1"]));
 });
 
@@ -287,7 +287,7 @@ test("Bun runtime and PATH Doctor failures point to the official pinned installe
     run: () => ({ ok: true, exitCode: 0, stdout: "1.4.1", stderr: "" }),
   });
   expect(mismatch.status).toBe("fail");
-  expect(mismatch.message).toContain("Principála");
+  expect(mismatch.message).toContain("uživatele");
   expect(mismatch.details).toContain("remedy_source: official_bun_installer_pinned");
 });
 
@@ -380,11 +380,11 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
     "platform.codex_update",
   ]);
   expect(checks[0]).toMatchObject({ status: "warn", severity: "recommended" });
-  expect(checks[0].message).toContain("požádat Principála o souhlas");
+  expect(checks[0].message).toContain("požádat uživatele o souhlas");
   expect(checks[0].details).toContain("next_action: ask_principal_before_update");
   expect(checks[1]).toMatchObject({ status: "fail", severity: "required" });
   expect(checks[1].message).toContain("není dostupný v PATH");
-  expect(checks[1].message).toContain("Principála");
+  expect(checks[1].message).toContain("uživatele");
   expect(checks[1].details).toContain("next_action: ask_principal_before_install");
 });
 

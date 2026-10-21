@@ -103,7 +103,7 @@ export function personalAppRuntimeId(spaceDirName, appId) {
 }
 
 function foreignOrUnrecognizedPersonalspaceDirFailure({ mountPath, directoryOwner, primaryOwner }) {
-  const principal = primaryOwner ? ` Principála ${primaryOwner}` : " Principála této mašiny";
+  const principal = primaryOwner ? ` uživatele ${primaryOwner}` : " uživatele této mašiny";
   const classification = directoryOwner
     ? `cizí Personalspace ownera ${directoryOwner}`
     : "nerozpoznaný adresář, který neodpovídá konvenci <owner>_GEN3";
@@ -158,7 +158,7 @@ export function validatePersonalConfig(personal, schema, label) {
   if (personal.shared_spaces !== undefined && !Array.isArray(personal.shared_spaces)) {
     failures.push(`${label}: shared_spaces musí být pole`);
   } else if (personal.shared_spaces?.length !== 0 && personal.shared_spaces !== undefined) {
-    failures.push(`${label}: shared_spaces musí zůstat prázdné; Personalspace je jen pro Principála a jeho Buddyho`);
+    failures.push(`${label}: shared_spaces musí zůstat prázdné; Personalspace je jen pro uživatele a jeho Buddyho`);
   }
 
   // owner
@@ -370,7 +370,7 @@ function buddyRuntimeIssues(buddy, label) {
   if (runtime.deployment_target !== undefined && runtime.deployment_target !== BUDDY_DEPLOYMENT_TARGET) {
     failures.push(
       `${label}: buddy.runtime.deployment_target musí být ${BUDDY_DEPLOYMENT_TARGET}: `
-      + "Buddy běží v Osobním Prostředí svého člověka (decision 0210)",
+      + "Buddy běží v Osobním Prostředí svého uživatele (decision 0210)",
     );
   }
   if (runtime.local_execution !== undefined) {
@@ -843,7 +843,7 @@ async function resolvePrimaryOwner({ companiesRoot, companiesConfig, personalspa
   const owners = await scanPersonalspaceOwners(personalspaceRoot);
   if (owners.length > 0) {
     warnings.push(
-      `personalspace: Principál mašiny není určen — nastavte personalspace_owner v launchpad.gen3.local.json (fail-closed privacy hranice; kandidáti ze skenu: ${owners.join(", ")}). Žádný Personalspace se nematerializuje.`,
+      `personalspace: Uživatel mašiny není určen — nastavte personalspace_owner v launchpad.gen3.local.json (fail-closed privacy hranice; kandidáti ze skenu: ${owners.join(", ")}). Žádný Personalspace se nematerializuje.`,
     );
   }
   return null;

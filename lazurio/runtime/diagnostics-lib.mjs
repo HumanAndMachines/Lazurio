@@ -2106,7 +2106,7 @@ function classifyModuleSlotReadiness(
       return {
         severity: "neutral",
         reason: "role_not_entitled",
-        message: "Checkout podle lokálně deklarovaných rolí tohoto Principála není očekávaný.",
+        message: "Checkout podle lokálně deklarovaných rolí tohoto uživatele není očekávaný.",
       };
     }
     if (classification === "restricted") {
@@ -2358,7 +2358,7 @@ export function codexRuntimeCheck({
       title: "Codex CLI",
       message:
         `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
-        + "Tento stav není připravený. Agent musí nejdřív požádat Principála o výslovný souhlas; potom použijte oficiální OpenAI standalone Windows instalátor a kontrolu zopakujte z nového procesu.",
+        + "Tento stav není připravený. Agent musí nejdřív požádat uživatele o výslovný souhlas; potom použijte oficiální OpenAI standalone Windows instalátor a kontrolu zopakujte z nového procesu.",
       paths: [],
       links: [],
       details: [
@@ -2550,7 +2550,7 @@ export function bunRuntimeCheck({
     title: "Bun runtime",
     message: current
       ? `Bun ${runtime.current_version} odpovídá Lazurio toolchain autoritě.`
-      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; Agent musí nejdřív požádat Principála o souhlas s aktualizací.`,
+      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; Agent musí nejdřív požádat uživatele o souhlas s aktualizací.`,
     paths: ["package.json"],
     links: [],
     details: [
@@ -2624,7 +2624,7 @@ export function nodeRuntimeCheck({
     title: "Node.js",
     message: compatible
       ? `Node.js ${runtime.current_version} odpovídá Lazurio toolchain rozsahu ${runtime.required_range}.`
-      : `Node.js ${runtime.current_version} neodpovídá požadovanému rozsahu ${runtime.required_range}; Agent musí nejdřív požádat Principála o souhlas s instalací aktuálního oficiálního Node.js LTS.`,
+      : `Node.js ${runtime.current_version} neodpovídá požadovanému rozsahu ${runtime.required_range}; Agent musí nejdřív požádat uživatele o souhlas s instalací aktuálního oficiálního Node.js LTS.`,
     paths: ["lazurio/package.json"],
     links: compatible
       ? []
@@ -2680,7 +2680,7 @@ function toolUpdateDoctorCheck(observation) {
       status: "warn",
       severity: "recommended",
       title: `${observation.title} · aktualizace`,
-      message: `${observation.title} ${observation.current_version} má novější oficiální verzi ${observation.latest_version}. Agent ji nesmí instalovat automaticky; musí nejdřív požádat Principála o souhlas.`,
+      message: `${observation.title} ${observation.current_version} má novější oficiální verzi ${observation.latest_version}. Agent ji nesmí instalovat automaticky; musí nejdřív požádat uživatele o souhlas.`,
       paths: [],
       links,
       details: [...details, "next_action: ask_principal_before_update"],
@@ -2705,7 +2705,7 @@ function toolUpdateDoctorCheck(observation) {
       status: required ? "fail" : "warn",
       severity: required ? "required" : "recommended",
       title: `${observation.title} · dostupnost`,
-      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; instalace není hotová, dokud jej nový čistý proces nespustí. Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
+      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; instalace není hotová, dokud jej nový čistý proces nespustí. Agent musí před instalací nebo změnou PATH nejdřív požádat uživatele o souhlas.`,
       paths: [],
       links: [],
       details: [...details, "next_action: ask_principal_before_install"],
@@ -2817,7 +2817,7 @@ function withBunInstallationGuidance(check, { platform, requiredVersion }) {
   const installCommand = officialBunInstallCommand({ platform, version: requiredVersion });
   return {
     ...check,
-    message: `${check.message} Agent musí nejdřív požádat Principála o výslovný souhlas; potom použijte oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakujte z nového čistého procesu.`,
+    message: `${check.message} Agent musí nejdřív požádat uživatele o výslovný souhlas; potom použijte oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakujte z nového čistého procesu.`,
     links: [...check.links, {
       label: "Oficiální instalace Bun",
       kind: "external",

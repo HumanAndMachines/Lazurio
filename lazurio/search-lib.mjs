@@ -157,7 +157,7 @@ export async function discoverLazurioSearchScope({
   }
   if (!scope.pilot_principals.includes(observedPrincipal)) {
     throw new LazurioSearchError(
-      `Principál ${observedPrincipal} není deklarovaný pilot scope ${scope.id}.`,
+      `Uživatel ${observedPrincipal} není deklarovaný pilot scope ${scope.id}.`,
       { code: "principal_outside_pilot", exitCode: 3 },
     );
   }
@@ -477,7 +477,7 @@ export async function searchLazurioQmd({
 
 export function qmdStorageLayout(scope) {
   const organization = safeStorageSegment(scope.organization.slug, "organization slug");
-  const principal = safeStorageSegment(scope.principal.github_username, "principal username");
+  const principal = safeStorageSegment(scope.principal.github_username, "username uživatele");
   const indexName = `lazurio-${organization}-${principal}`.toLowerCase();
   const localRoot = join(scope.root, ".cache", "lazurio", "qmd");
   return {
@@ -502,7 +502,7 @@ export async function materializeQmdConfig(scope, layout = qmdStorageLayout(scop
   await mkdir(layout.config_dir, { recursive: true });
   await mkdir(layout.cache_home, { recursive: true });
   const config = {
-    global_context: `${scope.display_name} search pilot v1. Organization a Principal scope jsou fyzicky izolované Lazurio adapterem.`,
+    global_context: `${scope.display_name} search pilot v1. Organization scope a scope uživatele jsou fyzicky izolované Lazurio adapterem.`,
     collections: Object.fromEntries(scope.sources.map((source) => [source.id, {
       path: source.absolute_path,
       pattern: `**/*.{${textExtensions.join(",")}}`,

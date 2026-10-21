@@ -127,7 +127,7 @@ function joinRequestBody({ organization, requester, device, platform, loginServe
     `- Registrační URL: ${registration.url}`,
     "",
     "**Schválení** (Admin Conglomerate Hostu):",
-    `1. na hostu: \`headscale nodes register --user ${requester.toLowerCase()} --key ${registration.key}\` (nebo pod uživatelem, kterého Organizace pro tuto osobu používá);`,
+    `1. na hostu: \`headscale nodes register --user ${requester.toLowerCase()} --key ${registration.key}\` (nebo pod uživatelem, kterého Organizace pro tohoto žadatele používá);`,
     "2. v Deployment Repu grant portu 22 z tohoto nodu na VM žadatele (`workspace_ssh_grants`), PR + review + apply;",
     "3. zavřít tuto issue. Launchpad žadatele připojení uvidí sám.",
     "",

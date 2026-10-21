@@ -470,7 +470,7 @@ export function personalspaceDoctorCheck(personalspaceResponse, { teamMachine = 
       links: [],
       details: [],
       not_applicable_reason: "no_such_mount",
-      owner: "Organizace (sdílená týmová Mašina nemá osobního vlastníka; Personalspace je jen na vlastní Mašině Principála)",
+      owner: "Organizace (sdílená týmová Mašina nemá osobního vlastníka; Personalspace je jen na vlastní Mašině uživatele)",
     };
   }
   const spaces = personalspaceResponse.spaces ?? [];
@@ -487,7 +487,7 @@ export function personalspaceDoctorCheck(personalspaceResponse, { teamMachine = 
       links: [],
       details: [],
       not_applicable_reason: "no_such_mount",
-      owner: "Principál mašiny (osobní prostor si mountuje sám, root ho nezakládá)",
+      owner: "Uživatel mašiny (osobní prostor si mountuje sám, root ho nezakládá)",
     };
   }
   const invalidSpaces = spaces.filter((space) => !space.config_valid);
@@ -522,7 +522,7 @@ export function personalspaceDoctorCheck(personalspaceResponse, { teamMachine = 
       ? privacyChecks.map(repositoryPrivacyDetail).join(", ")
       : "živá repository privacy neověřena";
     details.push(
-      `${space.mount_path}: Principálův, aplikací ${space.apps?.length ?? 0}, moduly available ${summary.available ?? 0}/missing_access ${summary.missing_access ?? 0}/planned_slot ${summary.planned_slot ?? 0}, ${gbrain}, ${privacySummary}`,
+      `${space.mount_path}: prostor uživatele, aplikací ${space.apps?.length ?? 0}, moduly available ${summary.available ?? 0}/missing_access ${summary.missing_access ?? 0}/planned_slot ${summary.planned_slot ?? 0}, ${gbrain}, ${privacySummary}`,
     );
   }
   if (warnings.length) {

@@ -60,7 +60,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
-          "description": "Self-reported local machine label for Principal-local recovery; not a stable fingerprint or proof of machine origin. Optional only for compatibility with legacy v1 sidecars; new writers always populate it."
+          "description": "Self-reported local machine label for local recovery by the user; not a stable fingerprint or proof of machine origin. Optional only for compatibility with legacy v1 sidecars; new writers always populate it."
         },
         "surface": {
           "type": "string",

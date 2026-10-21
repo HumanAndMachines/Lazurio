@@ -1,7 +1,7 @@
 # Lazurio resident distributions
 
 > **Buddy nemá Resident profil (decision 0210).** Buddy je Hermes Agent
-> v Osobním Prostředí svého člověka ([manuál Buddyho](../manual/buddy.md)).
+> v Osobním Prostředí svého uživatele ([manuál Buddyho](../manual/buddy.md)).
 > Profil `buddy`, jeho Zulip bridge, service a rollout příkazy a operator plane
 > pro jeho hosty se z tohoto source odstranily. Dosavadní hostované instalace
 > Buddyho běží dál ze svých nainstalovaných artefaktů podle pravidel svého
@@ -56,7 +56,7 @@ publishing drží
 
 `lazurio.resident.json` inventarizuje a hashuje každý immutable payload soubor.
 „Immutable“ tu označuje kanonickou, verzovanou podobu release, ne zákaz zápisu
-pro Principála na jeho vlastní Mašině. Principál může udělat lokální opravu;
+pro uživatele na jeho vlastní Mašině. Uživatel může udělat lokální opravu;
 Resident Doctor ji transparentně ohlásí jako drift a updater ji nikdy potichu
 nepřepíše. Manifest sám není v cirkulárním file inventory; celý archiv včetně
 manifestu kryje vnější `.tar.sha256` sidecar. Doctor navíc zachytí chybějící
@@ -69,7 +69,7 @@ nečte ani nehashuje.
 
 ## Assisted install, update a rollback
 
-Updater v1 je explicitní operátorský příkaz, ne daemon, a vždy běží mimo
+Updater v1 je explicitně spouštěný příkaz, ne daemon, a vždy běží mimo
 instalovaný artefakt, který updater nenese. Existují dvě cesty, obě z exact
 reviewovaného source commitu, ze kterého artefakt vznikl:
 

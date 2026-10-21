@@ -44,7 +44,7 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("84c09971eb20d1c4e38f15078214edf45cf3d5ff");
+    expect(scaffold.git_tree_oid).toBe("cdf12e55bef9f53f13bbb0a7ca78b4124707e78f");
     expect(scaffold.files.map((file) => file.path)).toEqual([
       ".github/ISSUE_TEMPLATE/agent-report.md",
       ".gitignore",

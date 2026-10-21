@@ -28,7 +28,7 @@ with exactly one **Branch: main** policy and no tag policies. Do not create a
 same-named repository or organization secret: that would bypass this boundary.
 The environment policy, not an editable feature-branch workflow condition,
 prevents other workflow refs from receiving the token. Repository admins and
-people authorized to change trusted main workflows remain trusted custodians.
+users authorized to change trusted main workflows remain trusted custodians.
 
 The job additionally requires the owner's immutable ID, `refs/heads/main`,
 and `github.run_attempt == 1`. The official action checks repository access.

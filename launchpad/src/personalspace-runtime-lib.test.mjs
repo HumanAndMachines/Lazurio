@@ -367,7 +367,7 @@ test("personalspaceDoctorCheck je metadata-only a nikdy neobsahuje obsah zápis�
   expect(["ok", "warn", "fail", "not_applicable", "blocked"]).toContain(check.status);
   // Detaily nesou jen počty/validitu/gbrain mode, ne obsah.
   expect(JSON.stringify(check)).not.toContain("soukromá poznámka");
-  expect(check.details.join(" ")).toContain("Principálův");
+  expect(check.details.join(" ")).toContain("prostor uživatele");
   expect(check.details.join(" ")).toContain("gbrain repo živě ověřeno private");
 });
 

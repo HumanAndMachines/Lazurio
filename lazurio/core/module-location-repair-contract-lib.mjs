@@ -42,7 +42,7 @@ Postupuj prosím takto:
 4. CLI musí před změnou celý stav znovu ověřit pod update lockem. Když se fingerprint změnil, vrať se k ověřovacímu kroku; neobcházej guardy.
 5. Po úspěšné opravě spusť \`lazurio update\` a ověř v Launchpadu, že modul i zdravé sousední moduly mají pravdivý stav.
 
-Hranice úkolu: zachovej veškerá lokální Git data. Nedělej reset, rebase, merge, push, force, ruční mazání ani automatické rozhodnutí nad dirty, ahead/diverged, detached, probíhající Git operací, nejednoznačným checkoutem, cizím remotem nebo kolizí cílové cesty. V těchto stavech má CLI bezpečně skončit a rozhodnutí zůstává Agentovi a Principálovi.`,
+Hranice úkolu: zachovej veškerá lokální Git data. Nedělej reset, rebase, merge, push, force, ruční mazání ani automatické rozhodnutí nad dirty, ahead/diverged, detached, probíhající Git operací, nejednoznačným checkoutem, cizím remotem nebo kolizí cílové cesty. V těchto stavech má CLI bezpečně skončit a rozhodnutí zůstává Agentovi a uživateli.`,
   };
 }
 

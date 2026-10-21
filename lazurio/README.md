@@ -3,7 +3,7 @@
 Interní CLI je tenká fasáda nad kanonickým Lazurio Core a platformními
 adaptéry. Nevytváří další identity, IAM, vlastní search engine ani druhý
 lifecycle engine. `context` bezpečně promítá
-Principála/Mašinu/Personalspace a na explicitní selektor jednu lokálně objevenou
+uživatele/Mašinu/Personalspace a na explicitní selektor jednu lokálně objevenou
 Organizaci, `doctor` znovu používá existující Doctor core a `search` přidává
 první explicitně omezený Organization pilot.
 
@@ -79,7 +79,7 @@ s oficiálním stabilním release zdrojem; Claude Code se kontroluje pouze tehdy
 je-li na dané mašině nainstalovaný a dostupný v `PATH`. Chybějící Claude je
 neutrální, zatímco nedostupný příkaz `codex` je warning: Doctor nemůže poznat,
 zda Codex chybí úplně, nebo leží mimo `PATH`, a navede Agenta k ověření se
-souhlasem Principála. Kontrola je pouze advisory: novější
+souhlasem uživatele. Kontrola je pouze advisory: novější
 verze je `warn` s `next_action: ask_principal_before_update`; Lazurio nikdy
 nespustí updater, package manager ani instalační příkaz. Nedostupná síť vrátí
 výslovné `currency_unknown` místo zeleného odhadu. Volitelný přepínač drží
@@ -217,7 +217,7 @@ sanitizaci a fallback draft drží [GitHub Issues manuál](../manual/github-issu
 
 ## Kontrola Organization manifestu a nastavení
 
-Read-only kontrola jednoho Organization rootu pro lidi, agenty i CI
+Read-only kontrola jednoho Organization rootu pro uživatele, agenty i CI
 repozitáře Organizace (decision 0194):
 
 ```sh
@@ -585,7 +585,7 @@ bun run lazurio -- search "záměr produktu" --mode hybrid
 
 Strojové výsledky mají schema marker `lazurio.search.results.v1`, diagnostika
 `lazurio.search.status.v1` a QMD adapter `lazurio.qmd.adapter.v1`. Každý hit
-obsahuje relativní cestu a provenance: Organization, Principála, Team, scope,
+obsahuje relativní cestu a provenance: Organization, uživatele, Team, scope,
 source, repository a stav provider access. Absolutní lokální cesty se ve
 výstupu nepublikují.
 
@@ -606,7 +606,7 @@ falešný freshness fingerprint.
 
 Verzovaný registr [search-scopes.v1.json](search-scopes.v1.json) deklaruje
 pilot `lazurio` pro Organization `HumanAndMachine-ai`, Team `lazurio` a
-Principála `immakermatty`. Jediné zdroje jsou:
+uživatele `immakermatty`. Jediné zdroje jsou:
 
 - repo `workspace/website-lazurio`;
 - repo `workspace/design-system-lazurio`;
@@ -638,7 +638,7 @@ nikoli obecný effective workspace nebo provider oprávnění.
 
 ## QMD adapter
 
-QMD drží pro každou dvojici Organization/Principál samostatný pojmenovaný
+QMD drží pro každou dvojici Organization/uživatel samostatný pojmenovaný
 config, SQLite index a Lazurio freshness state pod gitignored
 `.cache/lazurio/qmd/`. Adapter nastavuje vlastní `QMD_CONFIG_DIR` a
 `XDG_CACHE_HOME`; globální uživatelský QMD index nečte ani nemění.
@@ -673,7 +673,7 @@ QMD vyžaduje Node.js 22 nebo novější. Lazurio adapter globální instalaci s
 nemění; pouze ji diagnostikuje a exact režim nechává dostupný. Každý QMD child
 process explicitně nastavuje izolované `QMD_CONFIG_DIR` a `XDG_CACHE_HOME` a
 odstraňuje zděděný `INDEX_PATH`, který by jinak přesměroval SQLite databázi
-mimo deklarovanou Organization/Principál boundary.
+mimo deklarovanou Organization/uživatel boundary.
 
 Launchpad pole „Hledat aplikaci“ zůstává filtrem karet. Search UI ani obecný
 cross-Organization search nejsou součástí tohoto slice.

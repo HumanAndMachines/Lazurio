@@ -87,7 +87,7 @@ origin nebo cross-site request končí `403` před routingem.
 
 Výchozí hosted scope je `LAZURIO_HOSTED_SCOPE=organization` (výše popsaný
 Team Workspace; jeho výstupy i lifecycle identita se nemění). Osobní hostovaná
-Mašina Principála (decisions 0153/0154/0155) používá
+Mašina uživatele (decisions 0153/0154/0155) používá
 `LAZURIO_HOSTED_SCOPE=personal` s tímto kontraktem:
 
 - `LAZURIO_WORKSPACE_PROFILE=hosted` a `LAZURIO_HOSTED_DOMAIN` přesně
@@ -228,8 +228,8 @@ stejného seznamu.
 
 ### Laptopová strana spojení: Síť a Spojení
 
-Cíl: nový člověk si při onboardingu naklikne maximum sám, zásah do Headscale
-zůstává na oprávněné osobě (Admin Conglomerate Hostu) a port 22 mezi nody
+Cíl: nový uživatel si při onboardingu naklikne maximum sám, zásah do Headscale
+zůstává na oprávněném uživateli (Admin Conglomerate Hostu) a port 22 mezi nody
 zůstává grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`).
 Model hran, směrů a politiky drží issue HumanAndMachines/Lazurio#416.
 
@@ -265,7 +265,7 @@ předání Adminovi.
 Mašin, kam se z laptopu jde připojit (`~/.ssh/lazurio/*.conf`), a předávka
 z Launchpadu hostované Mašiny. Ta v sekci SSH ukáže **předávací kód**
 (base64url JSON s labelem, tailnet adresou, účtem, host klíčem a vlastní URL,
-nic tajného), který člověk vloží do sekce Spojení svého laptopu; stránka Mašiny
+nic tajného), který uživatel vloží do sekce Spojení svého laptopu; stránka Mašiny
 nezná adresu laptopového Launchpadu (tu má jen jeho locator) a žádný port
 nehádá. Sekce přijme kód holý, jako `connect=<kód>` i ve fragmentu
 `#connect=<kód>` vlastní URL. Laptop údaje znovu validuje (label, adresa 100.64.0.0/10, POSIX účet, tailnet,
@@ -274,8 +274,8 @@ stejném tailnetu (`tailnet_mismatch` jinak), a `POST /api/setup/connections/con
 vytvoří `~/.ssh/lazurio-<label>` (ed25519, `ssh-keygen`), zapíše
 `~/.ssh/lazurio/<label>.conf` a připnutý `<label>.known_hosts` a jednou vloží
 `Include lazurio/*.conf` na začátek `~/.ssh/config` — stejné rozložení jako
-záložní příkaz. Tlačítko **Přidat klíč na <label>** vrátí člověka na Launchpad
-Mašiny s `#add_key=<veřejný klíč>`; stránka klíč předvyplní a člověk klikne
+záložní příkaz. Tlačítko **Přidat klíč na <label>** vrátí uživatele na Launchpad
+Mašiny s `#add_key=<veřejný klíč>`; stránka klíč předvyplní a uživatel klikne
 Přidat (server zůstává jediný, kdo zapisuje `authorized_keys`). Záložní
 one‑liner pro laptop bez Lazuria zůstává schovaný pod „Bez Launchpadu na
 notebooku“. `POST /api/setup/connections/remove` smaže jen to, co podle
@@ -283,10 +283,10 @@ ledgeru vlastnictví (`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/connections
 Launchpad sám zapsal a co je pořád byte‑for‑byte jeho (ledger nese sha256
 confu i known_hosts a veřejný klíč): conf a připnutý host klíč jen při shodě
 digestu, soukromý klíč jen když ho vygeneroval a obě jeho poloviny jsou stále ty jeho (`.pub` text i sha256 soukromého klíče);
-cokoli člověk od té doby nahradil zůstává (`kept`). Ručně psaný
+cokoli uživatel od té doby nahradil zůstává (`kept`). Ručně psaný
 `~/.ssh/lazurio/<label>.conf` nebo `<label>.known_hosts` je v seznamu jen ke
 čtení a `connect` ho nikdy nepřepíše (`connection_unmanaged`). Klíč na Mašině
-zůstává, dokud ho tam člověk neodebere.
+zůstává, dokud ho tam uživatel neodebere.
 
 ### Zdrojové kódy: GitHub účet Mašiny
 
@@ -324,7 +324,7 @@ Launchpad přijímá a při přepnutí prostoru sám udržuje stabilní hash rou
 
 - `/#/org/<URL-encoded company.slug>` otevře přesnou lokálně dostupnou
   Organizaci;
-- `/#/personalspace` otevře Personalspace Principála na této mašině. Route je
+- `/#/personalspace` otevře Personalspace uživatele na této mašině. Route je
   záměrně local-only a neobsahuje username, jméno ani osobní data;
 - `/` bez hash route zachová výchozí výběr a po načtení URL kanonizuje podle
   aktivního prostoru.
@@ -486,7 +486,7 @@ ke každému slotu přidává `readiness.severity` (`ok` / `neutral` / `blocking
 - `missing_access` s `default_access: expected` je blokátor, protože modul má
   být dostupný každému kolegovi;
 - `missing_access` s `role_based`, `restricted` nebo `private` je neutrální jen
-  když principal-scoped `organization_roles` v gitignored
+  když user-scoped `organization_roles` v gitignored
   `launchpad.gen3.local.json` doloží, že žádná z rolí aktuálního Kolegy není
   mezi `required_roles`; bez lokálního role evidence zůstává fail-closed
   blokátorem;
@@ -700,7 +700,7 @@ V Lazurio rootu s více Organizacemi platí:
 ## Personalspace (decision 0051, CAC-0048)
 
 Personalspace je **oddělená privátní discovery lane** vedle Organization
-discovery. Materializuje pouze osobní prostor Principála této mašiny; jde o
+discovery. Materializuje pouze osobní prostor uživatele této mašiny; jde o
 privátní repo
 `<username>/<username>_GEN3` na osobním GitHubu, mimo firemní GitHub organizace.
 
@@ -732,7 +732,7 @@ personalspace/*/gbrain/                        (Obsidian-compatible markdown vau
 - Verzovaný Buddy binding podle decision 0210 má
   `runtime.deployment_target: owner-personal-environment` a
   `hermes.software_repo: Lazurio/hermes-agent`, bez `runtime.github_repo`
-  a `runtime.local_execution`: Buddy běží v Osobním Prostředí svého člověka.
+  a `runtime.local_execution`: Buddy běží v Osobním Prostředí svého uživatele.
   Dosavadní hostovaný blok (`owner-dedicated-personalspace-vps`,
   `local_execution: forbidden`, `runtime.github_repo`) zůstává validní do
   migrace své instalace a Doctor ho hlásí jako deprecation warning (DEV-6676).
@@ -752,7 +752,7 @@ personalspace/*/gbrain/                        (Obsidian-compatible markdown vau
 - Přesný listener osobní aplikace vlastní její `lazurio.module.json`.
   Organization `module_port_pool` se na Personalspace nevztahuje a neslouží
   jako root-wide rezervace čísel.
-- Prostor Principála mašiny určuje výhradně gitignored
+- Prostor uživatele mašiny určuje výhradně gitignored
   `launchpad.gen3.local.json` → `personalspace_owner`. Bez něj se žádný prostor
   nematerializuje; cizí mount vyvolá failure (decision 0091).
 
@@ -846,7 +846,7 @@ Doctor report zároveň obsahuje platform, Git a `.gitignore` checks:
 Tyto checks jsou součást stejného JSON reportu, který čte Launchpad přes
 `/api/doctor`.
 
-Z Lazurio Rootu existují stejné spouštěče pro lidi:
+Z Lazurio Rootu existují stejné spouštěče pro uživatele:
 
 - macOS: `Launchpad.command`
 - Windows: `Launchpad.cmd` nebo `Launchpad.ps1`
@@ -1216,7 +1216,7 @@ time, action, key type and fingerprint to
 `$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/audit/ssh-access.jsonl` (no key
 material); if that line cannot be written, nothing changes, and a change that
 fails afterwards is appended as `"result": "failed"`. An existing `~/.ssh` is
-tightened to 0700 before any write. This adds no new boundary: the operator can edit the same
+tightened to 0700 before any write. This adds no new boundary: the user can edit the same
 file from a shell on the Machine. Headscale ACLs still decide which tailnet
 nodes may reach port 22.
 
