@@ -27,10 +27,11 @@ Mašina člověka (0153) je jeho Osobní Prostředí; kdo ho nemá, Buddyho nem�
   přihlášení Osobního Prostředí se nepřeposílá (0210 bod 5).
 - **Pomocníci a vlákna.** Buddy sám nic neimplementuje: co chce zjistit,
   udělat nebo pohlídat, dává botům MausBotu v Prostředí, kam práce patří.
-  Vlákna T3 Code jsou místo uživatele; Buddy je zakládá, pokračuje v nich
-  nebo v nich odpovídá jen na jeho žádost. Jako agent ve vlákně s Buddym
-  nekomunikuješ a nehledáš cestu, jak mu poslat zprávu nebo ho probudit;
-  výsledek patří do vlákna (dodatek 0210 z 2026-10-20 noc).
+  Vlákna T3 Code jsou místo uživatele; Buddy je smí kdykoli číst kvůli
+  přehledu, ale zakládá je, pokračuje v nich nebo v nich odpovídá jen na jeho
+  žádost. Jako agent ve vlákně s Buddym nekomunikuješ a nehledáš cestu, jak
+  mu poslat zprávu nebo ho probudit; výsledek patří do vlákna (dodatek 0210
+  z 2026-10-20 noc).
 - **Oslovení.** Jestli Buddy svému uživateli tyká, nebo vyká, si uživatel
   nastaví v Nastavení → Buddy v Launchpadu; do té doby platí oslovení
   zapsané v SOUL.md (dodatek 0210 z 2026-10-20).
