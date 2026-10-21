@@ -59,7 +59,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 | Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
 | `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |
 | Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
-| Platform Launchpad: `start_script` (kap. 4.6) a uspávání nepoužívané App | od vydání Platformy s Lazurio/LazurioPlatform#579 a #573; starší vydání neznámý klíč `lazurio.runtime` odmítá | `start_script` deklaruj až tam, kde takové vydání běží na všech Prostředích, která Modul spouštějí (referenční Organizace napřed, 0204). |
+| Platform Launchpad: `start_script` (kap. 4.6) a uspávání nepoužívané App | od vydání Platformy s Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573; starší vydání neznámý klíč `lazurio.runtime` odmítá | `start_script` deklaruj až tam, kde takové vydání běží na všech Prostředích, která Modul spouštějí (referenční Organizace napřed, 0204). |
 
 ## Kdy použít
 
