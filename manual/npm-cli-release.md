@@ -17,7 +17,7 @@ důkazní archiv.
 
 Publikace nové npm verze, schválení staged package i přesun `latest` jsou
 **Release**. Agent je smí provést jen po explicitním pokynu oprávněného
-Operátora pro přesnou verzi nebo tagovou operaci.
+uživatele pro přesnou verzi nebo tagovou operaci.
 
 ## 0. Zmraz package coordinate
 
@@ -67,7 +67,7 @@ cross-job JSON parity ani release artefakt.
 
 Staged publishing vyžaduje už existující npm package. Pouze první claim proto
 proběhne standardním `npm publish` z adresáře `lazurio/`, s interaktivním npm
-přihlášením a 2FA oprávněného release operátora:
+přihlášením a 2FA uživatele oprávněného k release:
 
 ```sh
 cd lazurio
@@ -102,7 +102,7 @@ npm stage publish --tag next
 ```
 
 Staging není Release navenek: package ještě není veřejně dostupný. Oprávněný
-Operátor zkontroluje metadata a přesně staged bytes přes npm:
+uživatel zkontroluje metadata a přesně staged bytes přes npm:
 
 ```sh
 npm stage list <package-name>
@@ -116,7 +116,7 @@ Teprve explicitně schválený kandidát publikuje s proof-of-presence a 2FA:
 npm stage approve <stage-id>
 ```
 
-Špatný kandidát se neschvaluje; po kontrole jej oprávněný operátor odmítne a
+Špatný kandidát se neschvaluje; po kontrole jej oprávněný uživatel odmítne a
 source dostane novou verzi. Tag zvolený při stagingu je součástí kandidáta a
 později se v něm nepřepisuje.
 

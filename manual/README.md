@@ -25,7 +25,7 @@ Maintenance agent před zásahem ověřuje:
 - `package.json` — root workflow pro `bun run check`, `bun run doctor` a spuštění Launchpadu.
 - `AGENTS.md` — rozhodovací pravidla pro agenty před vstupem do organizace.
 - `MAP.md` — lidský rozcestník.
-- `launchpad/` — sdílený builder-first Lazurio Launchpad (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Uživatelů Organizace (Organization User) do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
+- `launchpad/` — sdílený builder-first Lazurio Launchpad (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Organization Users do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI kolegy; mechanismy rootu a Organizací drží `manual/` a MAP.md, dokud nevznikne plánovaná cesta „mapa systému“.
 - `organizations/README.md` — jediné trackované vysvětlení lokálního Organization mountpointu; konkrétní `organizations/*` jsou gitignored nested repos.
 - `personalspace/` — privátní osobní repo mimo GitHub organizace.
@@ -116,7 +116,7 @@ Při migraci z Workspace GEN2 rozděl Organizace repozitáře mezi `workspace/` 
 
 `personalspace/` je vedle `organizations/`, protože patří do osobního GitHub účtu vlastníka počítače nebo AI kolegy. Není to repo v žádné klientské ani provozní GitHub organizaci. Cílově nemá být jen privátní složka: má mít privátní moduly analogické workspace modulům, per-user/per-colleague aplikace a GBrain rozhraní pro nahlížení do osobní/Buddy paměti. Viz `manual/personalspace-modules-and-hosted-gbrain.md`.
 
-Root/Buddy/operator secrets, které nepatří do konkrétní Organizace, patří do
+Secrets rootu, Buddyho a uživatele, které nepatří do konkrétní Organizace, patří do
 gitignored `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>` s adresáři
 `0700` a soubory `0600`. Secrets konkrétního kolegy uvnitř Organizace patří
 do `organizations/<org>/company/colleagues/<os-user>/private/secrets/...`.

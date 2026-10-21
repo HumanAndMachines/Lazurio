@@ -48,7 +48,7 @@ become compatible before any repository migrates.
 | --- | --- | --- |
 | `lazurio.organization.json` | One Organization root, Organization identity, Organization-wide policy, optional root Forge binding and subordinate manifest pointers | Module runtime, provider grants or Dashboard account state |
 | `lazurio.module.json` | One workspace Module, its explicit applications and module-owned local leases | Organization authority, production deployment or Forge ACL |
-| `lazurio.personalspace.json` | One Personalspace owned by a single person, its privacy boundary, subordinate manifests and optional Resident bindings | Organization membership or another person's context |
+| `lazurio.personalspace.json` | One Personalspace owned by a single user, its privacy boundary, subordinate manifests and optional Resident bindings | Organization membership or another user's context |
 
 `launchpad.gen3.json` remains Machine-root configuration. `modules.manifest.json`
 remains the sole Organization repository-slot inventory and Git materialization
@@ -234,7 +234,7 @@ not secrets; the runbook is
 - `tenant_id` and `client_id` are lowercase GUIDs, as the Azure CLI prints them.
 - `apps` is a non-empty set of the parts the company app offers: `outlook`
   (mail and calendar), `one_drive`, `share_point`. Teams joins in phase 2. A
-  person connects an account once and gets every enabled part as one
+  user connects an account once and gets every enabled part as one
   Integration; `apps` selects the parts and so the delegated scopes, which
   live in LazurioPlatform, not in the setting.
 - `callbacks` is the projection of the Launchpad callbacks registered as

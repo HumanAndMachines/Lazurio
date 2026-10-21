@@ -104,7 +104,7 @@ frontmatter, route/link kontrakt a Git PR authoring flow.
 
 `v2` je první standardní Workspace modulová generace. App code a data jsou pořád v jednom modulovém repu, ale jsou jasně oddělené.
 
-**Univerzální koncept:** Git-readable data pro lidi i agenty, reviewovatelný
+**Univerzální koncept:** Git-readable data pro uživatele i agenty, reviewovatelný
 diff a jedna explicitní write/publish cesta.
 
 V2 má dva profily. **Record-native** je standard pro strukturované business

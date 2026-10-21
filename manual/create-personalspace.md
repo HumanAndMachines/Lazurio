@@ -24,13 +24,13 @@ Má-li vlastník Buddyho, přibude třetí private repo:
 ```
 
 Je to secret-free Hermes Profile Distribution se `SOUL.md`, nikoli runtime
-backup nebo fork Hermes softwaru. Buddy běží v Osobním Prostředí svého člověka
+backup nebo fork Hermes softwaru. Buddy běží v Osobním Prostředí svého uživatele
 (decision 0210, [manuál Buddyho](buddy.md)); tento root příkaz Buddy repo
 nevytváří.
 
 ## Na hostované osobní Mašině
 
-Osobní Mašina Operátora (`LAZURIO_HOSTED_SCOPE=personal`) dostane nainstalované
+Osobní Mašina uživatele (`LAZURIO_HOSTED_SCOPE=personal`) dostane nainstalované
 Lazurio bez Personalspace: jeho privátní repo leží na osobním GitHub účtu
 ownera a nikdo jiný ho vytvořit ani naklonovat nesmí (decision 0091). Dokud
 chybí, Launchpad běží a v osobním scope ukazuje výzvu „Personalspace na této

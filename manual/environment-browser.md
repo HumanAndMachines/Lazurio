@@ -37,9 +37,9 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
    totéž dělají jeho náhledové nástroje `preview_*` nad stejným prohlížečem. Žádná aplikace si
    nestaví vlastní prohlížeč pro stránky Environmentu a žádný agent nespouští vlastní Chromium
    s jinými přihlášeními.
-3. **Člověk vidí kartu jen přes pohled Platformy.** Jedna karta člověka je jedna vzdálená karta:
+3. **Uživatel vidí kartu jen přes pohled Platformy.** Jedna karta uživatele je jedna vzdálená karta:
    `https://browser.<…>/t/<id>` je pohled právě na ni, holá adresa `browser.<…>/` založí novou
-   (0191 bod 11, F39). Každá aplikace ukazuje kartu jako rámeček tohoto pohledu. Agent a člověk
+   (0191 bod 11, F39). Každá aplikace ukazuje kartu jako rámeček tohoto pohledu. Agent a uživatel
    v ní pracují současně. Plocha (`desktop.<…>`, druhá vlna) je pohled na celou obrazovku.
 4. **Spravuje se z Přehledu, lišta ukazuje karty svého místa.**
    - Přehled v Nové kartě ukazuje všechny karty Environmentu, jeho paměť a spuštěné Moduly a umí
@@ -48,7 +48,7 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
    - Lišta ukazuje karty svého místa: v T3 Code karty vlákna, v Launchpadu karty otevřené
      v Launchpadu (0195 bod 13).
 5. **Karta žije, dokud ji něco drží.** Drží ji místo, které ji ukazuje (lišta vlákna v T3 Code,
-   Launchpad, ve kterém ji člověk otevřel, výhledově bot MausBotu), a agent, který v ní pracuje.
+   Launchpad, ve kterém ji uživatel otevřel, výhledově bot MausBotu), a agent, který v ní pracuje.
    Když ji nic nedrží, nikdo se na ni nedívá a nepracuje v ní agent, po krátké lhůtě
    s nabídkou Vrátit zanikne (0195 bod 11, F47 bod 5). O konci karty rozhoduje jediné místo:
    hub pohledu.
@@ -71,7 +71,7 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
 | Návody agentům | LazurioPlatform (Folder) | Jak otevřít okno (`lazurio browser window`), poslat odkaz a co dělat po `tab_gone` |
 
 **Jak karta vzniká.** Agent si otevře okno příkazem `lazurio browser window`: vznikne okno
-prohlížeče a jeho sezení se na něj naváže (`<sezení>.target`). Člověk otevře kartu z Nové
+prohlížeče a jeho sezení se na něj naváže (`<sezení>.target`). Uživatel otevře kartu z Nové
 karty, Launchpad požádá hub o nové okno. Stránka otevře novou kartu nebo pop-up: pop-up se
 ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako novou kartu lišty
 (0191 bod 12).
@@ -81,14 +81,14 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
   pracuje. Agent v ní pracuje, když je na ni navázané jeho sezení `agent-browser`
   (`<sezení>.target`) a démon toho sezení běží (`<sezení>.pid`). Démon skončí po limitu
   nečinnosti z uživatelského nastavení agent-browseru: Platforma tam zapíše hodinu, pokud tam
-  člověk nemá vlastní limit, a jeho volbu nepřepisuje.
+  uživatel nemá vlastní limit, a jeho volbu nepřepisuje.
   Výchozí limit agent-browseru se na prohlížeč připojený přes DevTools nevztahuje.
 - **Konec po posledním držení.** Když poslední držení zmizí a nikdo se na kartu nedívá, karta
   skončí po 8 s. To je okno Vrátit.
 - **Karta, kterou nic nedrží,** skončí 30 s po odchodu posledního diváka. Kartu, kterou ještě
   nikdo neviděl ani nedržel, ukončí hub po 10 minutách.
 - **Držená karta** jen proto, že se na ni nikdo nedívá, nekončí.
-- **× na liště** kterékoli aplikace zavře pohled člověka a kartu za to místo pustí, s nabídkou
+- **× na liště** kterékoli aplikace zavře pohled uživatele a kartu za to místo pustí, s nabídkou
   Vrátit. Karta v Environmentu i v Přehledu zůstává, dokud ji drží něco jiného nebo se na ni někdo
   dívá. Jinak skončí po 8 s (0195 bod 14).
 - **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
@@ -225,7 +225,7 @@ převezme v úkolu 2026-10-12-703, MausBot až v úkolu 2026-10-05-510.
 ### Launchpad
 
 - **Lišta** ukazuje karty, které drží Launchpad (`holders/launchpad.json`, 0195 bod 13):
-  - karty, které v něm člověk otevřel z Nové karty, adresou nebo výběrem z Přehledu;
+  - karty, které v něm uživatel otevřel z Nové karty, adresou nebo výběrem z Přehledu;
   - nové karty stránek zobrazených v něm.
 - **„+“** otevře Novou kartu bez nástrojů a s adresním řádkem připraveným k psaní. Když je
   lišta prázdná, panel ukáže Novou kartu.
@@ -288,18 +288,18 @@ Do přechodu používá MausBot vlastní démony `agent-browser` s headless Chro
 
 Codex Desktop upravit nemůžeme, proto:
 - jeho agenti pracují v prohlížeči Environmentu přes `agent-browser` (přes SSH na Environment)
-  a posílají do chatu odkaz `browser.<…>/t/<id>`, který člověk otevře v prohlížeči Codex
+  a posílají do chatu odkaz `browser.<…>/t/<id>`, který uživatel otevře v prohlížeči Codex
   Desktopu;
 - Nová karta je pro něj samostatná stránka `launchpad.<…>/new-tab`. Výběr existující karty ji
   jen otevře ve stejném okně. Stránky otevřené odtud a stránky, které agent mimo T3 Code otevře
-  pro člověka, nikdo nedrží: žijí, dokud se na ně někdo dívá, a skončí 30 s po posledním
+  pro uživatele, nikdo nedrží: žijí, dokud se na ně někdo dívá, a skončí 30 s po posledním
   divákovi (dodatek 0191 z 2026-10-12, bod 29). Codex Desktop nemá lištu ani ×, kterými by je
-  člověk pustil;
+  uživatel pustil;
 - okno agenta Codexu drží jen práce agenta a to, že se na ně někdo dívá. Vlákna Codexu Lazurio
   nevidí, takže je nedrží. Na konci ho agent pustí (bod 28) a hub ho ukončí, až se na ně nikdo
   nedívá.
   - Agent přestal pracovat, když okno pustí nebo když jeho démon skončí po hodině bez příkazu
-    podle limitu, který nastaví Platforma, pokud si člověk v nastavení agent-browseru nezvolil
+    podle limitu, který nastaví Platforma, pokud si uživatel v nastavení agent-browseru nezvolil
     jiný.
   - Bez limitu démon připojený k prohlížeči sám nekončí.
 
@@ -313,7 +313,7 @@ Na `agent-browser` stojí tato smlouva:
 - připnutá karta;
 - limit nečinnosti démona z jeho uživatelského nastavení (`idleTimeout` v
   `~/.agent-browser/config.json`).
-  - Platforma tam zapíše hodinu (`"1h"`), jen když tam člověk nemá vlastní limit, a jeho volbu
+  - Platforma tam zapíše hodinu (`"1h"`), jen když tam uživatel nemá vlastní limit, a jeho volbu
     nepřepisuje.
   - Nastavení, které nejde přečíst, není objekt JSON nebo není obyčejný soubor (třeba odkaz),
     nechá Platforma být. Démon pak limit mít nemusí a sám neskončí (#533).
@@ -321,7 +321,7 @@ Na `agent-browser` stojí tato smlouva:
     (`blocks_default_idle_shutdown`). Bez limitu v nastavení by démon sám nikdy neskončil.
   - Po vypršení se démon jen odpojí, kartu nezavře; o jejím konci dál rozhoduje hub.
 
-Dashboard `agent-browser` lidé nepoužívají, lidé mají pohled Platformy. Fork nese jen opravy a
+Dashboard `agent-browser` uživatelé nepoužívají, mají pohled Platformy. Fork nese jen opravy a
 distribuci; jeho vydání popisuje `docs/operations/lazurio-fork-release.md` ve forku.
 
 ## Aktualizace forků a nové verze upstreamu
@@ -396,7 +396,7 @@ prohlížeč takto:
   - smluvní modul Platformy s testovacími vektory, celá fáze 1 F50: C1–C10 a C13–C17 i zápis
     souboru držitele jsou v modulu od Platformy v0.1.8-rc.68 a artefakt vydání ho nese pro
     forky (Lazurio/LazurioPlatform#404 a #407);
-  - `lazurio browser done` a stránky pro člověka bez držení (od rc.58);
+  - `lazurio browser done` a stránky pro uživatele bez držení (od rc.58);
   - nečitelný soubor držitele zastaví jen svou aplikaci (od rc.57; soubor, který od startu hubu
     přečíst nešel, nedrží nic, co by hub znal).
 
@@ -414,7 +414,7 @@ prohlížeč takto:
 - Nastavení doby nečinnosti okna agenta a strategie zavřít, nebo uspat v Nastavení Launchpadu
   (Matěj 2026-10-11; DEV-6656 úkol 943, čeká na spike 916). Do té doby karty vlákna, které stojí,
   ale není archivované, drží jeho lišta.
-- Jména lidí u karet: přijdou s účty Lazuria (0192). Přihlášení přes bránu identitu neříká.
+- Jména uživatelů u karet: přijdou s účty Lazuria (0192). Přihlášení přes bránu identitu neříká.
 - Plocha a Computer Use (druhá vlna 0191).
 - Jak při refreshi na stable 0.0.46 napojit serverový prohlížeč upstreamu na prohlížeč
   Environmentu: buď ho fork vypne, nebo ho nasměruje na DevTools na 9222.

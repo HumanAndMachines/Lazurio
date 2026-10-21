@@ -80,7 +80,7 @@ peera, vypne jeho desired runtime, bezpečně převezme listener a zapíše audi
 ## Exit kódy a report
 
 - `0` — snapshot/status je aktuální nebo akce proběhla;
-- `3` — je potřeba bezpečná akce člověka či Agenta (Server není spuštěný,
+- `3` — je potřeba bezpečná akce uživatele či Agenta (Server není spuštěný,
   selector není aktivní, takeover čeká na potvrzení, App není ready);
 - `1` — Server nebo runtime selhal technicky.
 

@@ -1,4 +1,4 @@
-# Přístupy mezi Mašinami jednoho Operátora
+# Přístupy mezi Mašinami jednoho uživatele
 
 > **Cílové zpřesnění 0192 (2026-10-06):** [Model přístupů](environment-access-model.md)
 > odděluje Lazurio účet, schválené zařízení, vstup do Environmentu a pracovní
@@ -9,19 +9,19 @@
 
 
 Plné znění rozhodnutí 0155 z [decision registru](decision-register.md). Popisuje,
-jak spolu smějí mluvit Mašiny a klienti, se kterými pracuje jeden Operátor, a
-kde se to zapisuje. Cílem je, aby pravidla přečetl i člověk bez IT specialisty
+jak spolu smějí mluvit Mašiny a klienti, se kterými pracuje jeden uživatel, a
+kde se to zapisuje. Cílem je, aby pravidla přečetl i uživatel bez IT specialisty
 a aby Agenti stavějící Lazurio Platformu měli jednu pravdu.
 
 ## Dvě zóny
 
 | Zóna | Co do ní patří | Owner |
 | --- | --- | --- |
-| **Osobní** | osobní klienti Operátora (laptop, telefon) a jeho jediná osobní VM (0153) | Operátor |
-| **Pracovní** | pracovní VM přiřazené právě tomuto Operátorovi (klidně víc, v různých Organizacích téhož Conglomerate) a pracovní laptop, který mu vydala Organizace | Organizace |
+| **Osobní** | osobní klienti uživatele (laptop, telefon) a jeho jediná osobní VM (0153) | Uživatel |
+| **Pracovní** | pracovní VM přiřazené právě tomuto uživateli (klidně víc, v různých Organizacích téhož Conglomerate) a pracovní laptop, který mu vydala Organizace | Organizace |
 
-Každá položka v infra nese dvě oddělená pole: `owner` (Operátor u osobní
-Mašiny a osobních klientů, Organizace u pracovních) a `operator` (člověk,
+Každá položka v infra nese dvě oddělená pole: `owner` (uživatel u osobní
+Mašiny a osobních klientů, Organizace u pracovních) a `operator` (uživatel,
 kterému je pracovní VM nebo pracovní laptop přiřazený). Oba vztahy se váží na
 neměnné GitHub ID; login je jen čitelný popis. Zmrazený lowercase login slouží
 výhradně jako síťový a DNS slug (Headscale user, `<login>.lazurio.io`). Zóna se
@@ -29,10 +29,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 
 ## Pravidla
 
-1. **Uvnitř zóny oběma směry.** Agenti Operátora pracují v jednom souvislém
-   prostoru a Operátor nemusí řešit, kde co leží.
+1. **Uvnitř zóny oběma směry.** Agenti uživatele pracují v jednom souvislém
+   prostoru a uživatel nemusí řešit, kde co leží.
    - osobní klient → osobní VM: SSH + HTTPS; osobní VM → osobní laptop: SSH;
-   - pracovní laptop → pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+   - pracovní laptop → pracovní VM téže Organizace přiřazená témuž uživateli: SSH.
      Grant se odvozuje z aktuálního stavu (schválené zařízení × právě přidělené
      Environmenty) bez samostatné žádosti a sleduje změny přidělení, zařízení
      i členství (dodatek 0192 z 2026-10-07).
@@ -41,18 +41,18 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      výslovně deklarovaného zařízení Ownera podle pravidla 8.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
-     zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
+     zachovaná; propojení drží pracovní laptop uživatele nebo jeho osobní strana.
      Výjimkou je servisní SSH z jmenovaného Pracovního Prostředí Ownera
      nebo Admina do Pracovních a Týmových Prostředí členů téže Organizace
      (0202). Ke službám servisní Mašiny svého serveru (AI pool a další)
      jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
      Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
-   téhož Operátora: SSH + HTTPS.
+   téhož uživatele: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
    na osobní VM ani na osobní laptop. Jedinou výjimkou je zařízení vědomě
    deklarované v obou zónách podle pravidla 8.
-4. **Sdílená týmová VM** (Hosted Team Workspace, víc Operátorů v jednom OS
+4. **Sdílená týmová VM** (Hosted Team Workspace, víc uživatelů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
    nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
@@ -61,7 +61,7 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    ke službám servisní Mašiny svého serveru, které jí Deployment Repo povolí,
    jde po vnitřní síti serveru, ne přes Headscale (0209). Pracovní zóna nemá hranu
    z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
-5. **Mezi Operátory nic implicitně.**
+5. **Mezi uživateli nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
    Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
@@ -74,11 +74,11 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
    Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
    být deklarované v obou zónách, ale jen při splnění všech podmínek:
-   - **Owner a Operátor jsou tatáž osoba.** Neměnné GitHub ID vlastníka
+   - **Owner a uživatel jsou tatáž osoba.** Neměnné GitHub ID vlastníka
      zařízení je zároveň Owner té Organizace, jejíž pracovní Mašiny na ně mají
-     dosáhnout. Pravidlo „z pracovní do osobní nikdy“ chrání Operátora před
+     dosáhnout. Pravidlo „z pracovní do osobní nikdy“ chrání uživatele před
      autoritou Organizace a jejích pracovních VM. Výjimka tu ochranu neruší;
-     Operátor, který je sám Ownerem, ji vědomě a výslovně vzdává pro jedno své
+     uživatel, který je sám Ownerem, ji vědomě a výslovně vzdává pro jedno své
      zařízení a přijímá důsledek popsaný níže. Rozhodnutí je jeho, protože se
      týká jeho vlastního zařízení.
    - **Výslovná deklarace, nikdy odvození.** Dvojí zařazení se zapisuje v infra
@@ -86,9 +86,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      z jména uzlu, popisu, Headscale usera ani z toho, že je někdo Owner.
    - **Jen jmenovaná Organizace.** Grant dostanou pouze pracovní Mašiny
      deklarovaných Organizací. Ostatní Organizace téhož Conglomerate ani cizí
-     Operátoři z toho nic nezískávají.
+     uživatelé z toho nic nezískávají.
    - **Vědomý důsledek.** Autorita Organization Hostu a Conglomerate Hostu tím
-     dostane technickou cestu do zařízení, na kterém Operátor pracuje i
+     dostane technickou cestu do zařízení, na kterém uživatel pracuje i
      soukromě. Ta autorita nepatří jen jemu: mají ji všichni Owneři té
      Organizace a každý, kdo smí spouštět práci na jejích pracovních VM, včetně
      agentních účtů. To je přijatý důsledek; proto tuhle výjimku nesmí dostat
@@ -102,7 +102,7 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      a žádná pracovní VM na deklarovaného osobního klienta nedosáhne.
 
 **Vědomý důsledek pracovního laptopu:** pracovní laptop dostává SSH do
-pracovního Environmentu, který je přidělený témuž člověku; opačný směr pracovní
+pracovního Environmentu, který je přidělený témuž uživateli; opačný směr pracovní
 VM → laptop se obecně nedává (0182). Pracovní VM vlastní Organizace a nad ní
 stojí autorita Organization Hostu a Conglomerate Hostu, takže hrana VM →
 zařízení by této vyšší autoritě dala technickou cestu do laptopu. Proto ji
@@ -113,9 +113,9 @@ se nikdy neodvozuje a osobní laptop ji dostat nesmí.
 
 Zóny a pravidla platí uvnitř jednoho Conglomerate (jednoho Headscale tailnetu).
 Osobní VM je uzlem právě jednoho tailnetu: **domovského Conglomerate**
-Operátora, který se určí při jejím založení (Conglomerate Organizace, kterou
-Operátor vlastní nebo pro kterou primárně pracuje) a zapíše se do jejího
-záznamu. Do cizího Conglomerate vstupuje Operátor jen svým klientem
+uživatele, který se určí při jejím založení (Conglomerate Organizace, kterou
+uživatel vlastní nebo pro kterou primárně pracuje) a zapíše se do jejího
+záznamu. Do cizího Conglomerate vstupuje uživatel jen svým klientem
 přihlášeným do toho tailnetu; jeho osobní VM tam grant nemá a mezi tailnety se
 nestaví žádný most.
 
@@ -137,9 +137,9 @@ nestaví žádný most.
   deklarovaného záznamu Mašiny v infra, ne z Headscale usera.
 - Technické jméno osobní VM = lowercase GitHub login (stejný slug jako Headscale
   user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
-  `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Operátor (osobní VM
+  `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí uživatel (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
-- **Jména uzlů zařízení lidí.** Uzel zařízení člověka v tailnetu se jmenuje
+- **Jména uzlů zařízení uživatelů.** Uzel zařízení uživatele v tailnetu se jmenuje
   `<login>-<zařízení>` (např. `<login>-macbook`) a další headless klient téhož
   zařízení `<login>-<zařízení>-cli`. Uzel osobní VM, tedy Osobního Prostředí
   na serveru, se jmenuje `<login>-personal-vm`; její technické jméno z
@@ -172,7 +172,7 @@ nestaví žádný most.
   běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
   servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
   zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
-  Prostředími více lidí služby Organizace nemá.
+  Prostředími více uživatelů služby Organizace nemá.
 
 ## Infra je blueprint
 
@@ -181,7 +181,7 @@ jediný čitelný popis toho, jaké Mašiny a klienti figurují, v jaké zóně,
 `owner` a `operator` a podle jakých pravidel. Autoruje se jen tento seznam a
 pravidla výše. Výsledné Headscale granty jsou exaktní per-Mašina (node ID,
 machine key, jméno, /32 adresa, žádné wildcardy namespace ani tagu), ale jsou
-**generovaný, reviewovatelný výstup**, aby blueprint nerostl s počtem lidí ×
+**generovaný, reviewovatelný výstup**, aby blueprint nerostl s počtem uživatelů ×
 Mašin.
 
 **Síťová lane (cíl):** merge změny, která se týká jen seznamu Mašin, zón a
@@ -208,7 +208,7 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 
 ## Příklad
 
-| Operátor | Domovský Conglomerate | Osobní zóna | Pracovní zóna |
+| Uživatel | Domovský Conglomerate | Osobní zóna | Pracovní zóna |
 | --- | --- | --- | --- |
 | Matouš (`mcn-kacanos-m`) | Macano-Tech | Windows laptop, iPhone, osobní VM „Friday“ | pracovní VM Macano-Tech „Henry“ |
 | Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě, HumanAndMachine-ai a Lumbio |
@@ -222,8 +222,8 @@ pracovní VM Macano-Techu na notebook nedosáhne a notebook je v příkladu jen 
 osobní zóně. Pracovní VM na něj dosáhne teprve po třech krocích: schopnost
 Machines deklarovat dvojí zařazení, výslovná deklarace v `Macano-Tech/infra` a
 běžné nasazení s Plánem a Permitem. Pak se notebook objeví v obou sloupcích.
-Do osobní zóny jiných Operátorů ani jiných Organizací se tím nic neotevírá.
-Operátor s pracovním laptopem Organizace má SSH z pracovního laptopu do
+Do osobní zóny jiných uživatelů ani jiných Organizací se tím nic neotevírá.
+Uživatel s pracovním laptopem Organizace má SSH z pracovního laptopu do
 přiděleného pracovního Environmentu; opačný směr jen u výslovně deklarovaného
 zařízení Ownera podle pravidla 8.
 

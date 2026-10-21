@@ -4,7 +4,7 @@ Status: **cílový kontrakt a implementační plán CAC-0065**. Fresh-main task
 preflight a PR push preflight popsané níže jsou aktivní. `lazurio doctor`
 navíc lokálně reportuje nepovolené worktree cesty a jejich pozorovatelný Git
 stav, ale cleanup neklasifikuje ani neprovádí. Plánované `doctor worktrees ...`
-create/hydrate/cleanup příkazy zatím aktivním operátorským postupem nejsou.
+create/hydrate/cleanup příkazy zatím aktivním postupem uživatele nejsou.
 Aktivní Launchpad guarded create/publish lane už umí jeden edit worktree. Pokud
 jeho explicitně deklarovaná App vyžaduje aktivní child `repository_db_mount`,
 create navíc materializuje exact detached linked worktree ze zdravého
@@ -50,7 +50,7 @@ externí cesta failne před mutací.
 
 ## Výsledek, který chceme
 
-Agent ani člověk nemá ručně rozhodovat:
+Agent ani uživatel nemá ručně rozhodovat:
 
 - kam worktree uložit;
 - zda použít `git clone`, `git worktree add` nebo dočasnou složku;
@@ -507,7 +507,7 @@ odvozuje při každém status/cleanup běhu. Sidecar smí držet timestampovaný
 cache/readback, ale report musí jasně ukázat jeho stáří.
 
 `conversation_origin` je gitignored lokální vodítko k původní relaci:
-`machine_ref`, harness `surface` a opaque `thread_id`. Operátor podle něj může
+`machine_ref`, harness `surface` a opaque `thread_id`. Uživatel podle něj může
 dohledat chat k nedokončenému worktree. Údaj je orientační, editovatelný a
 podvrhnutelný; není identitou, atribucí, auditním důkazem ani oprávněním.
 GitHub zůstává autoritou přístupů a commitové atribuce.

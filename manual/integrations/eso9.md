@@ -10,7 +10,7 @@ nevytváří vlastní roster ani vlastní ERP role. Organization-owned bridge je
 zužuje providerem povolené operace na několik jmenovaných doménových nástrojů.
 
 Dokud není uzavřený discovery gate níže, používej pouze browser fallback pod
-dohledem Operátora. Nevytvářej credential, nezapisuj server do `.mcp.json`
+dohledem uživatele. Nevytvářej credential, nezapisuj server do `.mcp.json`
 ani `.codex/config.toml` a nepřipojuj agentní mašinu přímo k SQL Serveru.
 
 ## Dostupné provider cesty
@@ -20,7 +20,7 @@ ani `.codex/config.toml` a nepřipojuj agentní mašinu přímo k SQL Serveru.
 | ESO9 Web API přes HTTPS | Preferovaná pro dlouhodobou integraci | Jmenované `vltyp` procedury, vlastní `x-api-key` bridge Organizace, prokázaný journal a samostatná revokace |
 | ESO9 JSON API přes HTTPS | Omezený read-only pilot | Samostatný backend účet s `SELECT` pouze nad jmenovanými pohledy; bridge nesmí přijmout volný zdroj ani T-SQL podmínku a nesmí vystavit `setFile` |
 | Přímé SQL z agentní mašiny | Zakázané | Obchází podporovanou API hranici a rozšiřuje custody i síťový blast radius |
-| Browser | Bezpečný fallback během discovery | Přímý dohled Operátora, bez automatizovaného exportu a bez ukládání zákaznických dat do Gitu |
+| Browser | Bezpečný fallback během discovery | Přímý dohled uživatele, bez automatizovaného exportu a bez ukládání zákaznických dat do Gitu |
 
 Web API používá `x-api-key` jako identifikátor třetí strany a podpis
 `x-eso9-signature`. Komunikaci ukládá do `WS_JOURNAL`; přihlašovací a
@@ -81,8 +81,8 @@ Task Agent v Prostředí -> MCP bridge ve Službách serveru -> HTTPS -> ESO9 AP
 Vstup Služeb serveru sdělí bridge, ze kterého Prostředí požadavek přišel a komu
 je Prostředí přidělené. Bridge to zapisuje do vlastního auditu, protože ESO9
 vidí jen identitu bridge; je to záznam, ne oprávnění, a sdílené Prostředí
-(0192) může používat víc lidí. Vnější chatovací klient, například ChatGPT
-desktop, se k bridge nepřipojuje: člověk přes něj chatuje s agenty ve svém
+(0192) může používat víc uživatelů. Vnější chatovací klient, například ChatGPT
+desktop, se k bridge nepřipojuje: uživatel přes něj chatuje s agenty ve svém
 Prostředí. Bridge nemá vlastní adresu; případnou stránku otevírají Owneři a
 Admini jen na localhostu v prohlížeči Služeb serveru.
 
@@ -157,7 +157,7 @@ Organizace projde stejnou branou se dvěma Prostředími toho serveru:
 Zápis není pokračováním read-only rolloutu, ale nový schvalovaný scope.
 Vyžaduje jmenovanou Web API proceduru, provider-side oprávnění, přesný preview
 Draftu, idempotency key, konflikt/verzi cíle, atomickou odpověď, ESO9-native
-audit, rollback nebo kompenzaci a explicitní pokyn Operátora k Publikaci.
+audit, rollback nebo kompenzaci a explicitní pokyn uživatele k Publikaci.
 Obecné `execute`, volný `vltyp`, DMS upload, ceny, sklad, fakturace, účetnictví,
 mazání a změny přístupů se nesmějí schválit jako jeden společný balík.
 

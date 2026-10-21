@@ -32,11 +32,11 @@ Lokální uložení omezuje cloudového prostředníka, ale neodstraňuje důvě
 server, poskytovatele služby ani model. MCP nástroj může číst data, která mu
 udělené OAuth scopes a lokální filesystem dovolí, a obsah e-mailu nebo dokumentu
 může nést prompt injection. Připojuj jen zdroj, jehož kód a datovou hranici
-Operátor přijímá.
+uživatel přijímá.
 
 ## Bezpečnostní gate před instalací
 
-1. Urči scope: osobní, root/operator, nebo právě jedna Organizace. Pro různé
+1. Urči scope: osobní, root/uživatel, nebo právě jedna Organizace. Pro různé
    Organizace používej oddělené názvy serverů i OAuth sessions, například
    `<org_slug>_clickup`; nepřenášej token jedné Organizace do druhé.
 2. Ověř publishera, zdrojový repozitář, licenci, release/tag nebo přesný commit
@@ -49,7 +49,7 @@ Operátor přijímá.
    ne default.
 4. Secret hodnoty, OAuth kódy, tokeny ani obsah client JSONu neposílej chatem a
    necommituj. Řiď se [lokálním secret custody standardem](security/local-secret-custody.md):
-   root/operator secrets patří do
+   secrets rootu a uživatele patří do
    `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>`, secrets
    Kolegy v Organizaci do
    `organizations/<org>/company/colleagues/<os-user>/private/secrets/<provider>/<scope>/<purpose>`.
@@ -114,13 +114,13 @@ přihlášení zachovat; krátkodobý access token se obnovuje refresh tokenem.
 
 Každý Kolega nastavuje integrace ve svém uživatelském profilu Codexu. Agent smí
 instalaci připravit a diagnostikovat, ale výběr účtu a OAuth souhlas dokončuje
-Operátor v prohlížeči. Sdílej pouze dokumentovaný postup a metadata; nepřenášej
-mezi lidmi hotové token cache, client secrety ani celý uživatelský
+uživatel v prohlížeči. Sdílej pouze dokumentovaný postup a metadata; nepřenášej
+mezi uživateli hotové token cache, client secrety ani celý uživatelský
 `~/.codex/config.toml`.
 
-### Výchozí model: jeden Operátor, více mašin
+### Výchozí model: jeden uživatel, více mašin
 
-Lazurio počítá s tím, že jeden Operátor může používat svůj vlastní
+Lazurio počítá s tím, že jeden uživatel může používat svůj vlastní
 OpenAI účet a subscription na více svých mašinách. Identita a subscription
 mohou být stejné, ale přístupy k ostatním službám zůstávají na každé mašině
 oddělené: každá má vlastní `~/.codex/config.toml`, MCP servery, OAuth granty,
@@ -132,9 +132,9 @@ autorizuj samostatně, uděluj jí jen potřebné scopes a veď ji jako samostat
 revokovatelný přístup. Ztracené nebo kompromitované zařízení pak lze odpojit
 u jednotlivých poskytovatelů bez přenášení jeho přístupů na ostatní stroje.
 
-Tento model neznamená sdílení jednoho OpenAI loginu mezi více lidmi. Podle
+Tento model neznamená sdílení jednoho OpenAI loginu mezi více uživateli. Podle
 [OpenAI Account Sharing Policy](https://help.openai.com/en/articles/10471989-openai-account-sharing-policy)
-je účet určen člověku, který jej vytvořil; tento člověk jej může používat na
+je účet určen uživateli, který jej vytvořil; tento uživatel jej může používat na
 více zařízeních, ale další Kolega potřebuje vlastní účet nebo přidělený seat.
 
 Pro onboarding call použij tento pořádek:
@@ -183,7 +183,7 @@ codex mcp login example_org_clickup
 codex mcp get example_org_clickup
 ```
 
-OAuth souhlas dokončuje člověk v prohlížeči. Zkontroluj správný ClickUp
+OAuth souhlas dokončuje uživatel v prohlížeči. Zkontroluj správný ClickUp
 Workspace a oprávnění účtu; agent může dělat pouze operace, které tento účet
 smí. Smoke začni čtením známého tasku a pokračuj zápisem na testovacím
 záznamu — write je od začátku povolený, potvrzuje ho approval mode.

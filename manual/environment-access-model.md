@@ -9,22 +9,22 @@ DEV-6551/DEV-6552 v Mission Controlu Human and Machine. Každý consumer musí
 před přechodem doložit níže uvedené chování. Dosavadní GitHub/Team brány
 zůstávají označenou migrační implementací, nikoli cílem k další expanzi.
 
-## Člověk a pracovní schopnosti
+## Uživatel a pracovní schopnosti
 
-Směrem k lidem používáme **uživatel**. Uživatel má jeden Lazurio účet s
+Směrem k uživatelům používáme **uživatel**. Uživatel má jeden Lazurio účet s
 neměnným identifikátorem issuer + subject. GitHub je volitelná propojená
 identita a pracovní schopnost; připojení samo nevytváří repo grant, právo
 schválit PR ani právo spravovat Organizaci. Technické názvy dosavadních
-GitHub rolí mohou zůstat v kompatibilitních kontraktech; nejsou druhy lidí.
+GitHub rolí mohou zůstat v kompatibilitních kontraktech; nejsou druhy uživatelů.
 
 Lazurio účet může získat oprávnění k individuálnímu i týmovému pracovnímu
 Environmentu bez GitHub účtu. Přihlášení, členství v Organizaci, přidělení
 Environmentu a GitHub identita používaná uvnitř jsou odlišné vazby.
 Stejný e-mail, login ani zobrazované jméno účty neslučují. Odpojení GitHubu
-nepřevádí Environment na jiného člověka a samo nemaže Lazurio účet.
+nepřevádí Environment na jiného uživatele a samo nemaže Lazurio účet.
 
-Pracovní Environment vlastní Organizace; člověku ho přiděluje. Osobní
-Environment a jeho Personalspace zůstávají soukromou hranicí jednoho člověka.
+Pracovní Environment vlastní Organizace; uživateli ho přiděluje. Osobní
+Environment a jeho Personalspace zůstávají soukromou hranicí jednoho uživatele.
 Plný přístup jiného uživatele k jeho Personalspace se tímto rozhodnutím
 nezavádí. Vědomě zpřístupněná aplikace či export nesmí obejít tuto hranici.
 
@@ -48,7 +48,7 @@ připojení není přístupem k pracovním datům. Síťová schválení se vá�
 konkrétní identitu zařízení a účet; jejich přesný mechanismus musí prokázat
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
 v mezeře před schválením. SSH ze schváleného zařízení do pracovního
-Environmentu, který je přidělený témuž člověku, je pravidlo: vzniká v téže
+Environmentu, který je přidělený témuž uživateli, je pravidlo: vzniká v téže
 reviewované změně jako schválení zařízení a při změně přidělení, odvolání
 zařízení nebo konci členství se v téže změně síťového záměru přidá nebo
 odebere. Opačný směr (Environment →
@@ -80,7 +80,7 @@ Organizaci; rozhodnutí z 2026-10-04 platí a Matěj ho 2026-10-06 potvrdil.
 přihlašovací metodu (DEV-6551). Nejde o druhý seznam: pro tyto účty je
 GitHub vstupem jedné evidence.
 
-Vstup lidí do týmového Environmentu spravuje Admin. Do přechodu na granty
+Vstup uživatelů do týmového Environmentu spravuje Admin. Do přechodu na granty
 Authu ho určuje členství v GitHub Teamu Environmentu jako označená migrační
 implementace.
 
@@ -94,7 +94,7 @@ Přidělený uživatel smí v rámci svého oprávnění:
   Organizaci, včetně deklarovaného účtu a rozsahu vzdálených operací.
 
 Každé takové sdílení nepotřebuje nové ruční schválení Adminem. Uživatel ale
-nemůže pozvat externího člověka, vytvořit členství, schválit zařízení,
+nemůže pozvat externího uživatele, vytvořit členství, schválit zařízení,
 přidělit si cizí Environment nebo obejít organizační hranici. Admin může
 propojit Environmenty napříč uživateli v Organizaci. Přidělení dvou
 Environmentů z různých Organizací samo nepovoluje propojení jejich dat.
@@ -106,8 +106,8 @@ konkrétní původní přidělení a cílový prostředek. Ztráta nebo změna p
 odebrání členství sdílejícího či příjemce a zrušení nebo převázání cíle tato
 sdílení zneplatní; nový přidělený uživatel je nepřebírá a pozdější obnovení
 členství je samo neoživí. Nezávislý platný grant zůstává samostatnou cestou
-přístupu a Dashboard jej musí ukázat. Přidělení novému člověku proto nemůže
-zpřístupnit jeho nová přihlášení lidem, kterým důvěřoval předchozí uživatel.
+přístupu a Dashboard jej musí ukázat. Přidělení novému uživateli proto nemůže
+zpřístupnit jeho nová přihlášení těm, kterým důvěřoval předchozí uživatel.
 
 ## Celý Environment, aplikace a vzdálené operace
 
@@ -130,12 +130,12 @@ Aplikační přístup nikdy nezahrnuje prohlížeč ani plochu Environmentu
 (`browser.`, `desktop.`) ani jinou cestu, která ovládá celý Environment.
 Sdílená cookie brány z 0191 (8b) není aplikační grant; brána ověřuje každý
 cíl zvlášť. Bod 10 rozhodnutí 0191 (vymazat profil prohlížeče před
-přeřazením pracovního Environmentu jinému člověku) platí dál; 0192 ruší jen
+přeřazením pracovního Environmentu jinému uživateli) platí dál; 0192 ruší jen
 povinné odhlašování při běžném sdílení.
 
 ### Data Modulů: strop Environmentu a zúžení v aplikaci (0196)
 
-Na data Modulu dosáhne Environment, ne člověk. Admin Organizace mu dá
+Na data Modulu dosáhne Environment, ne uživatel. Admin Organizace mu dá
 přístupy přes jeho kolekci v trezoru Organizace a úložiště je vynucuje; to je
 strop Environmentu. Kam tyto přístupy patří, když každé Prostředí má vlastní
 trezor a trezor Organizace s jeho kolekcí zaniká, je otevřený bod 8
@@ -143,7 +143,7 @@ rozhodnutí 0198. Kdo má celý Environment, pracuje s celým stropem, protože
 v Environmentu má root. Kdo má jen aplikaci, vidí část stropu podle pravidel
 Organizace: zužuje server Modulu u každého požadavku a víc než strop nedá.
 
-Zúžení je služba provozovatele Environmentu vůči lidem, se kterými aplikaci
+Zúžení je služba provozovatele Environmentu vůči uživatelům, se kterými aplikaci
 sdílí, ne izolace proti němu. Provozovatel má root, může server Modulu změnit
 a návštěvníkovi ukázat celý strop; Admin Organizace mu proto strop svěřuje
 celý a za to, co jeho aplikace ukáže, odpovídá on. Autor změny zapsaný na
@@ -159,7 +159,7 @@ svém Environmentu nebo v aplikaci provozované Organizací.
 
 ### Plné sdílení individuálního pracovního Environmentu je vědomá důvěra
 
-Přidělený uživatel může důvěryhodnému člověku udělit plný přístup i tehdy,
+Přidělený uživatel může důvěryhodnému uživateli udělit plný přístup i tehdy,
 když v Environmentu zůstávají jeho osobní pracovní přihlášení. Přijímá
 riziko, že příjemce může použít **všechno dostupné uvnitř**: soubory,
 procesy, Chat, automatizace, browser a jeho relace, hesla a passkeys,
@@ -167,7 +167,7 @@ GitHub i jiné integrace a existující vzdálené přístupy. Systém před
 sdílením nevynucuje odhlášení, výmaz profilu, výměnu účtů za broker,
 převod na týmový režim ani další schválení Adminem.
 
-Tato volba je pro pomoc člověka, kterému sdílející důvěřuje. Pro spolupráci
+Tato volba je pro pomoc uživatele, kterému sdílející důvěřuje. Pro spolupráci
 bez takové osobní důvěry slouží samostatný týmový Environment. V obou
 případech zůstává povinné členství v Organizaci a konkrétní zařízení
 schválené Adminem; kamarád nebo příbuzný není výjimkou. Pracovní sdílení
@@ -178,7 +178,7 @@ izolaci libovolných přihlášení uložených uvnitř plně sdíleného runtim
 
 **Environment s daty více Organizací.** Obsahuje-li individuální pracovní
 Environment repozitáře, data nebo přihlášení více Organizací, smí ho
-přidělený uživatel plně sdílet jen s člověkem, který je aktivním členem každé
+přidělený uživatel plně sdílet jen s uživatelem, který je aktivním členem každé
 z nich (rozhodnutí Matěje z 2026-10-06). Organizace připojené do Environmentu
 sdílení zkontroluje; že osobní přihlášení, například GitHub, může sahat i do
 dalších Organizací, vysvětlí text u sdílení a odpovídá za to sdílející. Jinak
@@ -190,9 +190,9 @@ Organizací tohoto Environmentu, přes OAuth přihlášení bez osobních token�
 Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
 bez dalšího schvalovacího workflow. Návrh textu:
 
-> Dáváte tomuto člověku plný přístup ke všemu v tomto Environmentu, včetně
+> Dáváte tomuto uživateli plný přístup ke všemu v tomto Environmentu, včetně
 > souborů, přihlášených účtů a přístupů do dalších služeb a Environmentů.
-> Udělte ho jen člověku, kterému důvěřujete; riziko nesete vy. Pokud jsou tu
+> Udělte ho jen uživateli, kterému důvěřujete; riziko nesete vy. Pokud jsou tu
 > data nebo přihlášení i jiných Organizací, dostane se k nim také, proto ho
 > udělte jen členovi všech těchto Organizací. Přístup můžete odebrat, ale již
 > získaná data nebo zkopírované přihlašovací údaje tím nezmizí.
@@ -204,10 +204,10 @@ se nezavádí.
 
 Plný vstup nepřidá příjemcovu Lazurio účtu Admin roli. Uložená relace
 Admina či jiná privilegovaná identita ale může stejné operace technicky
-umožnit; mezi plnými operátory tohoto runtime systém izolaci neslibuje.
+umožnit; mezi uživateli s plným přístupem k tomuto runtime systém izolaci neslibuje.
 Odpovědnost za použití sdílených identit a konkrétní publikační pokyny drží
-proces a jmenovaní lidé. Udělení vstupu samo není pokyn provést konkrétní
-merge, vydání nebo nasazení. Audit odlišuje doložený vstup člověka od
+proces a jmenovaní uživatelé. Udělení vstupu samo není pokyn provést konkrétní
+merge, vydání nebo nasazení. Audit odlišuje doložený vstup uživatele od
 operace pod účtem dostupným uvnitř; neslibuje jejich nezaměnitelnou shodu.
 
 Odebrání sdílení zavře další vstup a ukončí podporované aktivní relace
@@ -218,9 +218,9 @@ preventivní odhlašování není podmínkou běžného sdílení.
 
 Agent je běh uvnitř Environmentu, nikoli další uživatelská role. Používá
 schopnosti tohoto Environmentu. SSH nepředstavuje výhradně agenty a HTTPS
-výhradně lidi: obojí mohou používat lidé i automatizace.
+výhradně uživatele: obojí mohou používat uživatelé i automatizace.
 
-Pokud mají další lidé plný přístup do A a A může přes SSH ovládat B, získávají
+Pokud mají další uživatelé plný přístup do A a A může přes SSH ovládat B, získávají
 tím nepřímý přístup k B. Dashboard musí při propojení i sdílení ukázat tento
 dopad a ověřit oprávnění ke změně příslušného grantu nebo propojení.
 Vědomé plné sdílení A zahrnuje jeho již dostupné vzdálené schopnosti;
@@ -229,8 +229,8 @@ zevnitř A. Nevytváří tím novou síťovou hranu, členství, přímý vstup 
 ani cross-organization grant v Auth. Přihlášená integrace však může mít
 širší dosah a ten patří k přijatému riziku; nelze slibovat, že ho izoluje
 vstupní ACL. Mapa rozliší přímé oprávnění a efektivní cestu přes A.
-Audit rozliší doloženého člověka, zdrojový Environment, cíl a použitou
-pracovní identitu; samotná sdílená identita neprokazuje konkrétního člověka.
+Audit rozliší doloženého uživatele, zdrojový Environment, cíl a použitou
+pracovní identitu; samotná sdílená identita neprokazuje konkrétního uživatele.
 
 ## GitHub a publikace
 
@@ -241,7 +241,7 @@ Organizace; broker omezuje její operace na příslušný Team a repozitáře.
 Uživatel bez GitHubu smí přes týmový Environment připravit změnu, vytvořit PR
 jeho identitou a použít preview v povoleném rozsahu. GitHub účet není potřeba
 k tomu, aby byl autor požadavku auditovatelný jako Lazurio subject.
-Schválení a Publikaci provádí jmenovaný člověk s živým GitHub oprávněním.
+Schválení a Publikaci provádí jmenovaný uživatel s živým GitHub oprávněním.
 Broker, přihlašovací údaje a ochrana větví musí prokazatelně zabránit tomu,
 aby sdílený Environment sám provedl merge nebo přímý zápis do chráněné
 větve. Bez tohoto důkazu se přístup nové skupině uživatelů nerozšíří.
@@ -250,7 +250,7 @@ Tento kontrakt týmové GitHub capability není slib izolace osobní identity
 uvnitř vědomě sdíleného individuálního pracovního Environmentu. Tam je
 možnost použít uloženou publikační identitu výslovně přijaté riziko a
 odpovědnost drží proces. Také v týmovém browseru platí, že dodatečně
-vložené osobní přihlášení je dostupné všem plným operátorům; ochrany
+vložené osobní přihlášení je dostupné všem uživatelům s plným přístupem; ochrany
 organizačního bota samy neomezují práva takto vloženého účtu.
 
 ## Autority a mapa Conglomerate
@@ -323,17 +323,17 @@ Tato dokumentační změna nespouští rollout ani nezve žádného uživatele d
 skutečné sítě.
 
 DEV-6641 dodává síťovou část ve všech tailnetech, nejdřív ve sdíleném
-tailnetu, který obsluhuje víc Organizací. Člověk zařízení zaregistruje
+tailnetu, který obsluhuje víc Organizací. Uživatel zařízení zaregistruje
 přihlášením do tailnetu Lazurio účtem (Headscale OIDC); zařízení přistane pod
 jeho osobním Headscale userem s identitou Lazurio subject a nemá žádný dosah.
 Admin každé Organizace schválí konkrétní zařízení. Schválené zařízení dostane
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
 dál rozhoduje brána Environmentu. SSH zůstává u přesných grantů: zařízení →
-Environment přidělený témuž člověku vzniká spolu se schválením zařízení a sleduje
+Environment přidělený témuž uživateli vzniká spolu se schválením zařízení a sleduje
 změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně, a
 stávající zařízení se převedou bez nového přihlášení. Vstupní granty brány
 (přidělení, plné a aplikační sdílení, vstup bez GitHubu) patří do
 DEV-6551/6552/6638/6645; do jejich nasazení brány pouští podle GitHub Teamu
 jako označená migrační implementace. Matěj 2026-10-06 večer rozhodl, že se
-lidé připojí rovnou touto cílovou cestou, bez dočasné registrace přes
+uživatelé připojí rovnou touto cílovou cestou, bez dočasné registrace přes
 předávaný odkaz.

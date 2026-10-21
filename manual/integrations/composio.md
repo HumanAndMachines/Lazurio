@@ -2,7 +2,7 @@
 
 Stav k 2026-10-09: Composio je jedna ze tří cest Integrací (rozhodnutí 0162,
 dodatek z 2026-10-09). Připojí jedním klikem mnoho aplikací, ale jde přes
-server Composia a s vlastním účtem člověka; v Týmovém Prostředí s týmovým
+server Composia a s vlastním účtem uživatele; v Týmovém Prostředí s týmovým
 účtem Composia, nikdy osobním (dodatek 0162 z 2026-10-19). Zapíná se a přihlašuje
 v Nastavení Launchpadu → Nástroje (sekce vydaná v LazurioPlatform 0.1.8).
 Přímou cestu z Environmentu drží Executor 1 ([executor.md](executor.md)).
@@ -10,14 +10,14 @@ Tento runbook popisuje model Composia.
 
 ## Model
 
-- O napojení rozhoduje operátor Environmentu. Je volitelné a nic se centrálně
+- O napojení rozhoduje uživatel Environmentu. Je volitelné a nic se centrálně
   nevynucuje.
-- Operátor Composio povolí v Nastavení Launchpadu a přihlásí svůj účet přes
+- Uživatel Composio povolí v Nastavení Launchpadu a přihlásí svůj účet přes
   prohlížeč, stejně jako `gh`; v Týmovém Prostředí přihlásí týmový účet
   Composia, nikdy osobní. API klíč se nikdy nekopíruje.
 - Agenti používají příkazovou řádku `composio`. Její aktivace se propíše do
   instrukcí Lazurio Folderu té mašiny.
-- Aplikaci operátor připojí odkazem, který mu vrátí Launchpad nebo agent, a
+- Aplikaci uživatel připojí odkazem, který mu vrátí Launchpad nebo agent, a
   přihlásí se přímo do ní.
 
 ## Účet a organizace (dodatek 0162 z 2026-10-13)
@@ -25,10 +25,10 @@ Tento runbook popisuje model Composia.
 Připojené aplikace patří u Composia účtu a jeho organizaci, ne mašině. Dvě
 mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 
-- Každý člověk má výchozí jeden svůj účet Composia, přihlášený přes GitHub.
+- Každý uživatel má výchozí jeden svůj účet Composia, přihlášený přes GitHub.
   Další účet si založí, jen když jiné Prostředí potřebuje jiné přihlašovací
   údaje (viz níže). Týmové Prostředí má vlastní týmový účet Composia, nikdy
-  osobní účet některého člověka.
+  osobní účet některého uživatele.
 - V něm má pro každou Organizaci Lazuria jednu vlastní organizaci se stejným
   jménem, ve které nikdo jiný není, a výchozí organizaci, kterou Composio
   založilo při registraci.
@@ -54,7 +54,7 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
   přihlášení v Nastavení → Nástroje.
 - Do své organizace Composia nikoho nezvete. Sdílené organizace se zvanými
-  lidmi, API klíči a sdílením se nedělají: dělaly by nepořádek a ostatní by
+  uživateli, API klíči a sdílením se nedělají: dělaly by nepořádek a ostatní by
   viděli vaše volání. Lazurio nedrží žádný klíč organizace Composia.
 - Co v organizaci připojíte, používají agenti (Chat, Apps i Automate) ve
   vašem Prostředí té Organizace.
@@ -72,7 +72,7 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Zda se Composio smí používat, rozhoduje na pracovních Environmentech
   Organizace v nastavení Organizace (rozhodnutí 0194): nová Organizace ho
   má vypnuté, Organizace, které ho už používají, zapnuté. Na osobním
-  Environmentu rozhoduje člověk sám a Composio je tam snadná výchozí cesta.
+  Environmentu rozhoduje uživatel sám a Composio je tam snadná výchozí cesta.
 - Organizace, které Composio používají, nic nemigrují a nikdo se
   nepřipojuje znovu.
 - Composio nemá žádné režimy. Firemní Composio organizace s projektem na
@@ -95,44 +95,44 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   pojmenuje.
 - Katalog Integrací nemá všechny aplikace Composia. Od téhož vydání otevře
   Apps → Integrace → „Aplikace v Composiu“ sekci Apps v organizaci Composia
-  tohoto Environmentu, kde člověk chybějící aplikaci připojí. Připojený účet
+  tohoto Environmentu, kde uživatel chybějící aplikaci připojí. Připojený účet
   pak Integrace ukážou i mimo katalog (třeba Wispr Flow) a agenti ho najdou
   v `lazurio integrations list`.
 - Composio účet může mít víc organizací a CLI vidí jen tu, do které je
   přihlášené. Launchpad proto u composia ukazuje organizaci Composia
   a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
   agent nevidí. Na Environmentu Organizace je to organizace jejího jména;
-  dokud ji člověk nemá, ta, kterou má vybranou, a `lazurio integrations list`
+  dokud ji uživatel nemá, ta, kterou má vybranou, a `lazurio integrations list`
   to agentům řekne (viz Účet a organizace výše). Agent proto stav organizace
   čte tam, než přes Composio začne pracovat.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
 - V Týmovém Prostředí se do Composia přihlašuje týmový účet Composia, nikdy
-  osobní účet některého člověka: co se v něm připojí, používá každý z Teamu.
+  osobní účet některého uživatele: co se v něm připojí, používá každý z Teamu.
   Je to samostatný účet a jeho organizace nese jméno Organizace stejně jako
   v osobním účtu (dodatek 0162 z 2026-10-19).
 
 ## Co agent smí
 
 - S napojenou aplikací dělat vše, co nabízí, tedy číst, zapisovat i mazat,
-  pokud operátor rozsah neomezil.
-- Navenek viditelný zápis provést jen na pokyn Operátora.
-- Připojení účtu zprostředkovat operátorovi odkazem; přihlašovací údaje nikdy
+  pokud uživatel rozsah neomezil.
+- Navenek viditelný zápis provést jen na pokyn uživatele.
+- Připojení účtu zprostředkovat uživateli odkazem; přihlašovací údaje nikdy
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
 - Integraci nepřipojovat sám a Composio nezřizovat, kde zapnuté není:
-  poslat člověku odkaz na kartu v Apps → Integrace, a chybí-li aplikace
+  poslat uživateli odkaz na kartu v Apps → Integrace, a chybí-li aplikace
   v katalogu, na „Aplikace v Composiu“ tamtéž (od vydání s #403). Dokud stránka Integrace
   na Environmentu není, zprostředkovat připojení jen na výslovný pokyn
-  člověka odkazem z `composio link`; přihlášení dokončí člověk sám.
-- Účet Composia odpojit jen na výslovný pokyn člověka, a jen ten, který
-  člověk jmenoval: v Apps → Integrace (⋯ → Odpojit), nebo s připnutým
+  uživatele odkazem z `composio link`; přihlášení dokončí uživatel sám.
+- Účet Composia odpojit jen na výslovný pokyn uživatele, a jen ten, který
+  uživatel jmenoval: v Apps → Integrace (⋯ → Odpojit), nebo s připnutým
   sestavením příkazem `composio connections remove <id> --yes` s id
   z `composio connections list`.
 
-## Alternativy pro operátora
+## Alternativy pro uživatele
 
 - Přímé Integrace a vlastní MCP servery v Executoru
   ([executor.md](executor.md)).

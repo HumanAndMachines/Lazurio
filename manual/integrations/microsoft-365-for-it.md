@@ -5,7 +5,7 @@ po kroku je v [runbooku](microsoft-365.md#postup-it-firmy-výchozí).
 
 ## Co to je
 
-Lazurio dává každému člověku ve firmě vlastní pracovní Environment,
+Lazurio dává každému uživateli ve firmě vlastní pracovní Environment,
 hostované pracovní prostředí, ve kterém za něj pracují AI agenti. Aby agenti mohli pracovat
 s poštou, kalendářem a soubory, založíte ve svém tenantu jednu aplikaci
 Microsoft Entra „Lazurio (<Organizace>)“:
@@ -20,8 +20,8 @@ jen id tenantu a id aplikace, které nejsou tajné.
 
 ## Co může a co ne
 
-Agent jedná vždy za konkrétního přihlášeného člověka a dosáhne jen tam, kam
-smí ten člověk sám. Správcovské role člověka k tomu nic nepřidávají.
+Agent jedná vždy za konkrétního přihlášeného uživatele a dosáhne jen tam, kam
+smí ten uživatel sám. Správcovské role uživatele k tomu nic nepřidávají.
 
 | Oprávnění | Co dovoluje |
 | --- | --- |
@@ -39,11 +39,11 @@ Co aplikace nemá:
 - Teams zatím ne.
 
 Zápisy a mazání nebrání oprávnění, ale pravidla práce agentů: navenek
-viditelnou změnu dělají jen na pokyn člověka.
+viditelnou změnu dělají jen na pokyn uživatele.
 
 ## Kudy tečou data
 
-1. Microsoft Graph → Environment toho člověka, hostovaný pro vaši
+1. Microsoft Graph → Environment toho uživatele, hostovaný pro vaši
    Organizaci. Mezi tím není žádná další služba.
 2. Co agent při práci přečte, odchází k poskytovateli AI modelu, se kterým
    Environment pracuje.
@@ -54,24 +54,24 @@ viditelnou změnu dělají jen na pokyn člověka.
 
 ## Kdo se připojuje
 
-Každý člověk sám: v Lazuriu zvolí „Přidat účet“ a jednou se ve svém
+Každý uživatel sám: v Lazuriu zvolí „Přidat účet“ a jednou se ve svém
 prohlížeči přihlásí pracovním účtem. Tím agenti v jeho Environmentu dostanou
 poštu, kalendář, OneDrive a SharePoint toho účtu. Víc účtů vedle sebe je jeho
-volba. Lazurio samo žádný účet neodpojí: odpojí ho člověk tlačítkem
+volba. Lazurio samo žádný účet neodpojí: odpojí ho uživatel tlačítkem
 „Odpojit“, nebo vy v Entra (níže). Když Environment přechází na jiného
-člověka, odpojí ten, kdo v něm pracuje, účty, které už používat nemá; na
+uživatele, odpojí ten, kdo v něm pracuje, účty, které už používat nemá; na
 týmovém Environmentu připojený účet používají všichni jeho agenti. Doporučujeme v *Enterprise applications* zapnout *Assignment
-required* a přiřadit skupinu lidí, kteří se smějí připojit. Podle Microsoftu
+required* a přiřadit skupinu uživatelů, kteří se smějí připojit. Podle Microsoftu
 to neomezuje Global Administratory.
 
 ## Podmíněný přístup
 
-- Přihlášení se vyhodnocuje na adrese a zařízení člověka, obnova tokenu a
+- Přihlášení se vyhodnocuje na adrese a zařízení uživatele, obnova tokenu a
   volání Graphu na odchozí adrese Environmentu. Pokud máte zásady podle
   lokality, vyžádejte si odchozí adresy Environmentů vaší Organizace.
 - Zásada vyžadující vyhovující nebo spravované zařízení zablokuje přihlášení
   z prohlížeče Environmentu (`AADSTS53000`).
-- Frekvence přihlášení připojení po uplynutí ukončí (`AADSTS70043`). Člověk
+- Frekvence přihlášení připojení po uplynutí ukončí (`AADSTS70043`). Uživatel
   se pak připojí znovu.
 - Změna hesla může ukončit připojení vzniklé přihlášením heslem, připojení
   z přihlášení bez hesla ale platí dál. K ukončení přístupu proto použijte
@@ -79,7 +79,7 @@ to neomezuje Global Administratory.
 
 ## Jak přístup ukončit
 
-- **Jeden člověk:** zablokujte účet nebo odvolejte jeho přihlášení. Už vydaný
+- **Jeden uživatel:** zablokujte účet nebo odvolejte jeho přihlášení. Už vydaný
   přístupový token platí dál, takže přístup skončí až asi do 90 minut. To
   platí i pro odchod z firmy: Lazurio samo nic neodpojí.
 - **Celá firma:** v *Enterprise applications* nastavte *Enabled for users to
@@ -91,7 +91,7 @@ to neomezuje Global Administratory.
 - **Přihlašovací protokoly Entra** (*Sign-in logs*): každé přihlášení a
   obnovu tokenu aplikace „Lazurio (<Organizace>)“, včetně adresy.
 - **Jednotný protokol auditu** Microsoft Purview: operace s poštou a soubory
-  pod účtem daného člověka.
+  pod účtem daného uživatele.
 
 ## Proč u aplikace stojí „Unverified“
 

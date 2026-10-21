@@ -20,25 +20,25 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
   možnost s povinným odhlášením (krok 5).
 - **Jeden souhlas za celou firmu.** Správce tenantu jednou udělí souhlas
   jménem organizace; nikdo další souhlas nedává. Výchozí politika Microsoftu
-  („Let Microsoft manage your consent settings“) lidem souhlas s poštou,
+  („Let Microsoft manage your consent settings“) uživatelům souhlas s poštou,
   kalendářem, soubory ani weby stejně nedovolí.
 - **Veřejný klient bez tajného klíče.** Aplikace přihlašuje přes PKCE a žádný
   klientský tajný klíč ani certifikát nemá. Návratové adresy (typ *Mobile and
   desktop applications*, tedy `publicClient.redirectUris`) jsou:
   - adresa Launchpadu každého pracovního Environmentu Organizace,
     `https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback`,
-    pro přihlášení ve vlastním prohlížeči člověka;
+    pro přihlášení ve vlastním prohlížeči uživatele;
   - `http://localhost/api/oauth/callback`, návrat Executoru pro přihlášení
     v prohlížeči Environmentu. U `localhost` Microsoft port nebere v úvahu,
     cesta se ale shodovat musí, proto se registruje celá cesta.
 - **Přijaté kompromisy veřejného klienta** (dodatek 0162 bod 3): bez klíče
   může útočník spustit vlastní přihlášení s id aplikace a návratem na
-  `localhost` a vylákat z člověka adresu s kódem; protože souhlas za firmu už
+  `localhost` a vylákat z uživatele adresu s kódem; protože souhlas za firmu už
   platí, Microsoft se na nic neptá. Frekvence přihlášení z podmíněného
   přístupu se u veřejného klienta neodkládá. Změna hesla může zneplatnit
   obnovovací tokeny získané přihlášením heslem, ty z přihlášení bez hesla
   ale platí dál; spolehlivé ukončení je zablokování účtu nebo odvolání
-  relací. Firmám proto doporučujeme „Assignment required“ a skupinu lidí,
+  relací. Firmám proto doporučujeme „Assignment required“ a skupinu uživatelů,
   kteří se smějí připojit (krok 3).
 - **Nastavení Organizace nese jen identifikátory** (rozhodnutí 0194): id
   tenantu, id aplikace, zapnuté aplikace a zaregistrované adresy Launchpadů
@@ -47,14 +47,14 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
   Environment podle nich zaregistruje aplikaci do svého Executoru
   ([executor.md](executor.md)). `apps` vybírá části (`outlook` = pošta a
   kalendář, `one_drive`, `share_point`) a tím i jejich oprávnění.
-- **Jeden účet, jedno přihlášení.** Člověk v Apps → Integrace u Microsoftu
+- **Jeden účet, jedno přihlášení.** Uživatel v Apps → Integrace u Microsoftu
   365 zvolí „Přidat účet“, jednou se ve svém prohlížeči přihlásí pracovním
   účtem a účet je připojený. Agenti pak používají jeho poštu, kalendář,
   OneDrive a SharePoint jako jednu Integraci `m365`, kterou Launchpad sestaví
   z připnutých specifikací zapnutých částí (pevný commit, ověřený otisk
-  SHA-256). Agenti dosáhnou jen tam, kam smí ten člověk sám. Víc účtů vedle
-  sebe je volba člověka.
-- **Odpojení dělá jen člověk.** Jediné odpojení je „Odpojit“; na straně
+  SHA-256). Agenti dosáhnou jen tam, kam smí ten uživatel sám. Víc účtů vedle
+  sebe je volba uživatele.
+- **Odpojení dělá jen uživatel.** Jediné odpojení je „Odpojit“; na straně
   Lazuria se nic samo neodpojí ani nevyprší. Když Environment přechází na
   někoho jiného, odpojí ten, kdo v něm pracuje, účty, které už používat nemá,
   stejně jako u Composia. Firemní aplikace se nabízí na každém druhu
@@ -68,7 +68,7 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
 **Dnes versus cíl.** Použití nastavení v Environmentech a „Přidat účet“ pro
 firemní aplikaci v LazurioPlatform i nastavení Microsoftu 365 v Dashboardu
 teprve vznikají (plán DEV-6626).
-Do té doby připojení dělá agent na výslovný pokyn člověka přechodnou cestou
+Do té doby připojení dělá agent na výslovný pokyn uživatele přechodnou cestou
 ze sekce [Přechodně: Executor ručně](#přechodně-executor-ručně). Nastavení
 `microsoft365` Organizace do manifestu nezapisuje, dokud nevyjdou čtenáři,
 kteří ho znají (sekce [Readers first](../lazurio-manifest-family.md#readers-first)):
@@ -77,7 +77,7 @@ starší čtenář by celou sekci `settings` odmítl, včetně přepínače Comp
 ## Co oprávnění dovolují
 
 Všechna oprávnění jsou delegovaná: skutečný přístup je průnik oprávnění
-aplikace a práv přihlášeného člověka. Správcovské role člověka k nim nic
+aplikace a práv přihlášeného uživatele. Správcovské role uživatele k nim nic
 nepřidávají.
 
 | Aplikace | Oprávnění | Co tím agent smí | Volitelně později |
@@ -167,7 +167,7 @@ https://login.microsoftonline.com/<TENANT>/v2.0/adminconsent?client_id=<APP>&sco
 ### 3. Kdo se smí připojit (doporučeno pro firmy)
 
 V **Enterprise applications → Lazurio (<Organizace>) → Properties** zapnout
-*Assignment required* a v *Users and groups* přiřadit skupinu lidí, kteří se
+*Assignment required* a v *Users and groups* přiřadit skupinu uživatelů, kteří se
 smějí připojit. Kdo ve skupině není, přihlášení nedokončí. Global
 Administratory to podle Microsoftu neomezuje.
 
@@ -202,7 +202,7 @@ příkazy jako v kroku 2 v Environmentu po
 
 Po vydání čtenářů agent navrhne PR do kořenového repozitáře Organizace
 s `settings.integrations.microsoft365` (`tenant_id`, `client_id`, `apps`,
-`callbacks`) a PR mergne člověk, který na to má práva na GitHubu.
+`callbacks`) a PR mergne uživatel, který na to má práva na GitHubu.
 Schválení v Dashboardu přijde s jeho editorem. `callbacks` obsahuje přesně
 zaregistrované adresy Launchpadů, bez `localhost`.
 
@@ -211,7 +211,7 @@ zaregistrované adresy Launchpadů, bez `localhost`.
 IT doplní adresu jeho Launchpadu v *Authentication* (nebo
 `az ad app update --id <APP> --public-client-redirect-uris <všechny adresy>`,
 příkaz seznam nahrazuje) a stejná změna `callbacks` jde PR. Do té doby se
-lidé z nového Environmentu přihlašují v prohlížeči Environmentu. Aplikace
+uživatelé z nového Environmentu přihlašují v prohlížeči Environmentu. Aplikace
 unese nejvýš 256 návratových adres, jednu bere `localhost`, takže `callbacks`
 má nejvýš 255 položek; zástupné znaky (wildcard) se nepoužívají. Do
 `callbacks` patří jen adresy hostovaných Launchpadů
@@ -220,14 +220,14 @@ odmítne, protože by na ni Microsoft poslal autorizační odpověď.
 
 ## Podmíněný přístup
 
-- Přihlášení se vyhodnocuje na adrese člověka (jeho prohlížeč), obnova tokenu
+- Přihlášení se vyhodnocuje na adrese uživatele (jeho prohlížeč), obnova tokenu
   a volání Graphu na odchozí adrese Environmentu. IT proto potřebuje odchozí
   adresy Environmentů Organizace, pokud má zásady podle lokality.
 - Zásady vyžadující spravované nebo vyhovující zařízení zablokují přihlášení
   v prohlížeči Environmentu (`AADSTS53000`); přihlášení ve vlastním prohlížeči
   na spravovaném zařízení projde, obnova z Environmentu ale může narazit.
 - Frekvence přihlášení (sign-in frequency) připojení po uplynutí ukončí
-  (`AADSTS70043`); veřejný klient nedostává odklad. Člověk se pak připojí
+  (`AADSTS70043`); veřejný klient nedostává odklad. Uživatel se pak připojí
   znovu. Změna hesla připojení ukončí jen u tokenu z přihlášení heslem.
 - Executor neumí Continuous Access Evaluation, takže zablokování účtu se
   projeví až po vypršení přístupového tokenu.
@@ -235,7 +235,7 @@ odmítne, protože by na ni Microsoft poslal autorizační odpověď.
 ## Přechodně: Executor ručně
 
 Cílově tohle dělá Launchpad podle nastavení Organizace. Přechodně to agent
-dělá na výslovný pokyn člověka přes rozhraní Executoru 1.6.10 na
+dělá na výslovný pokyn uživatele přes rozhraní Executoru 1.6.10 na
 `http://127.0.0.1:4789/api` s tokenem z `~/.executor/server-control/auth.json`
 (popis rozhraní drží `docs/integrations.md` v LazurioPlatform). Token se nikdy
 nevypisuje ani nekopíruje; volání jdou bez proxy (`curl --noproxy '*'`).
@@ -243,7 +243,7 @@ nevypisuje ani nekopíruje; volání jdou bez proxy (`curl --noproxy '*'`).
 **Přechodná Integrace `pilot-m365`.** První vydání LazurioPlatform s firemní
 aplikací převezme jmenný prostor `m365` a připojení, která v něm nezná,
 odebere. Ručně založená Integrace se proto jmenuje `pilot-m365`; po vydání se
-člověk připojí přes „Přidat účet“ a pilotní Integrace se odebere.
+uživatel připojí přes „Přidat účet“ a pilotní Integrace se odebere.
 
 **Jedna specifikace ze čtyř připnutých.** Stejné soubory, jaké připíná
 LazurioPlatform: kurátorovaný katalog Executoru v repozitáři
@@ -350,23 +350,23 @@ console.log(JSON.stringify({ paths: Object.keys(spec.paths).length,
    `{client: "microsoft365", clientOwner: "org", owner: "org", name:
    "default", integration: "pilot-m365", template: "microsoft365",
    newConnection: true, redirectUri: "<adresa Launchpadu>/api/integrations/oauth/callback"}`.
-   Člověk otevře `authorizationUrl` ve svém prohlížeči a přihlásí se.
+   Uživatel otevře `authorizationUrl` ve svém prohlížeči a přihlásí se.
    Launchpad tento návrat nezná, odpoví stránkou s chybou 400 a kód
-   nespotřebuje. Člověk agentovi předá adresu té stránky; agent ji hned předá
+   nespotřebuje. Uživatel agentovi předá adresu té stránky; agent ji hned předá
    Executoru jako `GET http://localhost:4789/api/oauth/callback?<tentýž dotaz>`.
    Executor najde tok podle `state` a kód vymění s uloženou návratovou adresou
    a PKCE ověřovačem, bez klíče. Kód je jednorázový, platí minuty a bez
    ověřovače, který zůstává v Executoru, je k ničemu; agent ho nikam jinam
    nepíše. Další účet je další `oauth/start` s jiným `name`.
 4. **Jen pro účty bez správcovské role** jde i kratší cesta: `oauth/start`
-   bez `redirectUri` vrátí přihlášení na `localhost` Executoru a člověk ho
+   bez `redirectUri` vrátí přihlášení na `localhost` Executoru a uživatel ho
    dokončí v prohlížeči Environmentu.
 5. **Kontrola:** `GET /api/oauth/await/<state>`, pak `GET /api/connections`:
    `lastHealth.status` `healthy` nebo `unknown`, `identityLabel` s pracovním
    účtem, `expiresAt` vyplněné.
 
 Executor zápisy pozastaví ke schválení (`waiting_for_interaction`); výslovný
-pokyn člověka k připojení je schválením připojení, zápisy navenek schvaluje
+pokyn uživatele k připojení je schválením připojení, zápisy navenek schvaluje
 jen pro schválený Draft nebo Publikaci.
 
 **Práce agentů.** Agenti operace hledají `executor tools search` a volají
@@ -375,7 +375,7 @@ se složky procházejí podle id položky (`/drives/{id}/items/{id}/children`)
 a před tvrzením, že je složka prázdná, se přečte i `@odata.nextLink`.
 Koncept zprávy vzniká `POST /me/messages` s `body.contentType: "Text"`,
 odpověď `createReply` a následným `PATCH` těla; agent koncept přečte zpět a
-dá člověku jeho `webLink`. `send` ani `sendMail` agent nevolá.
+dá uživateli jeho `webLink`. `send` ani `sendMail` agent nevolá.
 
 ## Ověření na skutečném tenantu
 
@@ -396,7 +396,7 @@ Pořadí je důležité: V1 rozhoduje mezi veřejným a důvěrným klientem.
   vytvořit textový koncept sobě, přečíst ho zpět s `webLink`.
 - **V4 Politiky tenantu:** role správce, politika souhlasů, podmíněný přístup
   (od IT), jedno přihlášení i volání Graphu z adresy Environmentu.
-- **V5 Odvolání:** „Assignment required“ a odebrání testovacího člověka ze
+- **V5 Odvolání:** „Assignment required“ a odebrání testovacího uživatele ze
   skupiny zastaví obnovu tokenu (**neověřeno**); `revokeSignInSessions`
   udělá z připojení v Executoru `expired`.
 - **V6 Záložní cesty:** přihlášení v prohlížeči Environmentu pro Environment,
@@ -405,24 +405,24 @@ Pořadí je důležité: V1 rozhoduje mezi veřejným a důvěrným klientem.
 Výsledky se zapisují bez tajemství: id tenantu a aplikace, kód chyby, stav
 připojení. Žádné tokeny, kódy z přihlášení ani obsah pošty.
 
-## Odvolání a odchod člověka
+## Odvolání a odchod uživatele
 
 - **Skutečný vypínač je v Entra.** Odebrání aplikace nebo nastavení
   `microsoft365` v Lazuriu existující připojení neodpojí; přestane jen
   nabízet nová. Celou firmu zastaví zakázání podnikové aplikace (*Enabled
   for users to sign in: No*), odebrání souhlasu nebo smazání aplikace.
-- **Člověk odpojí** účet v Apps → Integrace („⋯“ → Odpojit), což smaže
+- **Uživatel odpojí** účet v Apps → Integrace („⋯“ → Odpojit), což smaže
   připojení v Executoru. Je to jediné odpojení na straně Lazuria. U Microsoftu
   souhlas ruší v My Apps (`https://myapplications.microsoft.com`).
-- **Odchod člověka:** IT zablokuje účet nebo odvolá jeho přihlášení
+- **Odchod uživatele:** IT zablokuje účet nebo odvolá jeho přihlášení
   (`revokeSignInSessions`). Obnova pak selže a Executor připojení označí
   `expired`; už vydaný přístupový token platí dál, takže přístup skončí až
   asi do 90 minut.
 - **Předání Environmentu:** Lazurio nic samo neodpojí. Kdo Environment
   přebírá, odpojí účty, které už používat nemá, jinak by agenti dál jednali
-  pod účtem předchozího člověka. Kdo Environment předává a odchází z firmy,
+  pod účtem předchozího uživatele. Kdo Environment předává a odchází z firmy,
   toho spolehlivě odstřihne IT blokací účtu.
-- Microsoft obnovovací token zneplatní po 90 dnech bez použití; člověk se pak
+- Microsoft obnovovací token zneplatní po 90 dnech bez použití; uživatel se pak
   přihlásí znovu.
 
 ## Tokeny v klidu
@@ -448,7 +448,7 @@ Microsoftu, obecně dostupný od 2026-06-16 a použitelný z klientů třetích 
 Výchozí cestou Lazuria není:
 
 - účtuje se z Copilot Credits (Pay-as-you-go plán s předplatným Azure a
-  přiřazenými lidmi);
+  přiřazenými uživateli);
 - jediné delegované oprávnění `WorkIQAgent.Ask` dává čtení i zápis všude, kam
   Work IQ dosáhne;
 - nastavení vyžaduje Global Administratora a server nemá dynamickou registraci
@@ -462,7 +462,7 @@ jsou podle Microsoftu jen pro zpětnou kompatibilitu a nepoužívají se.
 ## Co se nepoužívá
 
 - **Konektory ChatGPT a claude.ai** se pro nová napojení nezřizují.
-  Existující konektor na vlastním počítači člověka smí dál běžet; agenti
+  Existující konektor na vlastním počítači uživatele smí dál běžet; agenti
   v pracovním Environmentu ho nepoužívají.
 - **Komunitní MCP server** `softeria/ms-365-mcp-server` a launcher
   Organizace pro něj už nejsou doporučenou cestou: duplikovaly by to, co dávají

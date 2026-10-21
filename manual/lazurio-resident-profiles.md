@@ -1,13 +1,13 @@
 # Lazurio Resident a jeho profil Workspace
 
 > **Buddy nemá Resident profil (decision 0210).** Buddy je Hermes Agent
-> v Osobním Prostředí svého člověka; co o něm platí, drží
+> v Osobním Prostředí svého uživatele; co o něm platí, drží
 > [manuál Buddyho](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/buddy.md).
 > Profil Buddyho v Resident distribuci, jeho Zulip bridge a operator plane
 > jeho hostů skončily. Dosavadní hostované instalace Buddyho se do své migrace
 > řídí pravidly svého hostu.
 
-Lazurio je pracovní prostředí, ve kterém lidé a stroje používají stejné
+Lazurio je pracovní prostředí, ve kterém uživatelé a stroje používají stejné
 Organizace, nástroje a dohledatelné procesy. Lazurio Resident je immutable
 runtime artefakt Lazuria postavený z jednoho přesného source commitu, ne druhá
 kopie Lazuria ani dlouhodobá Git branch. Build kontrakt dnes vydává jediný
@@ -21,14 +21,14 @@ credentials.
 
 | Pojem | Co znamená |
 | --- | --- |
-| Operátor | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Operátorem je vždy člověk (decision 0175). |
-| Kolega | Člověk v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
-| Buddy | Osobní zástupce jednoho člověka. Běží v jeho Osobním Prostředí (decision 0210) a jedná jen v mezích jeho práv a mandátů. Resident profil nemá. |
+| Uživatel | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Uživatelem je vždy člověk (decision 0175 s dodatkem z 2026-10-21; starší záznamy mu říkají Operátor). Není to role User v Organizaci. |
+| Kolega | Uživatel v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
+| Buddy | Osobní zástupce jednoho uživatele. Běží v jeho Osobním Prostředí (decision 0210) a jedná jen v mezích jeho práv a mandátů. Resident profil nemá. |
 | AI Kolega | AI s vlastní identitou, Mašinou, Personalspace a pracovními právy jako člověk; pojem je deprecated (decisions 0156/0169). Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
 | Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
 | Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
-| Personalspace | Privátní prostor právě jednoho člověka a případného Buddyho. |
+| Personalspace | Privátní prostor právě jednoho uživatele a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
 
 Kanonickou cross-profile definici drží root `ARCHITECTURE.md`. Tento manuál dál
