@@ -125,7 +125,7 @@ lazurio module setup ./workspace/portal \
   --root /cesta/k/Lazurio
 ```
 
-`--adopt-port` je vědomé tvrzení operátora. Report jej ponechá viditelný pro
+`--adopt-port` je vědomé tvrzení uživatele. Report jej ponechá viditelný pro
 review, zkontroluje rozsah a kolizi s Module leases stejné Organizace, ale
 nevymýšlí historickou provenienci čísla. Překryv s jinou Organizací zůstává
 vědomý runtime takeover kontrakt; není důvodem k přečíslování stabilního portu.

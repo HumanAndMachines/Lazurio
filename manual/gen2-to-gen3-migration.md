@@ -2,7 +2,7 @@
 
 Tento runbook převádí existující Workspace GEN2 super-repo na samostatnou
 Organizaci GEN3 pod jedním Lazurio rootem. Je
-určený pro reálnou firmu s historií, nested repozitáři, lidmi, AI kolegy a
+určený pro reálnou firmu s historií, nested repozitáři, uživateli, AI kolegy a
 rozpracovaným provozem. Greenfield Organizace bez GEN2 historie vzniká z
 `OrganizationTemplate_GEN3` podle `manual/first-client-organization-rollout.md`;
 tento postup pro ni není potřeba.
@@ -40,7 +40,7 @@ Z těchto rozhodnutí plynou nepřekročitelné hranice:
 - jeden source of truth pro module slots, jednu app deklaraci a jednu živou
   Mission Control data autoritu;
 - žádné rutinní obousměrné zápisy mezi generacemi;
-- žádný týmový archive/cutover, dokud nejsou přestěhovaní všichni lidé i AI
+- žádný týmový archive/cutover, dokud nejsou přestěhovaní všichni uživatelé i AI
   kolegové v daném scope;
 - productionspace repo se nespouští, nereleasuje ani nepřepíná tímto runbookem.
 
@@ -70,7 +70,7 @@ Template hranice během migrace (decision 0033 a decision 0077 v
   syncem**: `managed` soubory verbatim a `managed` bloky uvnitř org souborů.
   Kanonický blok „Model spolupráce" v Organization `AGENTS.md` je právě takový
   managed blok — synchronizuje se verbatim a drift se hlídá md5 hashem bloku
-  (od nadpisu `## Model spolupráce: Operátor a Agenti` po další `## `), nikdy
+  (od nadpisu `## Model spolupráce: uživatel a Agenti` po další `## `), nikdy
   se nepřepisuje celý soubor. Detail mechanismu je v
   `manual/template-promotion-and-sync.md`. Časová výjimka: samotný **seed** tohoto
   managed bloku se dělá už při zakládání kanonického layoutu (Fáze 5) z template
@@ -120,7 +120,7 @@ Pojmenuj:
 - Workspace/Organization Stewarda pro Doctor, Launchpad a app smoke;
 - Productionspace Stewarda pro potvrzení, že se production runtime nemění;
 - Builder ownera migračního Mission Control plánu;
-- scope migrace: jedna mašina/jeden člověk, cohorta, nebo týmový cutover.
+- scope migrace: jedna mašina/jeden uživatel, cohorta, nebo týmový cutover.
 
 Veškerá evidence musí být metadata-only. Doporučené lokální custody cesty:
 
@@ -206,7 +206,7 @@ archivu: není to aktivovaná Organization a nesmí se automaticky kopírovat do
 Rozjedeme-ai `workspace/` ani `productionspace/`. Aktivace konkrétních dat do
 GEN3 je samostatný, reviewovaný owner-repo krok. Ani zelený `SUCCESS.json`
 neopravňuje Agenta smazat GEN2; destruktivní delete stále vyžaduje explicitní
-pokyn Operátora v aktuálním threadu.
+pokyn uživatele v aktuálním threadu.
 
 ## Fáze 0 — preflight a přesný source snapshot
 
@@ -625,7 +625,7 @@ se nenahrazuje firemním overlayem.
 
 Přepiš všechny živé resolvery, Doctor person lookup, Guide odkazy, skilly,
 CI a `.gitignore`. `company/team/` smaž až při nule nevyřešených consumers a
-potvrzené mapě všech lidí i AI kolegů v migrované cohortě. Neznámé OS username
+potvrzené mapě všech uživatelů i AI kolegů v migrované cohortě. Neznámé OS username
 neodhaduj; ponech compatibility stav a otevřenou issue.
 
 ## Fáze 5 — kanonický tracked Organization layout
@@ -763,7 +763,7 @@ listener pro UI i API. Productionspace app
 manifest se tímto automaticky nestává spustitelným Launchpad lifecycle
 povrchem.
 
-Runtime proměnné pouze přenesou verzovaný lease do child procesu. Operátor je
+Runtime proměnné pouze přenesou verzovaný lease do child procesu. Uživatel je
 nenastavuje v `.env` a aplikace nemá náhradní číselnou hodnotu. Launchpad je
 při každém Start/Open odvodí z `lazurio.module.json`; Doctor kontroluje jen env soubory,
 které `dev_script` skutečně načítá. `.env` zůstává pro lokální hodnoty Mašiny,
@@ -779,7 +779,7 @@ cutover.
 Kanonický blok „Model spolupráce" v Organization `AGENTS.md` se **seeduje už
 tady**, ne až post-cutover: vlož ho VERBATIM z template mountu (reference
 checkout, ne wired remote) a ověř md5 bloku (od nadpisu
-`## Model spolupráce: Operátor a Agenti` po další `## `) proti template. Blok je
+`## Model spolupráce: uživatel a Agenti` po další `## `) proti template. Blok je
 čistě managed (HTML komentář ukazuje na reviewovaný Lazurio source),
 Organizace ho nemá jak legitimně customizovat, takže seed je nedestruktivní a
 odpovídá stavu sourozeneckých Organizací.
@@ -1085,7 +1085,7 @@ Cutover blokuje:
 
 ## Fáze 10 — local switch, cohort rollout a týmový cutover
 
-Local switch jednoho člověka není týmový cutover. Pro každého člověka/AI
+Local switch jednoho uživatele není týmový cutover. Pro každého uživatele/AI
 kolegu eviduj OS user, Organization/role access, required moduly, porty,
 Doctor výsledek, daily apps, rollback ownera a applied move SHA.
 
@@ -1113,7 +1113,7 @@ automatizace smí pokračovat jen s čerstvou zálohou a jednoznačnou shodou.
 
 Týmový cutover smí Organization Admin schválit až když:
 
-1. všichni lidé a AI kolegové v scope mají GEN3 access a ověřený daily flow;
+1. všichni uživatelé a AI kolegové v scope mají GEN3 access a ověřený daily flow;
 2. GEN2 maintenance commits po `SOURCE_SHA` jsou všechny ported/skipped/deferred
    s evidencí;
 3. MC code/data a DEV remap gates jsou uzavřené;
@@ -1210,7 +1210,7 @@ Migrace Organizace je hotová teprve když:
 - inventory nemá neklasifikovaný high-risk rozdíl;
 - Organization i Lazurio validace, API a user-facing smoke jsou zelené
   nebo mají pouze explicitně accepted warnings;
-- local switch každého člověka má rollback a týmový archive byl proveden jen
+- local switch každého uživatele má rollback a týmový archive byl proveden jen
   po samostatném lidském schválení;
 - žádný secret, klientský export ani cizí Organization pravda nebyla
   přenesena;

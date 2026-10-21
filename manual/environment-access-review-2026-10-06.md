@@ -44,16 +44,16 @@ publikace → implementace platí beze změny.
 
 ### 1. Plné sdílení deleguje i přihlášené účty
 
-Plný operátor může používat soubory, procesy, browser, trezor i credentials
+Uživatel s plným přístupem může používat soubory, procesy, browser, trezor i credentials
 Environmentu. Pokud individuální pracovní Environment obsahuje osobní
 GitHub přihlášení, publikační token nebo přihlášení Admina do Dashboardu,
-přidání dalšího plného operátora mu může fakticky zpřístupnit také tato
+přidání dalšího uživatele s plným přístupem mu může fakticky zpřístupnit také tato
 oprávnění. Omezení tlačítek pro sdílení tomu nezabrání.
 
 Původní doporučení review požadovalo odstranit privilegované osobní
 identity nebo omezit plné sdílení na týmové Environmenty. **Operátor je
 následně odmítl jako povinnou technickou podmínku.** Zvolil vědomé přijetí
-rizika sdílejícím člověkem a srozumitelnou komunikaci plného rozsahu.
+rizika sdílejícím uživatelem a srozumitelnou komunikaci plného rozsahu.
 
 Aktuální rozhodnutí: důvěryhodný příjemce plného vstupu může používat vše,
 co je uvnitř dostupné, včetně osobních přihlášení, browseru, passkeys,
@@ -63,8 +63,8 @@ odhlášení, výmaz ani převod na týmový broker. Příjemce musí být aktiv
 vstupu nezneplatní již zkopírované údaje; případná rotace patří recovery.
 
 0191/DEV-6646 zůstává kompatibilní: jeden sdílený browser profil není
-izolace jednotlivých lidí. Osobní schválení operace, za kterou odpovídá
-jmenovaný člověk, je uvnitř důvěrně sdíleného runtime procesní pravidlo,
+izolace jednotlivých uživatelů. Osobní schválení operace, za kterou odpovídá
+jmenovaný uživatel, je uvnitř důvěrně sdíleného runtime procesní pravidlo,
 nikoli kryptograficky prokázaná exkluzivita jeho přihlášení. Ochrany
 organizačního bota se neposuzují jako ochrany libovolného osobního účtu,
 který někdo do browseru vloží. Komunikace nesmí slibovat opak.
@@ -74,7 +74,7 @@ který někdo do browseru vloží. Komunikace nesmí slibovat opak.
 Review původně doporučilo pro plnou ovladatelnost A → B:
 
 ```text
-Plní operátoři(A) ⊆ Plní operátoři(B)
+Uživatelé s plným přístupem(A) ⊆ Uživatelé s plným přístupem(B)
 ```
 
 Tento požadavek **není podmínkou nyní schváleného důvěrného sdílení**.
@@ -88,7 +88,7 @@ Mapa a sdílecí text musejí ukázat efektivní cestu a její důsledky. Přím
 oprávnění a možnost použít již přihlášený účet zevnitř A nejsou stejná věc;
 Auth ACL neumí omezit širší práva takového účtu. Odebrání přímého grantu
 v B neodvolává schopnost dostupnou z A. Audit nesmí zaměňovat doložený
-workload nebo sdílený účet za nezaměnitelnou identitu člověka.
+workload nebo sdílený účet za nezaměnitelnou identitu uživatele.
 
 Rozlišujeme osobní zařízení, soukromý osobní Environment a pracovní
 Environment Organizace. Existující samostatně schválené osobní vstupy a
@@ -101,7 +101,7 @@ doménou kompromitace a obnovy.
 Schválení je vztah konkrétního zařízení, ověřeného účtu a cílové
 Organizace. Jedna fyzická instalace Tailscale může obsloužit společný
 tailnet, ale Admin jedné Organizace tím neschvaluje vstup do jiné.
-Odebrání člověka z jedné Organizace nesmaže jeho globální účet ani
+Odebrání uživatele z jedné Organizace nesmaže jeho globální účet ani
 oprávnění v ostatních Organizacích.
 
 Navrženým vlastníkem tohoto schválení je Auth spolu s ostatními
@@ -110,8 +110,8 @@ apply. Dokumenty nesmějí schválení současně přidělit třem nezávislým
 writerům. Převod schválené akce na Machines Plan/Permit musí být explicitní
 kontrakt vykonavatele, nikoli tvrzení, že dnešní kliknutí je už Permitem.
 
-Brána musí doložit souvislost schváleného zdroje a přihlášeného člověka:
-schválený notebook jednoho člověka plus relace jiného člověka nesmějí
+Brána musí doložit souvislost schváleného zdroje a přihlášeného uživatele:
+schválený notebook jednoho uživatele plus relace jiného nesmějí
 náhodně splnit dvě nesouvisející kontroly. Vstup přes pracovní Environment
 se vyhodnocuje jako delegovaná pracovní schopnost s odpovídajícím rozsahem,
 ne jako soukromý notebook jeho přiděleného uživatele.
@@ -132,8 +132,8 @@ nemůže vydávat za omezený vstup. Kvalifikují se její backendové operace,
 API, WebSockety, downloads a použitelné credentials. Nevytváříme per-App
 sandbox, který současná hranice Environmentu neumí vynutit.
 
-Omezený návštěvník aplikace a škodlivý plný operátor téhož runtime jsou
-odlišné hrozby. Plný operátor může ovlivnit aplikaci i její data. Silnější
+Omezený návštěvník aplikace a škodlivý uživatel s plným přístupem k témuž runtime jsou
+odlišné hrozby. Uživatel s plným přístupem může ovlivnit aplikaci i její data. Silnější
 oddělení vyžaduje další Environment; samotná brána ho nevytvoří.
 
 Sdílená cookie brány z 0191 není oprávnění ke všem aplikacím. Brána
@@ -152,7 +152,7 @@ repozitářových pravidel, nikoli z obecného názvu GitHub tarifu.
 [GitHub uvádí ochranu větví i pro veřejná Free repa a popisuje výchozí
 výjimky pro administrátory](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
-Záznam pracovní identity nebo Git trailer sám neprokazuje, který člověk
+Záznam pracovní identity nebo Git trailer sám neprokazuje, který uživatel
 spustil proces uvnitř sdíleného runtime. Audit musí rozlišit doloženého
 iniciátora, delegaci a pouze doložený původ z Environmentu. Nesmí
 předstírat lidskou identitu tam, kde má jen workload credential.
@@ -189,9 +189,9 @@ ukončit nebo znovu ověřit delegace závislé na původním přidělení.
    Schválené staré onboarding cesty lze používat v jejich dosavadním
    scope; nedokazují způsobilost nové skupiny uživatelů.
 3. **Pilot s uzavřenými hranicemi.** Schválené a neschválené zařízení,
-   uživatel bez GitHubu, App/full, odmítnutí externího člověka,
+   uživatel bez GitHubu, App/full, odmítnutí externího uživatele,
    nepřímé propojení, publikace, revokace a obnova. Připravený browser a
-   credentials musí odpovídat skutečnému okruhu operátorů.
+   credentials musí odpovídat skutečnému okruhu uživatelů.
 4. **Jeden aktivní rozhodovací zdroj pro každý cíl.** Síť, brána a
    oprávnění se přepnou koordinovaně. Staré a nové allow podmínky se nikdy
    nespojí pomocí OR; nehotový krok nesmí otevřít širší přístup.
@@ -226,7 +226,7 @@ k důkazu na consumerovi, nikoli pokyn obejít Machines Plan/Permit/apply.
 - Stávající native Owner a čerstvý GitHub Owner důkaz pro správu Auth se
   neruší potichu. Běžný přístup bez GitHubu není nová cesta k Owner roli.
   Admin Organizace nemůže obnovou globálního Lazurio účtu převzít účty
-  člověka v jiných Organizacích nebo jeho Personalspace; obnovu
+  uživatele v jiných Organizacích nebo jeho Personalspace; obnovu
   autentizátorů drží issuer a jeho samostatný recovery kontrakt.
 
 ## Rozhodnutí Operátora po review
@@ -246,10 +246,10 @@ Revokace dalších vstupů zůstává vynucovaná a měřená; odstranění kopi
 zneplatnění externích přihlášení není její automatický účinek. Recovery
 při ztrátě důvěry a bezpečné přepřidělení jsou samostatné operace, nikoli
 preventivní blokátor každého dočasného sdílení. Publikace zůstává na pokyn
-jmenovaného člověka; uvnitř důvěrně sdíleného runtime ji drží proces.
+jmenovaného uživatele; uvnitř důvěrně sdíleného runtime ji drží proces.
 
 Týmový Environment nemá individuálního přiděleného uživatele, proto jeho
-přidělování lidem a propojení spravuje Admin. Samotný plný vstup nepřidává
+přidělování uživatelům a propojení spravuje Admin. Samotný plný vstup nepřidává
 příjemcovu Lazurio účtu správní roli; přihlášené privilegované účty uvnitř
 jsou však technicky použitelné a systém jejich izolaci nepředstírá.
 

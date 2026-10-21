@@ -4,12 +4,12 @@ Status: seed operating concept from the founder's 2026-07-04 product correction;
 
 ## Core correction
 
-`personalspace/` is not just a private folder or secret custody mount. It is the private human/Buddy layer of Lazurio and needs a module model analogous to Organization `workspace/` modules, with stricter privacy and per-person ownership.
+`personalspace/` is not just a private folder or secret custody mount. It is the private user/Buddy layer of Lazurio and needs a module model analogous to Organization `workspace/` modules, with stricter privacy and per-user ownership.
 
 ## Product implications
 
 1. **Personalspace has private modules.**
-   - A personalspace module is a private module owned by one human, Buddy, or AI colleague.
+   - A personalspace module is a private module owned by one user, Buddy, or AI colleague.
    - It can expose one or more applications, just like workspace modules do.
    - Those applications are per-user/per-colleague by default, not shared Organization apps.
    - Personalspace modules must never be auto-merged into Organization discovery or company source-of-truth.
@@ -44,7 +44,7 @@ personalspace/gbrain-module/
 ```
 
 - **Server side:** host the canonical private Git repo or mirror plus the gbrain DB/index/API/MCP. Expose only authenticated, scope-limited APIs to agents.
-- **Human Obsidian side:** open a local clone/synced copy of the vault in Obsidian. Use a sync adapter rather than editing a remote network mount directly.
+- **User Obsidian side:** open a local clone/synced copy of the vault in Obsidian. Use a sync adapter rather than editing a remote network mount directly.
 - **Agent side:** prefer GBrain MCP/API over scraping Obsidian files. Agents on the owner's machine can also read a local checkout when they have local permission.
 - **Conflict policy:** markdown changes should flow through Git or an equivalent conflict-aware sync protocol; GBrain DB writes must materialize back to markdown before they are treated as durable Obsidian truth.
 
@@ -57,7 +57,7 @@ Current ecosystem options worth evaluating, based on 2026-07-04 quick verificati
 - **Remotely Save** — community plugin for S3-compatible storage, WebDAV, Dropbox, OneDrive, Google Drive, etc.; it warns to back up before use.
 - **Official Obsidian Sync** — useful if Obsidian-hosted sync is acceptable, but it is not the self-hosted Lazurio server path.
 
-For Lazurio, the strategic path is probably: Git-backed vault as source of truth + hosted GBrain service for agents + optional Obsidian sync adapter for human editing convenience.
+For Lazurio, the strategic path is probably: Git-backed vault as source of truth + hosted GBrain service for agents + optional Obsidian sync adapter for user editing convenience.
 
 ## Access and safety invariants
 
@@ -72,6 +72,6 @@ For Lazurio, the strategic path is probably: Git-backed vault as source of truth
 
 - What is the canonical manifest shape for `personalspace` private modules?
 - Should personalspace modules have the same lifecycle versioning as workspace modules, or a lighter per-user variant?
-- How does a human approve a Buddy/agent write to hosted GBrain when the write changes durable self-knowledge?
+- How does a user approve a Buddy/agent write to hosted GBrain when the write changes durable self-knowledge?
 - Which sync adapter is acceptable for the first hosted GBrain pilot: Git-only, Self-hosted LiveSync, or a custom gbrain write-through service?
 - How should Dashboard present personalspace apps differently for Admin, Builder and User personas?

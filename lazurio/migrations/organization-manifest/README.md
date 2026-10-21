@@ -31,7 +31,7 @@ folder.
 package-managed `lazurio` (`lazurio/package.json#files`). Resident artifacts
 built by `distribution/build.mjs` do not carry it: the CLI loads the folder
 lazily and `lazurio migrate organization-manifest` reports the absence with
-exit code 2 there. Migration is an operator task on a source checkout in a
+exit code 2 there. Migration is a task the user runs on a source checkout in a
 plan-owned worktree, never a hosted runtime feature.
 
 ## Entry points
@@ -59,7 +59,7 @@ lazurio migrate organization-manifest <organization-root> --finalize        # no
 - The deprecated `company.gen3.json#modules[]` is never copied. Every entry
   must be a declared `modules.manifest.json` slot projecting identically;
   otherwise the plan is `blocked` with `legacy_modules_unreconciled` and the
-  operator aligns `modules.manifest.json` first.
+  user aligns `modules.manifest.json` first.
 - `--write` only in a linked task worktree on a non-canonical branch whose
   only dirty paths are the two managed manifests. Primary checkouts, `main`,
   detached HEAD and foreign dirty files are refused. Nothing is committed,

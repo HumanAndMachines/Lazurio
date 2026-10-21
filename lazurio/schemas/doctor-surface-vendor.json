@@ -43,7 +43,7 @@
       "path": "schemas/doctor-report.schema.json",
       "baseline_path": "lazurio/schemas/doctor-report.schema.json",
       "baseline_sha256": "0bdf0184dcb7fb1a95e312c01cec448d0deaaebf0acc7bd09c3afa5ec4380036",
-      "current_sha256": "a1499150990ed3504d55c042689237000f338dc7f5edfa9c6afc6cca4bd62614",
+      "current_sha256": "73de615510628dddb6e361e5f2593692a74599c6d4d1113f86a70d8d3441f829",
       "declared_delta": [
         {
           "summary": "Zobrazovaný titul schématu používá značku Lazurio; validační kontrakt se nemění.",
@@ -56,6 +56,10 @@
         {
           "summary": "Popis scope personalspace zdůvodňuje samostatný běh bez Buddy VPS, která s decision 0210 skončila; validační kontrakt se nemění.",
           "anchor": "v samostatném checkoutu nebo v Lazurio Folderu je to jediný běžící doctor"
+        },
+        {
+          "summary": "Popis remedy pojmenovává toho, kdo má jednat, pojmem uživatel (dodatek 0175 z 2026-10-21); validační kontrakt se nemění.",
+          "anchor": "co má uživatel udělat"
         }
       ]
     }

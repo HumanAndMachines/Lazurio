@@ -586,7 +586,7 @@ function nextSteps({ plan, target, moduleRoot, dryRun, report = null }) {
   }
   for (const issue of report?.issues ?? []) if (issue.action) steps.push(issue.action);
   steps.push(
-    `V ${target.organizationRoot} commitněte modules.manifest.json (slot ${plan.module_path}) a otevřete PR do root repa Organizace; merge je rozhodnutí oprávněného Principála.`,
+    `V ${target.organizationRoot} commitněte modules.manifest.json (slot ${plan.module_path}) a otevřete PR do root repa Organizace; merge je rozhodnutí oprávněného uživatele.`,
     `Založte privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Organization Admin; Dashboard „Nový Modul“ to převezme) a pushněte: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
   );
   if (plan.lease) {

@@ -14,7 +14,7 @@ transport, custody, aktivní Team projekce a provozní nasazení runtime.
 
 Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice se známým
 Ownerem, ne typ hardwaru. Lokální workstation může být Mašinou jednoho
-Principála. Celý Hosted Team Workspace se na tenantní vrstvě počítá jako
+uživatele. Celý Hosted Team Workspace se na tenantní vrstvě počítá jako
 Mašina Teamu jen díky podporovanému infrastrukturnímu obalu se samostatnými
 soubory, procesy, sítí, credentials, lifecycle a obnovou; samotný kontejner,
 Unixový účet, proces, Modul ani worktree Mašinou nejsou.
@@ -45,29 +45,29 @@ textová role ani prompt nevytvářejí druhý ACL.
 Na hostované pracovní VM Organizace (`/etc/lazurio/lazurio.machine.json`,
 `machine.kind: workspace-vm`) se před první prací i před `lazurio update` řiď
 `manual/hosted-machine-first-login.md` v tomto runtime rootu. Na osobní
-pracovní VM dočasně (decision 0159) operátor přihlásí `gh` libovolným GitHub
+pracovní VM dočasně (decision 0159) uživatel přihlásí `gh` libovolným GitHub
 účtem; platné přiřazení `operator` přihlášení neomezuje na konkrétní účet
 a jiný účet není blocker. Rozlišovacím znakem postupu je `owner.assignment.kind`
 z platného handoveru:
 
 - `operator`: osobní postup. Agent ověří, že `gh` je přihlášený, a řekne
-  operátorovi kterým účtem; přihlášení a přehlášení provede operátor sám
+  uživateli kterým účtem; přihlášení a přehlášení provede uživatel sám
   (Launchpad → Nastavení → Zdrojové kódy).
 - handover chybí, nevaliduje, nebo přiřazení není deklarované: Agent osobní
   přihlášení **neprovede** — bez důkazu nejde vyloučit týmovou VM (decision
-  0168). Stav nahlásí operátorovi a požádá provozovatele Machines o ověření
+  0168). Stav nahlásí uživateli a požádá provozovatele Machines o ověření
   handoveru; práce bez přihlášení pokračuje.
 - `team`: GitHub identitou je výhradně bot Organizace
   `lazurio-for-github[bot]`; osobní přihlášení Agent nespouští ani
   nenavrhuje. Chybějící broker je vada Machines k opravě vpřed, ne důvod
-  přihlásit člověka (decision 0168): Agent zapíše blocker a zastaví se.
+  přihlásit uživatele (decision 0168): Agent zapíše blocker a zastaví se.
 
 Nejasný nebo nebezpečný Git stav
 se neopravuje odhadem: zachová se a předá Kolegovi jako prompt pro Codex.
 
 ## Architektonická odpovědnost při změně source kódu
 
-Principál určuje chtěný výsledek a má poslední slovo, ale jeho zadání není
+Uživatel určuje chtěný výsledek a má poslední slovo, ale jeho zadání není
 automaticky hotovou architektonickou specifikací. Před každou tvorbou nebo
 změnou source kódu v odděleném pracovním checkoutu kriticky ověř navržený
 prostředek proti autoritám a principům Lazuria, navrhni nejmenší úplné řešení a

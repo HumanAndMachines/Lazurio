@@ -1,6 +1,6 @@
 # Local secret custody in GEN3
 
-GEN3 musí mít jedno standardní místo, kam patří lokální secret soubory pro člověka nebo AI kolegu, aby se neopakovalo ad-hoc hledání v `Downloads`, `Desktop`, tool cache složkách nebo chatových handoffech.
+GEN3 musí mít jedno standardní místo, kam patří lokální secret soubory pro uživatele nebo AI kolegu, aby se neopakovalo ad-hoc hledání v `Downloads`, `Desktop`, tool cache složkách nebo chatových handoffech.
 
 ## Pravidlo
 
@@ -12,9 +12,9 @@ Secrets a OAuth client soubory se **nikdy necommitují**. Do Gitu patří jen:
 - metadata-only ověření (`present`, `mode`, `mtime`, `account/domain`, `doctor=ok`),
 - nikdy hodnota secretu, tokenu, refresh tokenu, hesla ani obsah JSONu.
 
-## Root / Buddy / operator secrets
+## Root / Buddy / user secrets
 
-Pro secrets, které patří vlastníkovi Launchpad rootu, Buddymu nebo operátorovi stroje, je custody místo owner-scoped uvnitř jeho personalspace:
+Pro secrets, které patří vlastníkovi Launchpad rootu, Buddymu nebo uživateli stroje, je custody místo owner-scoped uvnitř jeho personalspace:
 
 ```text
 personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>
@@ -55,13 +55,13 @@ Tool-specific cesty jako:
 
 jsou runtime/cache/adaptér cesty. Nejsou zdroj pravdy pro držení secretů. Runbook musí umět z custody source připravit runtime path bez toho, aby secret tisknul nebo commitoval.
 
-## Human-action boundary
+## User-action boundary
 
 Když je potřeba OAuth consent nebo zadání hesla:
 
 1. Agent připraví lokální `.command` / wizard / aplikaci na cílovém Macu.
-2. Člověk dokončí pouze lokální krok na cílové obrazovce.
-3. Člověk neposílá heslo, kód, token, OAuth URL ani JSON do chatu.
+2. Uživatel dokončí pouze lokální krok na cílové obrazovce.
+3. Uživatel neposílá heslo, kód, token, OAuth URL ani JSON do chatu.
 4. Agent potom čte jen metadata-only výsledek a funkční smoke.
 
 ## Metadata-only verification

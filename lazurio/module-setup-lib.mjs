@@ -565,7 +565,7 @@ export function renderHumanModuleSetup(report) {
     }
   }
   if (report.operator_assertions.length > 0) {
-    lines.push("Tvrzení operátora k review:");
+    lines.push("Tvrzení uživatele k review:");
     for (const assertion of report.operator_assertions) lines.push(`  - ${assertion}`);
   }
   return lines.join("\n");

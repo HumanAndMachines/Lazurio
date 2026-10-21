@@ -28,7 +28,7 @@ Revize 2026-07-02: současný kurz (26 lekcí, sekce `1-mindset` až `5-soucast-
 ## Obsahová pravidla
 
 - Piš česky, krátce a konkrétně.
-- Cílovka je člověk, který nechce číst zdrojový kód.
+- Cílovka je uživatel, který nechce číst zdrojový kód.
 - Nepřenášej firemní ani klientská data do root Guidu.
 - Přenášej jen zobecněné mechanismy a ověřené patterny.
 - Když použiješ technický pojem, hned vysvětli jeho praktický význam.

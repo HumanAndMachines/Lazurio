@@ -890,7 +890,7 @@ function renderHumanContext(context) {
   const lines = [
     "Lazurio context v0 · unstable · read-only",
     `Root: ${context.root.kind}`,
-    `Principál: ${context.principal.github_username ?? "nezjištěn"} · ${stateText(context.principal)}`,
+    `Uživatel: ${context.principal.github_username ?? "nezjištěn"} · ${stateText(context.principal)}`,
     `Mašina: ${context.machine.platform}/${context.machine.architecture}`,
     `Personalspace: mount ${stateText(context.personalspace.mount)} · access ${stateText(context.personalspace.access)}`,
   ];

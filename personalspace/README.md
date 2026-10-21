@@ -1,6 +1,6 @@
 # Personalspace
 
-Mountpoint pro privátní prostory lidí a AI kolegů podle
+Mountpoint pro privátní prostory uživatelů a AI kolegů podle
 `launchpad.gen3.json` (`personalspace_mountpoint`) a CompaniesAsCode
 decisions 0013 a 0021; strukturu definuje decision 0051
 (revidovaná pro self-service decision 0079; Buddyho v Osobním Prostředí
@@ -8,14 +8,14 @@ zavádí decision 0210 místo VPS-only Buddyho z decision 0080; shrnutí drží
 `../manual/decision-register.md`).
 
 `personalspace/` je integrální privátní vrstva Lazuria a mountpoint
-**jediného osobního prostoru Principála této mašiny**. Není to Organizace ani
+**jediného osobního prostoru uživatele této mašiny**. Není to Organizace ani
 externí doplněk. Prostor je samostatné repo `<username>/<username>_GEN3` na
 osobním nebo agentním GitHub účtu (generační marker per decision 0045), mimo
-firemní GitHub organizace. Přístup má pouze Principál a jeho volitelný Buddy;
+firemní GitHub organizace. Přístup má pouze uživatel a jeho volitelný Buddy;
 Kolegové, jiní Buddyové ani Organization Builders sem přístup nemají. Firemní
 pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
 
-Personalspace může fungovat bez Buddyho. Jeho Principálem je vlastník; Buddy
+Personalspace může fungovat bez Buddyho. Jeho uživatelem je vlastník; Buddy
 binding a přístup ke gbrainu se přidávají jen tehdy, když vlastník Buddyho
 skutečně má. Buddy patří k Osobnímu Prostředí a běží v něm (decision 0210);
 Personalspace o něm drží blok `buddy` v `personal.gen3.json`, secret-free
@@ -34,7 +34,7 @@ Lokální OS účet není GEN3 owner identita.
 
 ## Pravidlo pro agenty
 
-**Personalspace je privátní prostor Principála a jeho volitelného Buddyho.**
+**Personalspace je privátní prostor uživatele a jeho volitelného Buddyho.**
 Pokud hledáš pracovní záležitosti — firmy, klienty, moduly, Mission Control
 plány — patří do `../organizations/<Org>/`, ne sem. Agent nesmí cizí
 Personalspace materializovat ani číst; jeho výskyt v tomto mountpointu je
@@ -45,13 +45,13 @@ objevit ve sdílených výstupech, org discovery, reportech ani šablonách.
 
 ```text
 personalspace/
-└── exampleowner_GEN3/          # jediný osobní prostor Principála mašiny
+└── exampleowner_GEN3/          # jediný osobní prostor uživatele mašiny
     ├── personal.gen3.json      # manifest (vlastník, volitelný Buddy, sloty)
     ├── modules.manifest.json   # identický kontrakt jako v Organizaci
     ├── workspace/              # plochá složka OSOBNÍCH modulů (nested private
     │   └── <modul>/            #   repa <owner>/<modul> na osobním GitHubu)
     ├── gbrain/                 # privátní paměťové data repo vlastníka
-    │                           #   (přístup jen Principál + volitelný Buddy)
+    │                           #   (přístup jen uživatel + volitelný Buddy)
     ├── buddy/                  # volitelný mount private Hermes Profile
     │                           #   Distribution Buddyho (bez secrets)
     ├── secrets/                # owner-scoped secret custody (viz níže)
@@ -117,7 +117,7 @@ warningem a migrují se podle
 ## Spolupráce s Kolegy
 
 Personalspace se s Kolegy nesdílí, a to ani po jednotlivých modulech. Co má
-být součástí práce Organizace, přesune Principál jako záměrný Draft do repa
+být součástí práce Organizace, přesune uživatel jako záměrný Draft do repa
 Organizace a podřídí to jeho GitHub oprávněním a review procesu. Export nebo
 předání výsledku nikdy nedává příjemci přístup k Personalspace, jeho manifestu,
 gbrainu ani secrets custody.
@@ -150,6 +150,6 @@ do custody jejich hostu); do profilu `buddy/` ani do Gitu nikdy.
 Detailní pravidla jsou v `manual/security/local-secret-custody.md`
 (aktualizace cesty na owner-scoped tvar je součást CAC-0048).
 
-Podle decision 0210 je Osobní Prostředí jediná osobní hostovaná Mašina člověka
+Podle decision 0210 je Osobní Prostředí jediná osobní hostovaná Mašina uživatele
 (0153) a Buddy běží v něm; organizační klony a běhy zůstávají na přidělených
 Organization-owned Mašinách.

@@ -16,7 +16,7 @@ z 2026-10-09.
   Běží jako služba uživatele Environmentu, jen na localhostu. Neběží na
   Conglomerate Hostu, nesdílí se mezi Environmenty a Executor Cloud se
   nepoužívá.
-- Lidé Executor ovládají jen z Launchpadu (Apps → Integrace) a do konzole
+- Uživatelé Executor ovládají jen z Launchpadu (Apps → Integrace) a do konzole
   Executoru nemají žádný vstup; používají ji agenti a servisní přístup při
   potížích. Dokud stránka Integrace na Environmentu není, platí přechodný
   postup ze sekce MCP servery a připojení.
@@ -24,7 +24,7 @@ z 2026-10-09.
   potřebuje jiné přístupy, zakládá další Environment.
 - Každá Integrace má v Environmentu jednu cestu: nástrojem z Nastavení →
   Nástroje, přímo přes Executor, nebo přes Composio s vlastním účtem
-  člověka, v Týmovém Prostředí s týmovým účtem Composia
+  uživatele, v Týmovém Prostředí s týmovým účtem Composia
   ([composio.md](composio.md)), pokud je povolené. Agent ji použije
   v pořadí nástroj aplikace, Executor, Composio.
 - Firemní aplikace Google Workspace a Microsoft 365 nastavuje Admin
@@ -92,15 +92,15 @@ stejně, jakmile to umí fork MausBotu (plán DEV-6626).
 
 ## MCP servery a připojení
 
-Lidé připojují Integrace v Launchpadu (Apps → Integrace); Launchpad k tomu
+Uživatelé připojují Integrace v Launchpadu (Apps → Integrace); Launchpad k tomu
 používá rozhraní Executoru uvnitř Environmentu. Na Remote Environmentu se
-přihlášení ze stránky Integrace otevře v prohlížeči na počítači člověka,
+přihlášení ze stránky Integrace otevře v prohlížeči na počítači uživatele,
 kde poskytovatel přijme adresu Launchpadu jako návratovou (dynamická
 registrace klienta); jen poskytovatel, který přijme výhradně návrat na
 `localhost`, zůstává v prohlížeči Environmentu (dodatek 0162 z 2026-10-13).
 **Přechodně, dokud stránka Integrace na Environmentu není,** připojí
-Integraci agent jen na výslovný pokyn člověka příkazovou řádkou. Tahle cesta
-se vrací na `localhost` Executoru, takže přihlášení nebo klíč dokončí člověk
+Integraci agent jen na výslovný pokyn uživatele příkazovou řádkou. Tahle cesta
+se vrací na `localhost` Executoru, takže přihlášení nebo klíč dokončí uživatel
 sám na stránce, kterou mu agent otevře v prohlížeči Environmentu; jinam do
 konzole nechodí:
 
@@ -112,17 +112,17 @@ executor call executor coreTools connections create '{"owner":"org","name":"defa
 
 - `probeEndpoint` řekne, jestli server potřebuje OAuth a jestli umí
   dynamickou registraci klienta. Takový server (v pilotu například Linear
-  nebo Notion) potřebuje jen souhlas operátora v prohlížeči, žádnou
+  nebo Notion) potřebuje jen souhlas uživatele v prohlížeči, žádnou
   vlastní OAuth aplikaci.
 - Bez dynamické registrace, typicky u Googlu a Microsoftu, je potřeba
   OAuth aplikace Organizace podle runbooku poskytovatele.
-- Při téhle přechodné cestě dá souhlas člověk v prohlížeči Environmentu.
+- Při téhle přechodné cestě dá souhlas uživatel v prohlížeči Environmentu.
   Executor ji vrací na `localhost`, jinde se nedokončí.
-- Klíč nebo token, který služba chce, zadá člověk sám na stránce předání
+- Klíč nebo token, který služba chce, zadá uživatel sám na stránce předání
   (`connections.createHandoff`), kterou mu agent otevře v prohlížeči
   Environmentu; do chatu ho nikdy nepíše.
 - Executor ve výchozím nastavení přidání serveru i vytvoření připojení
-  pozastaví a čeká na schválení. Výslovný pokyn člověka k připojení je tím
+  pozastaví a čeká na schválení. Výslovný pokyn uživatele k připojení je tím
   schválením; agent ho potvrdí příkazem
   `executor resume --execution-id <id> --action accept --content '{}'`.
   Čtecí nástroje v pilotu běžely bez schvalování.
@@ -143,7 +143,7 @@ Například
 
 ## Konzole (jen pro agenty a servisní přístup)
 
-Lidé do konzole nechodí a cílově všechno dělají v Launchpadu; přechodně jen
+Uživatelé do konzole nechodí a cílově všechno dělají v Launchpadu; přechodně jen
 dokončí přihlášení nebo klíč na stránce, kterou jim agent otevře. Agent nebo
 servisní přístup ji při potížích otevře v prohlížeči Environmentu na
 `http://localhost:4789`; `executor open` ji otevře rovnou přihlášenou.
@@ -171,16 +171,16 @@ servisní přístup ji při potížích otevře v prohlížeči Environmentu na
 
 - Používat všechny integrace Executoru. Uvnitř Environmentu se přístupy
   nedělí.
-- Integraci nikdy nepřipojit sám: přihlášení je souhlas člověka, proto
+- Integraci nikdy nepřipojit sám: přihlášení je souhlas uživatele, proto
   agent pošle odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
-  není, připojí ji jen na výslovný pokyn člověka postupem výše.
-- Vlastní MCP server přidat jen na výslovný pokyn člověka, vždy do
+  není, připojí ji jen na výslovný pokyn uživatele postupem výše.
+- Vlastní MCP server přidat jen na výslovný pokyn uživatele, vždy do
   Executoru Environmentu, ne jen do svého nástroje.
 - Integrační službu Služeb serveru (root 0209, dodatek z 2026-10-19 večer
   (e)) nepřidávat ani neodebírat: Admin ji povoluje v Deployment Repu a v
   povoleném Prostředí se v Integracích ukáže sama.
-- Navenek viditelný zápis udělat jen na pokyn Operátora.
-- Kde Executor neběží, nainstalovat ho na pokyn operátora podle tohoto
+- Navenek viditelný zápis udělat jen na pokyn uživatele.
+- Kde Executor neběží, nainstalovat ho na pokyn uživatele podle tohoto
   runbooku.
 
 ## Odebrání

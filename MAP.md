@@ -19,7 +19,7 @@ Dnešní podporovaný Source Root:
 ├── AGENTS.md
 ├── launchpad.gen3.json
 ├── organizations/                     # oddělené Organization Git checkouty
-└── personalspace/                     # privátní mount jednoho člověka
+└── personalspace/                     # privátní mount jednoho uživatele
 ```
 
 Dnešní instalace může mít source složku stále pojmenovanou například
@@ -91,7 +91,7 @@ pracovní Root.
   dokumentace na `documentation.lazurio.ai`; Launchpad její obsah neduplikuje.
   Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
-- Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Uživatele Organizace (Organization User) do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
+- Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Organization Users do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
 - `manual/module-standard.md` — Lazurio Module Standard (decision 0171): jak Modul vypadá, startuje, na čem stojí a jak vzniká; konformance `lazurio module setup`, skill `.agents/skills/lazurio-module-standard/`
 - `manual/mission-control-trusted-builder-smoke.md` — živý cross-Lazurio audit GitHub-only writeru, root pointerů a progresivního `trusted-process` / `provider-enforced` režimu
@@ -125,13 +125,13 @@ pracovní Root.
   workspace aplikace; starší tvar `<modul>.<team>.<doména>` je nahrazený.
 - `organizations/<org>/productionspace/` — org-level repozitáře dané Organizace, které nejsou workspace moduly (např. firmware, connect, platformní runtime nebo pracovní template checkout); každé repo si definuje vlastní pravidla a Doctor u nich vynucuje jen bezpečné minimum (decisions 0041 a 0127 v manual/decision-register.md)
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní
-- **Buddy** — běží v Osobním Prostředí svého člověka (decision 0210); v `personalspace/<owner>_GEN3/` drží mount `buddy/` jeho secret-free profil a `gbrain/` jeho paměť. Dosavadní hostované instalace na dedikované VPS se do své migrace řídí vygenerovanými instrukcemi aktivního Resident rootu na hostu a privátním profilem Ownera, ne pravidly source checkoutu. Hranici a postup zjištění drží `manual/buddy.md`
+- **Buddy** — běží v Osobním Prostředí svého uživatele (decision 0210); v `personalspace/<owner>_GEN3/` drží mount `buddy/` jeho secret-free profil a `gbrain/` jeho paměť. Dosavadní hostované instalace na dedikované VPS se do své migrace řídí vygenerovanými instrukcemi aktivního Resident rootu na hostu a privátním profilem Ownera, ne pravidly source checkoutu. Hranici a postup zjištění drží `manual/buddy.md`
 - `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>` — lokální gitignored
-  custody cesta pro root/Buddy/operator secrets; organization/AI-colleague
+  custody cesta pro secrets rootu, Buddyho a uživatele; organization/AI-colleague
   secrets patří do organization-local `private/secrets/...`
 - `templates/` — šablony
 - `drafts/` — lokální netrackované návrhy bez dlouhodobé autority; sdílený draft patří do příslušné Organizace, plan-owned worktree nebo PR
 - **V jakém světě jsi (koexistence Human↔Machine):** začni sekcí
   `AGENTS.md → Model spolupráce → Koexistence Human and Machine`. Vysvětluje
   hierarchii, hranice a procesy, ve kterých tenhle root a všechny Organizace
-  fungují — pro lidi i agenty.
+  fungují — pro uživatele i agenty.

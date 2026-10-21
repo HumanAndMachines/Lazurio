@@ -102,17 +102,17 @@ it with \`lazurio migrate organization-manifest <root> --write\`.
 
 GitHub memberships, Teams, repository grants and branch rules are the only
 access authority. Manifest roles and labels never create a second ACL. Keep
-secrets, another Organization's context and every Principal's Personalspace out
+secrets, another Organization's context and every user's Personalspace out
 of this repository.
 
 Use a task branch and pull request for tracked changes. A draft may be prepared,
 committed and pushed for review; merge, release and other publication require
-the current Principal's explicit instruction and live GitHub permission.
+the current user's explicit instruction and live GitHub permission.
 
 Open technical problems and uncertainties belong in GitHub Issues of the exact
 owning repository. Plans, priorities and responsibility belong in Mission
 Control. Creating an issue or comment is publication: it requires the current
-Principal's explicit mandate, duplicate search and sanitization. Never publish
+user's explicit mandate, duplicate search and sanitization. Never publish
 secrets, Personalspace or another Organization's data. If no safe repository or
 mandate exists, return a sanitized draft instead of creating a shadow ledger.
 

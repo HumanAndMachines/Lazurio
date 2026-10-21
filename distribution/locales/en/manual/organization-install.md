@@ -106,7 +106,7 @@ a permanent Lazurio setting. Filing a general reproduced defect as a GitHub
 Issue needs no separate consent: it is a standing mandate of the Agent
 (decision 0163), and the addition below only names the target repository.
 
-Add only the paragraphs whose impact the Principal actually approves:
+Add only the paragraphs whose impact the user actually approves:
 
 > Update existing Git, GitHub CLI, and Codex CLI to the
 > current official stable versions, and Node.js to the current supported LTS.
@@ -312,18 +312,18 @@ materialization.
 
 The short prompt above is deliberately end to end: the Task Agent runs the
 CLI, installers, `PATH` changes, and verification through its background tools
-and does not hand commands to the person for manual execution. Terminal and
+and does not hand commands to the user for manual execution. Terminal and
 PowerShell are not opened as user-facing windows. Native GitHub browser
 authorization, UAC, a password, or another system consent remain valid human
 steps because they approve a personal or privileged operation; the Agent
 invokes them and explains them in plain language beforehand.
 
 If a particular agent harness cannot start the required process without a
-visible console, the Agent does not shift shell work to the person and does
+visible console, the Agent does not shift shell work to the user and does
 not present the installation as complete. It returns the exact platform
 blocker so the installation surface can be fixed. The Agent performs the full
 Codex relaunch after a persistent `PATH` change when the harness can do so
-safely; otherwise the only fallback requested from the person is to close and
+safely; otherwise the only fallback requested from the user is to close and
 reopen the Codex graphical application, never Terminal or PowerShell.
 
 Bun is not ready merely because `bun --version` returns the exact version.
@@ -365,7 +365,7 @@ This step writes nothing to the registry or the shell profile and does not use
 a manually located versioned package directory. It allows the installation
 session to continue, but it is not the final proof. After the currently active
 atomic operation finishes, the Agent records the exact resume point in the
-chat and the Principal fully closes every Codex window and starts Codex again.
+chat and the user fully closes every Codex window and starts Codex again.
 Only a new clean process from the relaunched Codex may prove that the same
 commands are available without this snippet. A new terminal started by the old
 Codex still inherits its environment snapshot and is not sufficient. Their
@@ -440,7 +440,7 @@ Use the current official stable release, not a preview or a version copied
 verbatim from a manual. Before execution, a scoped installation or update
 mandate for Codex and the relevant `PATH` layer must apply. Do not request an
 already granted mandate again; if it is missing, first prepare the exact
-remediation and request the Principal's consent. Neither Doctor nor
+remediation and request the user's consent. Neither Doctor nor
 `lazurio update` ever executes this command. `lazurio install` remains a
 machine-gate report, not an installer for the external toolchain.
 
@@ -534,7 +534,7 @@ of the gate.
 
 ### Codex: the question tool
 
-The Agent asks a person through the harness question tool (decision 0211).
+The Agent asks the user through the harness question tool (decision 0211).
 Codex offers it as `request_user_input` in Default mode only with the feature
 `default_mode_request_user_input` turned on. In Codex 0.163.0 the feature is
 at stage "under development" and off by default. It is turned on per Machine
@@ -553,7 +553,7 @@ default_mode_request_user_input = true
 ```
 
 This changes the Codex settings of the Machine, so make it with the
-Operator's consent; do not rewrite the whole file. Verify it with
+user's consent; do not rewrite the whole file. Verify it with
 `codex features list`, where the `default_mode_request_user_input` row shows
 `true`. It takes effect after Codex starts again. Codex shows a warning that
 an under-development feature is on; that is expected.
@@ -595,7 +595,7 @@ user-facing code is intended to be entered in the browser and expires by
 design. It does not copy it into the clipboard, an issue, a repository, or a
 durable diagnostic log. It never reveals the internal OAuth `device_code`,
 access token, or private key. After opening the authorization page, it clearly
-tells the Principal the single pending human step. After completion, it
+tells the user the single pending human step. After completion, it
 verifies in the same session:
 
 ```sh
@@ -613,7 +613,7 @@ First verify the existing key and its binding to the correct GitHub account.
 Use a standalone `gh ssh-key add` only as a repair of an already signed-in
 account, not as a second default onboarding flow. Creating a new SSH key and
 uploading it is an access change, and the Agent may do it only with the
-Principal's explicit consent for this machine and account; it never prints the
+user's explicit consent for this machine and account; it never prints the
 private key or places it in the repository. It then repeats the exact
 `git ls-remote`, not the whole login.
 
@@ -641,7 +641,7 @@ explicitly:
   `git ls-remote`, and only then run
   `lazurio organization install <github-login> --role builder`.
 
-If the Principal wants to authorize the SSH bootstrap without further
+If the user wants to authorize the SSH bootstrap without further
 interruption, the prompt should say: "If no usable SSH key exists for this
 account, you have permission to create a new ed25519 key on this Machine,
 upload only its public part via `gh ssh-key add` to the GitHub account just
@@ -725,7 +725,7 @@ and the list of `excluded_by_role_scope` slots; an excluded restricted slot is
 never presented as an access blocker nor resolved by requesting a grant.
 
 Every recommended warning has an explicit disposition in the handoff: fixed,
-knowingly accepted by the Principal, or blocked by missing authority. A
+knowingly accepted by the user, or blocked by missing authority. A
 required finding is never merely "acknowledged". After a change to the
 persistent PATH, the Agent starts a new clean process; on Windows, an open
 Explorer, Start menu, or terminal with the old environment snapshot is not
@@ -750,9 +750,9 @@ owning repo.
 
 The CLI neither selects the Root nor stores it as additional configuration. A
 production installation always uses `~/Lazurio` on macOS/Linux and
-`%USERPROFILE%\\Lazurio` on Windows. This gives both people and Agents one
+`%USERPROFILE%\\Lazurio` on Windows. This gives both users and Agents one
 predictable path, and the absolute path simultaneously carries the Machine's
-user. This operation therefore does not accept `--root`.
+OS account. This operation therefore does not accept `--root`.
 
 The first run materializes the exact Organization root into
 `organizations/<CanonicalLogin>_GEN3` and, via the regular update reconciler,

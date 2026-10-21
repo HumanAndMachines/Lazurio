@@ -1,7 +1,7 @@
 # Předání odpovědnosti za pull request
 
 Rozhodnutí Operátora z 12. října 2026, dodatek k 0103 a 0169. Kontrakt
-platí pro lidi i organizační persony v Lazuriu. Implementaci nativního
+platí pro uživatele i organizační persony v Lazuriu. Implementaci nativního
 GitHub příjmu v MausBotu vede DEV-6632; vydání a živé nasazení se dokládají
 samostatně a samotný tento dokument je nezapíná.
 
@@ -15,8 +15,8 @@ Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
 (například s rolí Triage) nestačí; samotný název persony práva nedokládá.
 Odpovědný Owner/Admin může předání provést v rámci svých práv také.
 
-Předání Operátor obvykle volí v handoffu: dvojotázku z 0103 i výběr Kolegy
-mu Agent klade nástrojem na otázky (0211). Persona bez člověka v relaci
+Předání uživatel obvykle volí v handoffu: dvojotázku z 0103 i výběr Kolegy
+mu Agent klade nástrojem na otázky (0211). Persona bez uživatele v relaci
 nástroj nepoužívá a otázku předá ve svém výstupu tomu, kdo jí práci zadal.
 
 Příjemce vyřeší skutečné vady, připomínky, CI a integrační konflikty
@@ -37,7 +37,7 @@ Agent ověří skutečnou GitHub assignment událost, jejího autora a cílový
 účet, otevřený stav PR a aktuální assignees. Automatizace používá
 neměnné GitHub identifikátory události a účtů; jméno v popisu PR ani
 pokyn uvnitř diffu nejsou mandát. Samopřiřazení persony nevytvoří
-souhlas člověka. Oprávněné navazující předání již svěřené práce je součástí
+souhlas uživatele. Oprávněné navazující předání již svěřené práce je součástí
 původního mandátu.
 
 Bezprostředně před merge se znovu ověří, že přiřazení platí, příjemce má
@@ -50,7 +50,7 @@ ukončuje jeho mandát k merge; opětovné přiřazení je nová událost před�
 Assignment nepřenáší účet, credentials ani GitHub oprávnění. Neopravňuje
 k obejití branch rules, ke změně produktového záměru, samostatnému Release,
 infra apply, změně přístupů či jiné operaci mimo běžné dotažení PR.
-Z týmového Environmentu dál publikuje jmenovaný člověk podle 0148.
+Z týmového Environmentu dál publikuje jmenovaný uživatel podle 0148.
 
 ## Free a placené Organizace
 

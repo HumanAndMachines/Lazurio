@@ -1,4 +1,4 @@
-# Předání hostované Mašiny a onboarding operátora
+# Předání hostované Mašiny a onboarding uživatele
 
 > **Cílové zpřesnění 0192 (2026-10-06):** [Model přístupů](environment-access-model.md)
 > odděluje Lazurio účet, schválené zařízení, vstup do Environmentu a pracovní
@@ -22,18 +22,18 @@ Deployment Repa vlastníka a jeho Mission Controlu.
 | OS, management transport, přidělený OS účet a sudo | Machines | Fungující správa a oddělení guestů, bez osobních tokenů v image |
 | Tailnet, DNS, TLS, gateway a vstup do konkrétní VM | Machines a příslušné síťové/Auth služby | Vstup funguje pro oprávněný subjekt, neoprávněný vstup je odmítnut |
 | Identita Mašiny, Owner a vyšší provider/operator hranice | Machines, projekce owner Deployment Repa | Platný popis identity; nejde o oprávnění číst repozitáře |
-| Instalace podporované distribuce Lazuria | Machines vyvolají podporovaný Platform instalátor | Čisté Lazurio se spustí bez Organization checkoutu; pin je minimum: rollout chybějící nebo rozbité Lazurio nainstaluje a verzi pod pinem zvedne, nikdy ji nesníží a vyšší verzi operátora nechá (decision 0161, dodatek 2026-09-28) |
-| Lazurio Folder, Environment preset, instrukční profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou; aktualizaci Lazuria spouští operátor sám přes `lazurio update`, bez rolloutu |
-| Osobní `gh` přihlášení a volba Organizací | Operátor individuální VM | Přihlášení vlastním účtem; žádná identita vypůjčená od provisionera |
-| Materializace a synchronizace Organizací a Modulů | LazurioPlatform na explicitní volbu operátora | Čerstvá živá práva na GitHubu, existující materializační mechanismus |
-| Projektové závislosti, pracovní nastavení, aplikace a data | Operátor a příslušná Organizace | Jejich vlastní workflow; nejsou podmínkou vytvoření VM |
+| Instalace podporované distribuce Lazuria | Machines vyvolají podporovaný Platform instalátor | Čisté Lazurio se spustí bez Organization checkoutu; pin je minimum: rollout chybějící nebo rozbité Lazurio nainstaluje a verzi pod pinem zvedne, nikdy ji nesníží a vyšší verzi uživatele nechá (decision 0161, dodatek 2026-09-28) |
+| Lazurio Folder, Environment preset, instrukční profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou; aktualizaci Lazuria spouští uživatel sám přes `lazurio update`, bez rolloutu |
+| Osobní `gh` přihlášení a volba Organizací | Uživatel individuální VM | Přihlášení vlastním účtem; žádná identita vypůjčená od provisionera |
+| Materializace a synchronizace Organizací a Modulů | LazurioPlatform na explicitní volbu uživatele | Čerstvá živá práva na GitHubu, existující materializační mechanismus |
+| Projektové závislosti, pracovní nastavení, aplikace a data | Uživatel a příslušná Organizace | Jejich vlastní workflow; nejsou podmínkou vytvoření VM |
 | Záloha a obnova Mašiny | Machines v rozsahu provozního kontraktu | Ověřený restore; není to oprávnění číst nebo zveřejnit obsah |
-| Konzistence a migrace aplikačních dat | Vlastník aplikace/dat s operátorem | Aplikační kontrola, samostatně od health VM |
+| Konzistence a migrace aplikačních dat | Vlastník aplikace/dat s uživatelem | Aplikační kontrola, samostatně od health VM |
 
 Machines mohou znovu spravovat svou infrastrukturu i po předání. Předání není
 ukončení provozní odpovědnosti. Reconcile infrastruktury ale nevybírá checkouty,
-nepřepisuje přihlášení, nevytváří další Platform updater a nevrací operátorovy
-nástroje na starší verzi. Obnova infrastruktury a obnova prostředí mají mít
+nepřepisuje přihlášení, nevytváří další Platform updater a nevrací nástroje
+uživatele na starší verzi. Obnova infrastruktury a obnova prostředí mají mít
 odděleně doložený výsledek.
 
 ## Čtyři odlišné vztahy
@@ -42,31 +42,31 @@ odděleně doložený výsledek.
    provozující dedicated server není automatickým seznamem obsahu guestu.
 2. **Oprávnění vstoupit do VM** stanovuje její gateway a živá přístupová politika.
    Přihlášení do gateway samo nevytváří `gh` session ani repo grant.
-3. **GitHub identita uvnitř individuální VM** je účet jejího operátora. GitHub
+3. **GitHub identita uvnitř individuální VM** je účet jejího uživatele. GitHub
    určuje dostupné Organizace, Teamy a repozitáře při konkrétní operaci.
-4. **Obsah Lazurio Environment** vybírá operátor z toho, k čemu má oprávnění.
+4. **Obsah Lazurio Environment** vybírá uživatel z toho, k čemu má oprávnění.
    Vlastnický label Mašiny není allowlist Organizací pro Launchpad.
 
-Pro individuální VM může operátor zvolit více Organizací; každá zůstává
+Pro individuální VM může uživatel zvolit více Organizací; každá zůstává
 samostatným checkoutem a access hranicí. Změna výběru není Machines rollout
 ani změna identity Mašiny. Repository credentials nejsou součástí image,
 Deployment Repa, záloh s širší dostupností ani předávací evidence. Povolení
 na GitHubu neodstraňuje pravidla dané Organizace o umístění dat ani vyšší
 provider/operator hranici hostované VM. Personalspace se na Organization-owned Mašině nemountuje, ani když ji používá
-jen jeden přiřazený člověk; jeho vlastní osobní Mašina má odlišného Ownera
+jen jeden přiřazený uživatel; jeho vlastní osobní Mašina má odlišného Ownera
 a privátní hranici.
 
 ## Individuální VM a sdílený Team Workspace
 
-**Individuální hostovaná VM** má jednoho přiřazeného lidského operátora. Ten
+**Individuální hostovaná VM** má jednoho přiřazeného uživatele. Ten
 používá vlastní `gh` účet a volí obsah stejně jako na své pracovní stanici.
 Ownerem může zůstat Organizace. Jednočlenný GitHub Team použitý pro vstup do
 VM sám z Mašiny nedělá sdílený Team Workspace ani nemění identitu Git operací.
 
 **Hosted Team Workspace** je sdílená Mašina vlastněná Organizací bez osobního
-operátora. Společné soubory, procesy a Git identita se řídí týmovým kontraktem.
+uživatele. Společné soubory, procesy a Git identita se řídí týmovým kontraktem.
 Podle rozhodnutí 0147–0149 používá Lazurio for GitHub přes scoped broker,
-ne osobní token posledního přihlášeného člověka. Jeho organizační a týmový
+ne osobní token posledního přihlášeného uživatele. Jeho organizační a týmový
 rozsah zůstává omezený; do tohoto prostředí se nepřenáší pravidlo osobní VM
 „přihlásím svůj účet a připojím libovolnou svou Organizaci“. Samotná instalace
 Lazuria ani zde nesmí potřebovat checkout firemních dat; následná týmová
@@ -100,14 +100,14 @@ operací v nové Platform distribuci.
 - Jsou ověřené prostředky, OS, identita, management, síť a izolace.
 - Webový vstup má platný certifikát, správné DNS a funkční přístupovou bránu.
 - Čisté Lazurio a základní pracovní vstup běží bez Organization checkoutu,
-  bez osobního GitHub tokenu a bez přihlášení operátora k AI nástrojům.
+  bez osobního GitHub tokenu a bez přihlášení uživatele k AI nástrojům.
 - Launchpad zobrazuje pravdivý prázdný stav; chybějící checkout nezpůsobí pád
   serveru, automatické klonování ani přístup k jiné Organizaci.
 - Opakovaná instalace zachová identitu a již existující pracovní data.
 - Záloha/restore má samostatný ověřený výsledek. Pokud je pro pilot výslovně
   odložený, report uvede toto omezení; neoznačí obnovu za ověřenou.
 
-### Operátor připravený pracovat
+### Uživatel připravený pracovat
 
 - Dokončil vstup z vlastního zařízení a přihlášení vlastním `gh` účtem.
 - Vybral a materializoval požadované dostupné Organizace stávajícím CLI.
@@ -119,20 +119,20 @@ operací v nové Platform distribuci.
 
 Čekání na lidské přihlášení je `onboarding pending`, nikoli porucha provisioningu.
 Tyto názvy jsou význam stavů, ne tvrzení o existujících strojových enum hodnotách.
-Report fleetu nesmí sloučit infrastrukturu, základní Lazurio a operátorskou
-acceptance do jediného nezdůvodněného zeleného políčka.
+Report fleetu nesmí sloučit infrastrukturu, základní Lazurio a acceptance
+uživatele do jediného nezdůvodněného zeleného políčka.
 
 ## Současné rozpory a dokončení migrace
 
 | Pozorovaná implementace | Rozpor | Správný vlastník nápravy |
 |---|---|---|
 | Hosted Launchpad vyžaduje existující Organization/Team při startupu | Čistá instalace bez checkoutu spadne | Launchpad: prázdný funkční shell, přísná validace již připojeného scope |
-| `LAZURIO_ORGANIZATION_SLUG` a `LAZURIO_TEAM_ID` současně filtrují celý hosted inventory | Vstupní scope VM se zaměňuje s výběrem obsahu individuálního operátora | Platform runtime: oddělit individuální a sdílené použití při zachování request trust |
+| `LAZURIO_ORGANIZATION_SLUG` a `LAZURIO_TEAM_ID` současně filtrují celý hosted inventory | Vstupní scope VM se zaměňuje s výběrem obsahu individuálního uživatele | Platform runtime: oddělit individuální a sdílené použití při zachování request trust |
 | Workspace VM role instalují optional Organization archive a vlastní resident/tool artifacty | Infrastruktura vytváří a udržuje Environment mimo Platform instalátor | Migrace dle 0144: kvalifikovat Platform handover a pak odstranit supersedovanou cestu |
 | Označení „hosted“ se používá současně pro síťový trust a týmový lifecycle | Přepnutí na local by mohlo oslabit gateway ochranu | Zachovat hosted request trust; obsahové a lifecycle chování řešit samostatně |
-| Owner gateway roster někde obsahuje seznam firemních Modulů místo minimálního vstupu | Obsah operátora je zadrátovaný do infrastruktury | Zachovat jen základní vstupy; ostatní deklarovat existujícím Platform katalogem, ověřit consumer před odstraněním legacy routes |
+| Owner gateway roster někde obsahuje seznam firemních Modulů místo minimálního vstupu | Obsah uživatele je zadrátovaný do infrastruktury | Zachovat jen základní vstupy; ostatní deklarovat existujícím Platform katalogem, ověřit consumer před odstraněním legacy routes |
 | Hosted app hostname se odvozuje jen z modulu a Mašiny | Více Organizací se stejným modulem může kolidovat | Platform katalog: před širším rolloutem prokázat jednoznačný slot a fail-closed kolize, bez druhého katalogu v Machines |
-| Machine identity má OS operátora, ale neurčuje spolehlivě osobní vs sdílenou Git identitu | Jméno Unix účtu ani velikost Teamu nejsou důkaz režimu | Verzovaná owner deklarace a Platform consumer; nepřidávat odhad nebo paralelní ACL |
+| Machine identity má OS uživatele, ale neurčuje spolehlivě osobní vs sdílenou Git identitu | Jméno Unix účtu ani velikost Teamu nejsou důkaz režimu | Verzovaná owner deklarace a Platform consumer; nepřidávat odhad nebo paralelní ACL |
 | Staré runbooky říkají „pending“ nebo „aktuální“ i po změně release | Cíl a nasazený stav se směšují | Owner docs a generované release/readback odkazy; historické evidence neměnit |
 
 Oprava prázdného startupu sama **neimplementuje** multiorganizační hosted
@@ -142,7 +142,7 @@ VM profil. Nesmí se obcházet vypnutím Auth, změnou trust profilu na local ne
 předinstalací checkoutu pod administrátorovým přihlášením.
 
 Před odstraněním současných workspace resident rolí musí jedna kvalifikační
-VM prokázat Platform instalaci, prázdný start, operátorské přihlášení,
+VM prokázat Platform instalaci, prázdný start, přihlášení uživatele,
 materializaci vybraných Organizací, modulovou izolaci, aktualizaci a recovery
 při zachování identity a dat. Team Workspace dostane samostatný důkaz identity
 brokeru a týmového scope. Role sdílené s Buddy a AI Kolegy se touto migrací

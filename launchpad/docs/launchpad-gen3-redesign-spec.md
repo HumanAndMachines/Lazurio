@@ -39,12 +39,12 @@ Upřesnění 2026-07-14: dropdown používá kompaktní GEN2 rozměry a lokáln�
 čtvercové assety z `launchpad/app/v1/web/` příslušné Organizace
 (`launchpad-icon.png`, `logo-square.png`, `favicon.svg`/`favicon.png`). Pokud
 Organizace žádný z těchto assetů nemá, zůstává deterministický monogram.
-Upřesnění 2026-07-14: otevřený dropdown začíná profilovým blokem Principála
+Upřesnění 2026-07-14: otevřený dropdown začíná profilovým blokem uživatele
 (fotografie, jméno a e-mail). Jméno a GitHub username se čtou z primárního
 Personalspace, e-mail z lokální Git identity a avatar z veřejného GitHub
 profilu; osobní údaje se nezapisují do sdíleného root configu. Položka
 **Nastavení** je zatím neaktivní a nemá žádný proklik. GitHub profil se otevírá
-v nové kartě kliknutím na jméno Principála. Intent je správa zdrojového GitHub
+v nové kartě kliknutím na jméno uživatele. Intent je správa zdrojového GitHub
 profilu, precondition platný primární Personalspace, side effect v Launchpadu
 není žádný, failure mode je nedostupný externí GitHub a ověření drží URL
 i regresní UI test.
@@ -355,7 +355,7 @@ regions.
 | Main: Productionspace systems | Production/runtime engineering surfaces | future `productionspace` manifest + explicit policy | Visually distinct risk treatment; write/destructive actions disabled until policy exists. |
 | Detail panel | Selected app/system facts and next action | `/api/apps/:id/health`, logs, plugin metadata | Shows package path, cwd, dependency state, last failure, last install, runtime owner and log link. |
 | Doctor/support loop | Root health and explainability | `doctor` report + discovery/runtime checks | Read-only verdict with exact next actions. Doctor remains the authority for broad sync/install. |
-| Console/log drawer | Operator action evidence | app logs and Launchpad action responses | Shows command, cwd, exit code, excerpts, timestamps. |
+| Console/log drawer | User action evidence | app logs and Launchpad action responses | Shows command, cwd, exit code, excerpts, timestamps. |
 
 ## 3. Data model contract
 
@@ -560,18 +560,18 @@ Personalspace part **implemented by CAC-0048** (decision 0051):
       `lazurio/schemas/personal.gen3.schema.json`. Identity invariant is
       fail-closed
       (`owner.github_username` ↔ mount ↔ repo).
-- [x] Personalspace private-module discovery: Principálovy apps carry
+- [x] Personalspace private-module discovery: apps uživatele carry
       `personal: true` / `surface_scope: "private"`, prefixed runtime ids
       (`personal--…`), a **Private badge** and the same runtime actions as
       Organization apps, over a separate runtime lane
       (`POST /api/personalspace/apps/:id/:action`). Cizí Personalspace se
       nematerializuje (decision 0091). `missing_access`/`planned_slot` slots
-      popisují jen stav Principálových modulových rep.
+      popisují jen stav modulových rep uživatele.
 - [x] GBrain reader/search surface: Obsidian `obsidian://open` deep link +
       read-only tree/note/fulltext over `GET /api/personalspace/:space/gbrain/*`,
       **bounded to the vault** (no path escape), local-only (127.0.0.1), no note
       content in logs or shared outputs. Agents still use the gbrain MCP server;
-      this is only the human read-only surface.
+      this is only the user's read-only surface.
 - [x] Doctor `launchpad.personalspace` check is **metadata-only** (counts,
       validity, gbrain mount state) — never note content.
 
@@ -590,7 +590,7 @@ These layer on Phases A–D and reuse the 'keep the `/api/apps` contract' framin
 
 - **P1 — read-only status in the Dashboard.** `/bridge/meta` + read-tier routes; exact CORS allow-list + **LNA** preflight handling + pairing (read scope, auth for reads too); three transport adapters (loopback LNA / Workspace Host HTTPS / **mandatory fallback deep-link**); **stable deep-link hash routes** (org / module / Doctor / worktrees) so the Dashboard can open the local Launchpad at the matching page via contextual 'Open in local Builder' buttons (founder 2026-07-12; independent of embedding); local UI refactored to consume `/bridge/v1` as first client. Exit: capability negotiation works old-daemon × current-Dashboard; **browser-matrix passes incl. Safari via fallback, Firefox, managed Chrome/Edge, VPN/proxy, denied/revoked LNA, port squatting**; deep-link from a hosted Dashboard opens the correct local Launchpad screen; local data never transits the platform; local UI still functional.
 - **P2 — safe mutations (start/stop, pairing).** Mutate-tier behind token + scope + org-scope; runtime lifecycle as operations with idempotency keys + operation IDs; local grant + unpair. Exit: no danger-tier; User never reaches the Bridge; personalspace stays local-only; lost response never causes unsafe retry.
-- **P3 — git ops (worktree create, publish). [RESCOPED near-term — founder 2026-07-12.]** Browser-initiated git publish from the hosted Dashboard is **DROPPED from near-term scope**. Danger-tier `publish` with **per-operation local consent** (immutable intent → top-level local confirmation with real diff → fresh gesture → one-use authorization → revalidate hash + Git preconditions → local audit; not self-approval) **stays in the contract as the design guard IF this is ever revisited**, but is not built now. Near-term substitute: agents commit+push locally as part of creating PRs (worktree → PR); the hosted Dashboard shows open PRs + latest commits **read-only from the GitHub App**, linking out to GitHub. An **open PR is a Draft, not Publikace**; **Publikace dat** = commit+push to a data repository, which an Agent executes **only on its Principal's explicit in-thread instruction**; a **Release** is a GitHub Release performed by a GitHub user holding the required authority (Organization **Steward/Admin**) — an **authority category, NOT a human-vs-AI distinction** (an AI Colleague holding that seat may release). An **Agent never owns approval/authority**; it may execute an explicitly authorized publication on behalf of its Principal. Exit (when/if built): Agent never self-publishes; branch-push-only; TOCTOU/repo-lock/recovery covered.
+- **P3 — git ops (worktree create, publish). [RESCOPED near-term — founder 2026-07-12.]** Browser-initiated git publish from the hosted Dashboard is **DROPPED from near-term scope**. Danger-tier `publish` with **per-operation local consent** (immutable intent → top-level local confirmation with real diff → fresh gesture → one-use authorization → revalidate hash + Git preconditions → local audit; not self-approval) **stays in the contract as the design guard IF this is ever revisited**, but is not built now. Near-term substitute: agents commit+push locally as part of creating PRs (worktree → PR); the hosted Dashboard shows open PRs + latest commits **read-only from the GitHub App**, linking out to GitHub. An **open PR is a Draft, not Publikace**; **Publikace dat** = commit+push to a data repository, which an Agent executes **only on its user's explicit in-thread instruction**; a **Release** is a GitHub Release performed by a GitHub user holding the required authority (Organization **Steward/Admin**) — an **authority category, NOT a human-vs-AI distinction** (an AI Colleague holding that seat may release). An **Agent never owns approval/authority**; it may execute an explicitly authorized publication on behalf of its user. Exit (when/if built): Agent never self-publishes; branch-push-only; TOCTOU/repo-lock/recovery covered.
 - **Local-UI deprecation gate (founder-gated, after P3).** Rich local shell converges into the Dashboard; the minimal emergency UI and `/bridge/v1` remain permanently.
 
 ## 11. Acceptance checklist
@@ -656,7 +656,7 @@ Mission Control plan worktrees. Contract summary (decision 0049 in
 ## 13. Builder UX z GEN2 (RM-0009 / plan CAC-0044)
 
 Launchpad je **builder surface** a builder je **neprogramátor** (decision 0047):
-primární UI nesmí vyžadovat git žargon. Denní flow musí projít člověk, který
+primární UI nesmí vyžadovat git žargon. Denní flow musí projít uživatel, který
 Git nezná — otevřít appku, stáhnout novější verzi, poznat rozdělanou práci —
 bez pomoci. Port builder UX GEN2 Launchpadu do
 sdíleného GEN3, **bez org-specific hardcodů**.
@@ -791,7 +791,7 @@ klasifikaci chyb do lidského jazyka (`classifyOpenError`).
     odvozuje z podpisu commitu (`kind_source: "heuristic"`) a heuristika je
     schválně úzká — skrytý GitHub e-mail z Kolegy Agenta nedělá. Přesná
     persona podle rosteru Organizace je otevřená otázka plánu CAC-0095.
-  - **Stav přečtení je klientský**, per Principál a per mašina
+  - **Stav přečtení je klientský**, per uživatel a per mašina
     (`localStorage`, klíč `launchpad.notifications.read`). Server nevede nic
     o tom, kdo co četl.
   - **Izolace platí beze změny.** V Personalspace se zvoneček skrývá celý

@@ -102,7 +102,7 @@
                 "owner-personal-environment",
                 "owner-dedicated-personalspace-vps"
               ],
-              "description": "owner-personal-environment: Buddy běží v Osobním Prostředí svého člověka (decision 0210). owner-dedicated-personalspace-vps je jen dosavadní hostovaný Buddy na dedikované VPS z doby před 0210: zůstává do své migrace a řídí se pravidly svého hostu (0210 bod 1), Doctor ho hlásí jako deprecation warning. Tuto hodnotu i pole github_repo a local_execution odstraní DEV-6676, až žádný takový Buddy nezbude."
+              "description": "owner-personal-environment: Buddy běží v Osobním Prostředí svého uživatele (decision 0210). owner-dedicated-personalspace-vps je jen dosavadní hostovaný Buddy na dedikované VPS z doby před 0210: zůstává do své migrace a řídí se pravidly svého hostu (0210 bod 1), Doctor ho hlásí jako deprecation warning. Tuto hodnotu i pole github_repo a local_execution odstraní DEV-6676, až žádný takový Buddy nezbude."
             },
             "github_repo": {
               "enum": [
@@ -304,7 +304,7 @@
     "shared_spaces": {
       "type": "array",
       "maxItems": 0,
-      "description": "Zpětně kompatibilní rezervované pole. Personalspace je výhradní prostor jednoho Principála a jeho volitelného Buddyho; cizí Personalspace se nemountuje, proto pole musí zůstat prázdné (decision 0091)."
+      "description": "Zpětně kompatibilní rezervované pole. Personalspace je výhradní prostor jednoho uživatele a jeho volitelného Buddyho; cizí Personalspace se nemountuje, proto pole musí zůstat prázdné (decision 0091)."
     },
     "gbrain": {
       "type": "object",

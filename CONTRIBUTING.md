@@ -5,7 +5,7 @@ Každá mašina ho používá jako direct-pull klon (decision 0030 v
 manual/decision-register.md): jedna sdílená codebase bez trvalých
 per-machine variant kódu — lokální změny vznikají ve worktree a vracejí se
 do upstreamu výhradně pull requestem do tohoto repa. Tahle příručka platí pro
-lidi i pro agenty a její cíl je jediný — aby PR do sdíleného repa přidávaly
+uživatele i pro agenty a její cíl je jediný — aby PR do sdíleného repa přidávaly
 hodnotu celé komunitě, ne chaos.
 
 ## Zlaté pravidlo: konfigurace první, kód poslední
@@ -28,7 +28,7 @@ prvním stupni, který problém řeší:
 4. **PR do Lazuria.** Teprve generický bug fix nebo funkce užitečná
    každé instalaci na světě.
 
-**Pravidlo pro agenty:** když tvůj Operátor chce změnit chování Launchpadu,
+**Pravidlo pro agenty:** když tvůj uživatel chce změnit chování Launchpadu,
 nenavrhuj úpravu „pro nás" — navrhni ji tak, aby byla aplikovatelná pro celou
 komunitu (konfigurovatelná, org-agnostic, forkable). Pokud to nejde, není to
 změna Lazuria, ale kandidát na plugin nebo obsah Organizace.
@@ -97,8 +97,8 @@ GitHub právy, ne textovým labelem role: chráněnou `main` merguje Organizatio
 Steward nebo Organization Admin (včetně vlastního PR, decision 0095);
 nechráněnou `main` mladého repozitáře smí publikovat i Builder, dokud ji
 Admin vědomě nezamkne (progresivní zamykání). Task Agent merguje jen na
-explicitní pokyn svého Operátora platný v aktuálním threadu; z týmového
-Environmentu nemerguje vůbec a pull request předá jmenovanému člověku, který
+explicitní pokyn svého uživatele platný v aktuálním threadu; z týmového
+Environmentu nemerguje vůbec a pull request předá jmenovanému uživateli, který
 ho schválí, publikuje a odpovídá za něj (decision 0148, dodatek
 z 2026-10-05). Přímý push na
 `main` tohoto repa nemá nikdo kromě Admina. Otevřené PRs zachytává Nightly
@@ -107,7 +107,7 @@ než 48 hodin uvede v reportu jako stale draft vyžadující pozornost.
 Otevření PR nezakládá nárok na merge — nekvalitní nebo scope-cizí PR
 Steward zavře s vysvětlením.
 
-## Jak se změna dostane k lidem
+## Jak se změna dostane k uživatelům
 
 Merge do `main` ještě není release. Launchpad dnes umí aktualizovat root přes
 dva živé kanály: **Nightly** cílí na `origin/main`, **Stable** na nejvyšší tag

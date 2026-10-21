@@ -19,7 +19,7 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 - **Modul** — jeden Git repozitář s `lazurio.module.json` v kořeni. Modul
   Organizace leží v `organizations/<Org>/workspace/<slug>/`; osobní Modul
   (dodatek 0171 z 2026-10-13) je soukromý repozitář na vlastním GitHub účtu
-  člověka v `personalspace/<adresář vlastníka>/workspace/<slug>/`. Org-level
+  uživatele v `personalspace/<adresář vlastníka>/workspace/<slug>/`. Org-level
   aplikace (`mission-control/`, `design-system/`) jsou Moduly se stejnými
   pravidly. Všechny se liší jen slotem v `modules.manifest.json` své
   Organizace, nebo osobního prostoru.
@@ -43,7 +43,7 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 
 **Přesun leasu do poolu.** Dosavadní pravidlo `lazurio module setup`
 („existující platný lease se automaticky nemění", `--adopt-port` jako vědomé
-tvrzení operátora; [module-setup.md](module-setup.md)) platí dál pro běžný
+tvrzení uživatele; [module-setup.md](module-setup.md)) platí dál pro běžný
 provoz: mimo převod se port nepřečíslovává. Při **převodu Modulu na standard**
 (vlny W1–W2) je lease mimo pool Organizace vada `MS-01` a přesouvá se na
 volný port poolu jako koordinovaná migrace. Checker lease nepřesouvá: nahlásí
@@ -157,7 +157,7 @@ Vite/Astro dev servery přijmou vlastní host jen z `_EXTERNAL_ORIGIN`
 (`server.allowedHosts`); loopback vždy. Nikdy `--host 0.0.0.0`.
 
 **Odkaz na App sousedního Modulu** (decision 0176 bod 5). Odkaz, který
-otevře člověk v prohlížeči, na App deklarovaného sousedního Modulu (kap. 5) na
+otevře uživatel v prohlížeči, na App deklarovaného sousedního Modulu (kap. 5) na
 témže Environmentu App odvodí z vlastní
 `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`: v hostname vymění první label
 (label vlastního Modulu) za label souseda, tedy
@@ -192,12 +192,12 @@ Organizace na témže Environmentu, deklaruje ho v
   pravidla se nemění (session cookie se Modulům odebírá, zápis přichází jen ze
   stejného originu). App adresu nikdy nedá prohlížeči: žádný odkaz,
   přesměrování, data stránky ani CORS hlavička; prohlížeč dál volá vlastní App
-  a ta souseda ze serveru (např. proxy `/api/<soused>/*`). Odkaz pro člověka
+  a ta souseda ze serveru (např. proxy `/api/<soused>/*`). Odkaz pro uživatele
   zůstává podle odstavce výše.
 - **Co soused dostane.** Požadavek přichází z Environmentu přímo na jeho
-  listener, bez brány a bez přihlášení člověka. Přijímá-li soused zápis jen ze
-  svého originu, volající pošle `Origin` rovný adrese z proměnné. Kdo z lidí
-  akci vyvolal, volání samo nenese; zápis jednající osoby do auditní stopy
+  listener, bez brány a bez přihlášení uživatele. Přijímá-li soused zápis jen ze
+  svého originu, volající pošle `Origin` rovný adrese z proměnné. Kdo z uživatelů
+  akci vyvolal, volání samo nenese; zápis jednajícího uživatele do auditní stopy
   standard zatím neurčuje (decision 0176 bod 7).
 - **Čtení a validace.** App proměnnou čte jednou při startu. Je-li přítomná,
   ale není to přesný loopback origin (`http`/`https`, host `127.0.0.1`,
@@ -263,8 +263,8 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   do `XDG_STATE_HOME`; změna hodnoty v trezoru platí od dalšího startu.
 - **Kde hodnota leží.** V trezoru tohoto Environmentu (rozhodnutí 0198:
   každý Environment má vlastní trezor, jeho účet ho čte i zapisuje a spravují
-  ho lidé s přístupem do Environmentu). Položka má jméno přesně `<NAME>`,
-  hodnotou je její heslo. Ukládá ji člověk s přístupem do Environmentu nebo
+  ho uživatelé s přístupem do Environmentu). Položka má jméno přesně `<NAME>`,
+  hodnotou je její heslo. Ukládá ji uživatel s přístupem do Environmentu nebo
   Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
 - **Odmítnutí startu v Platformě.** Chybí-li hodnota povinného jména ze
   `secrets` nebo není dostupný trezor, Platform App **nespustí** a vrátí
@@ -365,7 +365,7 @@ Klíčem sestavení je commit Modulu spolu s commity jeho datového repa a
 deklarovaných slotů. Po změně `main` Launchpad nový commit sestaví na pozadí,
 po jednom a s nízkou prioritou, do té doby servíruje předchozí sestavení a
 pak ho vymění. Neúspěšné sestavení nechá běžet předchozí verzi; vývojovou
-verzi spustí jen výslovná volba člověka nebo `lazurio module start --dev`.
+verzi spustí jen výslovná volba uživatele nebo `lazurio module start --dev`.
 
 App s vlastním serverem (Bun server, Vite s API v dev pluginech) zatím
 `build_output` nedeklaruje a dál běží přes `dev` skript; její produkční start
@@ -414,7 +414,7 @@ vývojovém serveru, převede Agent po Modulech podle návodu (0173).
 - Jazyk App je **TypeScript strict**. `.js/.mjs/.cjs` se v App nepíší; nové
   JS zdroje jsou nekonformní. Konfigurace frameworků v TS (`vite.config.ts`,
   `astro.config.ts`).
-- Povolené stacky (jiný = rozhodnutí Operátora, ne tichá výjimka):
+- Povolené stacky (jiný = rozhodnutí uživatele, ne tichá výjimka):
 
 | Druh App | Stack | Poznámka |
 | --- | --- | --- |
@@ -461,7 +461,7 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 - Modul drží nejvýše **dvě generace App**: výchozí a jednu další — buď
   předchozí (ponechanou pro návrat), nebo kandidátní novější, která ještě
   není výchozí (migrační okno, např. `v2` výchozí a `v3` nad repository-db).
-  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo Operátora,
+  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo uživatele,
   ne oprava konformance. Starší generace (Firebase éra `app/v1`, nepoužívané
   `v2`) se mažou; Git historie zůstává. Rozhodnutí Matěje 2026-09-30.
 - `apps[]` odpovídá adresářům: package bez deklarace v `apps[]` v repu není.
@@ -523,7 +523,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   cutoveru (decision 0171, datum doplní rollout) start odmítne s kódem
   `module-nonconformant` a odkazem na výstup `lazurio module setup`.
 
-Launchpad **nedělá**: nedědí PATH ani env operátora, nečte `.env`,
+Launchpad **nedělá**: nedědí PATH ani env uživatele, nečte `.env`,
 nepíše tajemství do logů ani souborů, nespouští souseda kvůli volání jiné App
 a volání mezi Moduly neproxuje,
 nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s `build_output` podle kap. 4.5), nepřebírá porty, nenabízí legacy
@@ -623,11 +623,11 @@ repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
 
 **Osobní Modul** (dodatek 0171 z 2026-10-13; tvar je rozhodnutý, ale zatím
 není postavený): `lazurio module create personalspace/<slug>` založí Modul
-v soukromém repozitáři `<login>/<slug>` na vlastním GitHub účtu člověka, bez
+v soukromém repozitáři `<login>/<slug>` na vlastním GitHub účtu uživatele, bez
 Organizace a Teamů; repozitář založí a první commit pushne až po potvrzeném
 `--dry-run`. Modul je checkout
 `personalspace/<adresář vlastníka>/workspace/<slug>`, `company` je login
-člověka a lease leží ve vyhrazeném `module_port_pool` Personalspace mimo
+uživatele a lease leží ve vyhrazeném `module_port_pool` Personalspace mimo
 pooly Organizací; slot přidá pull request do vlastního Personalspace.
 Generátor přechází do LazurioPlatform (0167), tvar Organizace v rámci
 Lazurio/LazurioPlatform#267; potom se scaffold v Core vyřadí.

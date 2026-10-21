@@ -1112,7 +1112,7 @@ test("bez owner override se žádný Personalspace nematerializuje", async () =>
   expect(result.primary_owner).toBeNull();
   expect(result.spaces).toEqual([]);
   expect(result.apps).toEqual([]);
-  expect(result.warnings.some((warning) => warning.includes("Principál mašiny není určen"))).toBe(true);
+  expect(result.warnings.some((warning) => warning.includes("Uživatel mašiny není určen"))).toBe(true);
   expect(result.warnings.some((warning) => warning.includes("othercolleague"))).toBe(true);
 });
 
@@ -1129,7 +1129,7 @@ test("víc prostorů bez override = žádná materializace + warning", async () 
   expect(result.primary_owner).toBeNull();
   expect(result.spaces).toEqual([]);
   expect(result.apps).toEqual([]);
-  expect(result.warnings.some((warning) => warning.includes("Principál mašiny není určen"))).toBe(true);
+  expect(result.warnings.some((warning) => warning.includes("Uživatel mašiny není určen"))).toBe(true);
 });
 
 test("shared_spaces musí zůstat prázdné", async () => {
@@ -1328,7 +1328,7 @@ test("cizí adresář bez _GEN3 názvu a manifestu je Doctor failure a nemateria
   const result = await discoverPersonalspace(root);
   expect(result.failures.join(" ")).toContain("foreign_or_unrecognized_personalspace_dir");
   expect(result.failures.join(" ")).toContain("personalspace/just-a-vault");
-  expect(result.failures.join(" ")).toContain("není deklarovaný Personalspace Principála exampleuser");
+  expect(result.failures.join(" ")).toContain("není deklarovaný Personalspace uživatele exampleuser");
   expect(result.spaces.map((space) => space.dir_name)).toEqual(["exampleuser_GEN3"]);
   expect(result.apps).toHaveLength(0);
 });

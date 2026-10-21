@@ -220,7 +220,7 @@
           "remedy": {
             "type": "string",
             "minLength": 1,
-            "description": "Povinné u status=blocked: co má člověk udělat, aby to pozorovatelné bylo. Blocked bez remedy je jen tichá díra s jiným jménem."
+            "description": "Povinné u status=blocked: co má uživatel udělat, aby to pozorovatelné bylo. Blocked bez remedy je jen tichá díra s jiným jménem."
           }
         },
         "allOf": [

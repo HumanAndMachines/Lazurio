@@ -8,7 +8,7 @@ konvergence URL je navazující cílová schopnost, ne nový existující CLI p�
 ## Cíl a hranice
 
 Po zadání autorizovaného servisního úkolu má Task Agent použít připravený
-přístup svého Operátora bez hledání klíčů, opakovaného zadávání hesel nebo
+přístup svého uživatele bez hledání klíčů, opakovaného zadávání hesel nebo
 provider konzole. Nový Workspace modul má po řádném zařazení projít až
 k funkční autentizované URL. Úspěchem není jen běžící proces.
 
@@ -28,7 +28,7 @@ zachovává jejich vlastní privacy a recovery kontrakty.
 
 | Oblast | Autorita |
 | --- | --- |
-| Identita a GitHub oprávnění | Živý GitHub stav Operátora |
+| Identita a GitHub oprávnění | Živý GitHub stav uživatele |
 | Konkrétní Mašina, její Owner a provozní záměr | Deployment repo vlastníka Mašiny |
 | Host a provider přístup | Výslovně přidělená capability a její provider/host konfigurace |
 | Tajné hodnoty a jejich obnova | Existující schválená custody mimo Git |
@@ -42,7 +42,7 @@ nepřebírá privátní mutation rozhraní ani credentialy.
 
 ## Přístup připravený před úkolem
 
-Onboarding určí autorizovaného operátora, jeho konkrétní servisní Mašinu
+Onboarding určí autorizovaného uživatele, jeho konkrétní servisní Mašinu
 a účel přístupu ke každému cílovému hostu. Použije existující credential
 reference a provozní postup. Stejný credential se nerozkopíruje na nezávislé
 runnery; souběh změn drží existující lifecycle zámek.
@@ -57,7 +57,7 @@ Není nutné zpřístupnit celý trezor kvůli jednomu servisnímu klíči.
 Před první změnou se ověří všechny hosty, které úkol skutečně potřebuje,
 včetně řídicího hostu, pokud na něm závisí dokončení:
 
-1. Přesný cíl, Owner, vykonávající Operátor a rozsah operace.
+1. Přesný cíl, Owner, vykonávající uživatel a rozsah operace.
 2. Dosažitelnost schválenou sítí a ověřená identita hostu.
 3. Neinteraktivní autentizace z aktuální agentní relace.
 4. Skutečný omezený readback a read-only ověření potřebné capability.

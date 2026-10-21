@@ -10,7 +10,7 @@ Cíl: nový klient má vlastní Organization repo, je lokálně namountovaný po
 |---|---|---|
 | veřejný Lazurio root | shared Launchpad, Guide, manuály, template/runbooky, registry metadata | klientská business pravda, klientská data, secrets |
 | `organizations/<ClientOrg>_GEN3/` | klientská Organization pravda, workspace/productionspace, moduly, jejich manifesty | shared framework změny |
-| `personalspace/` | osobní/Buddy overlay a root/operator secrets custody | Organization-owned klientská data |
+| `personalspace/` | osobní/Buddy overlay a custody secrets rootu a uživatele | Organization-owned klientská data |
 
 Root repo má v `organizations/` trackovat pouze `organizations/README.md`. Konkrétní Organization checkouty jsou samostatná git repozitáře a lokální mounty; nejsou submoduly shared rootu.
 
@@ -26,9 +26,9 @@ Vyplň před tím, než vytvoříš nebo mountneš klientský checkout:
 | Lokální mount slug | `organizations/ClientX_GEN3/`; suffix `_GEN3` je filesystem marker, ne interní company identity |
 | Repo hranice | klientské super-repo ve vlastnictví klientské/GitHub organization hranice |
 | GitHub access baseline | `Lazurio for GitHub` na `All repositories`; base repository permission `none`; právě jeden GitHub Team `builders` pro obecnou Builder roli |
-| Počáteční Builders | Přesné GitHub loginy schválených lidí; každý musí být aktivní Organization member i člen Teamu `builders`, ne jen čekající pozvánka |
+| Počáteční Builders | Přesné GitHub loginy schválených uživatelů; každý musí být aktivní Organization member i člen Teamu `builders`, ne jen čekající pozvánka |
 | Default Team | právě jeden default Team se slugem `workspace`; Team je logická deklarace, ne adresář |
-| Role hranice | Admin Organizace, Builder Organizace, Uživatel Organizace; Steward Organizace (AI Kolega ve Steward seatu) na Workspace Hostu; kdo drží secrets a kdo smí měnit source |
+| Role hranice | Admin Organizace, Builder Organizace, User Organizace; Steward Organizace (AI Kolega ve Steward seatu) na Workspace Hostu; kdo drží secrets a kdo smí měnit source |
 | Počáteční baseline | Mission Control app + data, Knowledgebase, Design System a Infra; ostatní workspace moduly až podle business potřeby, ne big-bang rollout |
 | Design System scope | `active`, pokud je vytvoření objednané; jinak manifestový `planned_slot` bez repa a bez vymyšlených brandových dat |
 | Template baseline | Organization z `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`; Mission Control, Knowledgebase a Design System z vlastních `TemplatesRozjedeme-ai/*Template` upstreamů |
@@ -296,7 +296,7 @@ Tento gate platí pro `github-first` a pro okamžik, kdy se `local-first`
 Organizaci později připojuje klientský `origin`. Jeho ownerem je GitHub
 Organization Admin: runbook popisuje požadovaný stav, ale sám není trvalým
 mandátem k instalaci App, změně memberů, Teamů ani repository grantů. Každý
-live provider zápis potřebuje explicitní pokyn Operátora pro přesnou
+live provider zápis potřebuje explicitní pokyn uživatele pro přesnou
 Organizaci.
 
 Gate má dva přirozené checkpointy: před vytvořením prvního provider repa se
@@ -312,7 +312,7 @@ Musí současně platit:
 2. Organization **Base permissions** / API
    `default_repository_permission` je `none`. Členství v Organizaci samo
    nesmí zpřístupnit žádný privátní repozitář.
-3. Existuje právě jeden obecný GitHub Team se slugem `builders`. Každý člověk,
+3. Existuje právě jeden obecný GitHub Team se slugem `builders`. Každý uživatel,
    který má instalovat Builder Mašinu, je aktivní Organization member a
    aktivní člen tohoto Teamu; čekající invitation není readiness.
 4. Team `builders` má user-facing **Write** (GitHub API `push`) na canonical
@@ -425,7 +425,7 @@ Teprve potom předej klientovi aktuální krátký Builder prompt z
 `manual/organization-install.md`. Prompt musí zůstat self-contained end-to-end
 mandátem: Agent autonomně zkonverguje nezbytný User i Machine/system-wide
 `PATH`, používá své background nástroje bez user-facing Terminalu nebo
-PowerShellu a člověku ponechá jen nativní consent a GitHub web krok. GitHub
+PowerShellu a uživateli ponechá jen nativní consent a GitHub web krok. GitHub
 párování spouští bez `--clipboard`; krátkodobý user-facing ověřovací (device)
 kód předá pouze v aktuálním soukromém chatu, zatímco interní OAuth
 `device_code`, access token a privátní klíč nikdy nezobrazí. Prompt, který po
@@ -730,7 +730,7 @@ Kontrolní pravidla:
 - Každý runtime listener odkazuje na stabilní module lease. Main, verze i
   worktrees stejného modulu používají shodný materializovaný port; dynamické
   i inline runtime porty jsou nevalidní.
-- Přesný port je pouze v `lazurio.module.json`. Operátor jej nenastavuje v
+- Přesný port je pouze v `lazurio.module.json`. Uživatel jej nenastavuje v
   `.env`; Launchpad může procesu předat pouze namespacované
   `LAZURIO_RUNTIME_*` hodnoty, které musí přesně souhlasit. Doctor odmítne
   obecné `HOST`/`PORT`, portový fallback i portovou autoritu v env souboru,
@@ -877,9 +877,9 @@ curl -fsS -X POST http://127.0.0.1:<launchpad-port>/api/apps/<app-id>/repair | p
 
 Neprováděj Install/Repair na Productionspace systémech bez explicitního scoped souhlasu a role guardrail.
 
-### 6. Guide / human handoff smoke
+### 6. Guide / user handoff smoke
 
-Před předáním prvnímu klientovi musí člověk umět odpovědět na tři otázky bez čtení zdrojového kódu:
+Před předáním prvnímu klientovi musí uživatel umět odpovědět na tři otázky bez čtení zdrojového kódu:
 
 1. Co je tento lokální Lazurio/Launchpad root?
 2. Která Organization je klient a kde je její source of truth?
@@ -891,7 +891,7 @@ Pokud na to root Guide nebo Organization README neodpovídá, doplň navigační
 
 Secrets nikdy nepatří do Gitu ani do chatu.
 
-- Root/operator secrets: `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>`.
+- Secrets rootu a uživatele: `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>`.
 - Organization/AI-colleague secrets: `organizations/<ClientOrg>_GEN3/company/colleagues/<os-user>/private/secrets/...`.
 - Tool runtime cesty typu `~/.config/...` jsou cache/adaptér, ne custody source of truth.
 
@@ -955,7 +955,7 @@ GEN3 je ready pro prvního klienta, když:
   bez `origin` reportuje `not configured` a nevydává se za install-ready
   klientskou Mašinu;
 - první klientský pilot modul má validní manifest, nekolidující port a vysvětlitelný dependency/runtime stav;
-- člověk i agent najdou source-of-truth hranice v README/Guide/manuálu;
+- uživatel i agent najdou source-of-truth hranice v README/Guide/manuálu;
 - Organization baseline je z `OrganizationTemplate_GEN3`; Mission Control
   app + data, Knowledgebase, Design System boundary a Infra mají výše popsané
   nested repo/sloty, zatímco další workspace moduly se nezakládají big-bang;

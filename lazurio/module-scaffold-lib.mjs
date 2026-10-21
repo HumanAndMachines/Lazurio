@@ -111,7 +111,7 @@ export function planModuleScaffold({
     throw new ModuleScaffoldError(
       "unknown_stack",
       `Stack ${JSON.stringify(stack)} neexistuje; povolené jsou ${MODULE_SCAFFOLD_STACKS.join(", ")}.`,
-      "Zvolte stack podle Lazurio Module Standardu kap. 6; jiný stack je rozhodnutí Principála.",
+      "Zvolte stack podle Lazurio Module Standardu kap. 6; jiný stack je rozhodnutí uživatele.",
     );
   }
   assertSlug(slug);

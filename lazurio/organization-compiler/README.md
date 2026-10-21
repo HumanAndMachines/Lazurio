@@ -58,8 +58,8 @@ Caller-supplied observations and schemas are diagnostic-only, never write author
 
 Invalid paths, escaping symlinks/junctions, ownership ambiguity, changed repository
 identity or unsafe Git routing fail before generation writes. This is a local
-operation inside the Principal's Machine boundary, not isolation against another
-hostile process owned by that same Principal. Interrupted multi-file writes can
+operation inside the user's Machine boundary, not isolation against another
+hostile process owned by that same user. Interrupted multi-file writes can
 leave partial derived output; rerun the deterministic compiler in the same review
 worktree and inspect the complete diff before commit. Rollback is an ordinary PR
 revert; no persistent state or data migration is introduced.

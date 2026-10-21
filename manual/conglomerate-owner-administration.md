@@ -31,10 +31,10 @@ Vazbu nové IP či reenrollmentu nikdy neopravuj automatickým širokým grantem
 Mapa Conglomerate v Dashboardu je jen pohled. Skládá infra Ownera, důkazy
 apply a živý stav tailnetu, který Conglomerate Host posílá do Dashboardu sám;
 klíč Headscale host neopouští. Mapa nic neuděluje. Přístup se mění vždy pull
-requestem do infra se standardním review a apply. Ownera zařízení člověka určuje
+requestem do infra se standardním review a apply. Ownera zařízení uživatele určuje
 jeho přihlášení Lazurio účtem do Headscale (OIDC, vázané na GitHub ID); infra
 ho ověřuje, ale nevytváří, existující zařízení se doplní adopcí (0184) a každý
-záznam přístupu nese GitHub ID osoby.
+záznam přístupu nese GitHub ID uživatele.
 
 SSH konfiguraci generuje Lazurio: standardní OpenSSH `~/.ssh/lazurio/config`
 s host klíči připnutými z Machine Recordů a jeden `Include` na začátku
@@ -71,7 +71,7 @@ každého SSH přihlášení; automatickou ochranu bez implementace netvrď.
 Správa Conglomerate Hostu má dopad na všechny jeho tenanty. Owner jedné
 Organizace nemá automaticky právo spravovat host dalších Organizací; schválení
 musí odpovídat vlastnictví a celé sdílené hranici hostu. Vlastník osobní VM tím
-nepředává oprávnění číst svůj Personalspace jinému Ownerovi ani Operátorovi.
+nepředává oprávnění číst svůj Personalspace jinému Ownerovi ani uživateli.
 
 Plné ovládání osobního počítače z pracovní VM může umožnit nepřímé použití
 jeho správních přístupů. Síťový zákaz přímé cesty toto neřeší. Rozsah computer

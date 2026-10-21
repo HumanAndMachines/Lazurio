@@ -2,7 +2,7 @@
 
 This is the read-only inventory step for a **single Organization** moving from a
 legacy GEN2 workspace shape into a GEN3 Organization checkout. It compares two
-explicit paths supplied by the operator and reports which files need review,
+explicit paths supplied by the user and reports which files need review,
 porting, skipping, or mechanism extraction.
 
 The script is intentionally generic: the shared `HumanAndMachines/Lazurio`
