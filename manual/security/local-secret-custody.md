@@ -44,11 +44,11 @@ organizations/<Org>_GEN3/company/colleagues/<agent-user>/private/secrets/google-
 
 `private/` je lokální a ignorovaný Git pravidly dané Organizace. Pokud je secret potřeba z runtime cesty nástroje, runbook ho může lokálně zkopírovat nebo symlinknout do tool-specific path, ale custody source zůstává v `private/secrets/...` nebo `personalspace/<owner>_GEN3/secrets/...`.
 
-## Operátorská custody Mašiny
+## Custody celé Mašiny
 
 Credential mapy a dokumenty, na které ukazují (předávají se nástrojům jako
 `machines-operate --credential-map …` nebo skriptům kitu), drží Mašina
-operátora mimo repozitáře:
+mimo repozitáře:
 
 ```text
 ~/.config/lazurio/credentials/<lane>/...
