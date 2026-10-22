@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createCustodyModel } from "./custody-model.mjs";
@@ -20,6 +20,7 @@ write(join(lane, "credential-map.json"), JSON.stringify({ credentials: { "creden
 write(join(lane, "issuer.env"), "KC_DB_PASSWORD=synthetic-one\n");
 write(join(lane, "id_ed25519.pub"), "ssh-ed25519 AAAA synthetic\n");
 write(join(lane, "known_hosts"), "host ssh-ed25519 AAAA\n");
+symlinkSync(join(lane, "issuer.env"), join(lane, "export.pub"));
 write(join(home, ".config/lazurio/custody/run/apply.log"), "synthetic log\n");
 const org = join(lazurio, "organizations/ExampleOrg_GEN3");
 write(join(org, "company/colleagues/agent/private/secrets/google/client.json"), "{}");
@@ -98,6 +99,18 @@ describe("denies a command that prints custody values", () => {
     ["a custody log", "tail -f ~/.config/lazurio/custody/run/apply.log"],
     ["unparseable but names custody next to a reader", `cat ${SECRETS} "unterminated`],
     ["custody archived to stdout and encoded", "tar -cf - ~/.config/lazurio/credentials/lane | base64"],
+    // Redirections apply left to right: the last one decides where stdout goes.
+    ["stdout to /dev/null, then onto stderr", `cat ${ENV} >/dev/null 1>&2`],
+    ["stdout to a file, then onto stderr", `cat ${ENV} > /tmp/copy >&2`],
+    ["awk writing to /dev/stderr itself", `awk '{print > "/dev/stderr"}' ${ENV} > /dev/null`],
+    ["sed writing to /dev/stderr itself", `sed -n 'w /dev/stderr' ${ENV} > /dev/null`],
+    ["jq debug writes to stderr", `jq 'debug' ${SECRETS} > /dev/null`],
+    ["inline code with only stdout sunk", `python3 -c "print(open('${ENV}').read())" > /tmp/out.txt`],
+    ["dd to stdout", `dd if=${ENV} bs=64 count=1`],
+    ["dd to stderr", `dd if=${ENV} of=/dev/stderr`],
+    ["cp to stdout", `cp ${ENV} /dev/stdout`],
+    ["cp to stderr", `cp ${ENV} /dev/stderr`],
+    ["a symlink with a public name pointing at a secret", "cat ~/.config/lazurio/credentials/lane/export.pub"],
     ["custody compressed from stdin and encoded", `cat ${SECRETS} | gzip | base64`],
     ["gzip -c of custody", `gzip -c ${ENV} | xxd`],
     ["zip to stdout", "zip -r - ~/.config/lazurio/credentials/lane | base64"],
@@ -120,6 +133,10 @@ describe("denies a command that prints custody values", () => {
     );
     expect(reason).toEqual(expect.any(String));
     expect(reason).not.toContain(secret);
+  });
+
+  test("Read of a public-named symlink that points at a secret", () => {
+    expect(custodyReason({ tool_name: "Read", tool_input: { file_path: join(lane, "export.pub") }, cwd: lazurio }, { model })).toContain("Read would show");
   });
 
   test("Read of a custody file", () => {
@@ -176,6 +193,11 @@ describe("allows normal work with custody", () => {
     ["unrelated", "git status --short && git log --oneline -3 && cat README.md | head -5"],
     ["grep over a tree without custody", "grep -rn record infra/machines", org],
     ["archive of custody into custody", "tar -czf ~/.config/lazurio/custody/run/lane.tgz -C ~/.config/lazurio/credentials lane"],
+    ["stdout and stderr both to /dev/null", `cat ${ENV} > /dev/null 2>&1`],
+    ["stderr onto the pipe first, then stdout to a file", `cat ${ENV} 2>&1 > /tmp/env.copy`],
+    ["inline code with stdout and stderr sunk", `python3 -c "print(open('${ENV}').read())" > /tmp/out.txt 2>&1`],
+    ["inline code sunk inside bash -c", `bash -c "python3 -c 'print(open(\\"${ENV}\\").read())' > /tmp/o 2>/dev/null"`],
+    ["dd into a file", `dd if=${ENV} of=/tmp/env.bin`],
     ["compressed in place", `gzip ${ENV}`],
   ];
   for (const [name, command, cwd] of cases) {

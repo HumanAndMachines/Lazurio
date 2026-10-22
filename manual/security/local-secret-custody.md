@@ -97,9 +97,12 @@ Pravidlo vynucuje PreToolUse hook `scripts/custody/custody-guard.mjs`. Odmítne
 volání nástroje, které by obsah custody dostalo na stdout/stderr: čtecí
 program (`cat`, `head`, `tail`, `less`, `bat`, `jq`, `yq`, `grep`, `rg`, `sed`,
 `awk`, `cut`, `od`, `xxd`, `strings`, `base64`, `diff` bez `-q`, `plutil -p`,
-inline interpretery, `bash -c` …) nakrmený cestou do custody, a to i přes
-proměnnou, `$(…)`, rouru, `xargs`, `find -exec`, `cd` do custody, `source` se
-`set -x` nebo výpisem prostředí, nebo kopii pořízenou tímtéž příkazem. Dále
+inline interpretery, `bash -c`, `dd`, archiv nebo komprese na stdout …)
+nakrmený cestou do custody, a to i přes proměnnou, `$(…)`, rouru, `xargs`,
+`find -exec`, `cd` do custody, `source` se `set -x` nebo výpisem prostředí,
+nebo kopii pořízenou tímtéž příkazem. Přesměrování vyhodnocuje zleva doprava
+jako shell; inline kód a programy `awk`, `sed` nebo `jq`, které umějí psát na
+stderr, musí mít přesměrovaný i stderr (`> soubor 2>&1`). Dále
 Read souboru v custody a Grep v content módu nad custody, nad `~/.config`
 nebo nad `~`. Zamítnutí vysvětlí důvod a ukáže helper. Výjimku nemá: žádná
 proměnná ani přepínač ho nevypne, jen odebrání hooku z nastavení, což je
@@ -129,8 +132,9 @@ Guard chrání před nehodou, není to sandbox:
   co vypíšou, guard neví;
 - soubor zapsaný z custody dřívějším příkazem je pro pozdější příkaz obyčejný
   soubor (stejný příkaz ho hlídá);
-- proměnné a aliasy z dřívějších volání guard nevidí; cestu poskládanou až za
-  běhu nepozná;
+- proměnné a aliasy z dřívějších volání guard nevidí; z prostředí bere jen
+  `TMPDIR`, `XDG_*` a `USER` (jiné proměnné můžou držet tokeny a hodnota by se
+  dostala do důvodu zamítnutí); cestu poskládanou až za běhu nepozná;
 - custody na vzdáleném hostu hlídá jen v textu vzdáleného příkazu;
 - inline kód nad custody je zakázaný celý, i když by vypsal jen klíče: na to
   je helper;

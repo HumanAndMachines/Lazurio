@@ -50,10 +50,12 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
-// A JSON key that looks like a credential itself is shown by length only.
+// A key that looks like a credential itself is shown by length only: a known
+// token prefix, or a long run of mixed letters and digits.
+const CREDENTIAL_PREFIX = /^(?:(?:sk|pk|rk)_(?:live|test)_|gh[pousr]_|github_pat_|xox[abposr]-|AKIA|ASIA|AIza|glpat-|eyJ[A-Za-z0-9_-]{8})/u;
 function showKey(key) {
-  if (key.length >= 24 && !/[\s_.:/-]/u.test(key) && /[0-9]/u.test(key) && /[A-Za-z]/u.test(key)) return `<key len=${key.length}>`;
-  return key;
+  const randomRun = (key.match(/[A-Za-z0-9+=]{16,}/gu) ?? []).some((run) => /[0-9]/u.test(run) && /[A-Za-z]/u.test(run));
+  return CREDENTIAL_PREFIX.test(key) || randomRun ? `<key len=${key.length}>` : key;
 }
 
 function keyPath(parent, key) {

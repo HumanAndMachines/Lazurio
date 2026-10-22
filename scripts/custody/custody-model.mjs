@@ -80,11 +80,11 @@ export function createCustodyModel({
   function custodyRootOf(path) {
     if (!isAbsolute(path)) return null;
     const normalized = resolve(path);
-    if (PUBLIC_MATERIAL.test(basename(normalized))) return null;
-    const lexical = lexicalRoot(normalized);
-    if (lexical) return lexical;
     const real = existingRealPath(normalized);
-    return real === normalized ? null : lexicalRoot(real);
+    // A public name only counts when the file behind it is public too, not a
+    // symlink named `x.pub` that points at a secret.
+    if (PUBLIC_MATERIAL.test(basename(normalized)) && PUBLIC_MATERIAL.test(basename(real))) return null;
+    return lexicalRoot(normalized) ?? (real === normalized ? null : lexicalRoot(real));
   }
 
   function isCustodyPath(path) {

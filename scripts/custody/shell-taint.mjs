@@ -529,6 +529,7 @@ const PATH_VARS = words("TMPDIR XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG
 const ENV_ACCESS = /environ|getenv|process\.env|Bun\.env|Deno\.env|ENV\[|\$ENV\{/u;
 const PYTHON_READER_MODULES = words("json.tool base64 pickletools pickle quopri uu pprint");
 const TRANSCRIPT_DEVICES = words("/dev/stderr /dev/fd/2 /dev/tty");
+const STDERR_CAPABLE = /\/dev\/(stderr|tty|fd\/2)|\bstderr\b|\bdebug\b|>&\s*2|\bsystem\s*\(|\|\s*"/u;
 
 const valueOf = (w) => w?.value ?? "";
 const isOption = (w) => valueOf(w).startsWith("-") && valueOf(w) !== "-";
@@ -546,6 +547,7 @@ class Analysis {
     this.sourced = null;
     this.xtrace = false;
     this.findings = [];
+    this.stderr = null;
     this.depth = 0;
     this.budget = 50_000;
   }
@@ -693,7 +695,7 @@ class Analysis {
 
   source(src, stdin, { positional = null, xtrace = false } = {}) {
     if (++this.depth > 8) throw new ShellParseError("nesting too deep");
-    const saved = { positional: this.positional, xtrace: this.xtrace, cwd: this.cwd };
+    const saved = { positional: this.positional, xtrace: this.xtrace, cwd: this.cwd, stderr: this.stderr };
     if (positional) this.positional = positional;
     if (xtrace) this.xtrace = true;
     try {
@@ -742,26 +744,43 @@ class Analysis {
     return io;
   }
 
-  output(redirs, out) {
-    let result = out;
+  // Where a file name sends a descriptor: "out" (the pipe or, at the top,
+  // the transcript), "err" and "tty" (the transcript), "null", or a file.
+  destination(target, fds) {
+    if (target === null) return { file: null };
+    if (target === "/dev/null") return "null";
+    if (target === "/dev/tty") return "tty";
+    if (target === "/dev/stdout") return fds[1];
+    if (target === "/dev/stderr") return fds[2];
+    const fd = /^\/dev\/fd\/(\d+)$/u.exec(target);
+    if (fd) return fds[fd[1]] ?? "null";
+    return { file: resolve(this.cwd, target) };
+  }
+
+  // Applies output redirections left to right, as the shell does, to the
+  // command's stdout taint `out` and the CONTENT it may write to stderr.
+  output(redirs, out, err = null) {
+    const fds = { 1: "out", 2: "err" };
     for (const r of redirs) {
       if (["<", "<>", "<<<", "<<", "<<-", "<&"].includes(r.op)) continue;
-      const fd = r.op === "&>" || r.op === "&>>" ? 1 : (r.fd ?? 1);
-      if (fd !== 1) continue;
       const target = this.word(r.target).value;
-      if (r.op === ">&") {
-        if (target === "2" && result.level === CONTENT) this.find(`${result.why}, sent to stderr`);
-        if (target === "2" || target === "-") result = CLEAN_T;
-        continue;
+      if (r.op === ">&" && target !== null && /^(\d+|-)$/u.test(target)) {
+        fds[r.fd ?? 1] = target === "-" ? "null" : (fds[target] ?? "null");
+      } else if (r.op === "&>" || r.op === "&>>" || r.op === ">&") {
+        fds[1] = fds[2] = this.destination(target, fds);
+      } else {
+        fds[r.fd ?? 1] = this.destination(target, fds);
       }
-      if (target === "/dev/stdout" || target === "/dev/fd/1") continue;
-      if (TRANSCRIPT_DEVICES.has(target)) {
-        if (result.level === CONTENT) this.find(`${result.why}, sent to ${target}`);
-      } else if (result.level === CONTENT && target !== null && target !== "/dev/null") {
-        this.tainted.set(this.model.fold(resolve(this.cwd, target)), result);
-      }
-      result = CLEAN_T;
     }
+    let result = CLEAN_T;
+    const route = (taint, to) => {
+      if (!taint || taint.level === CLEAN) return;
+      if (to === "out") result = max(result, taint);
+      else if ((to === "err" || to === "tty") && taint.level === CONTENT) this.find(`${taint.why}, sent to ${to === "tty" ? "/dev/tty" : "stderr"}`);
+      else if (to?.file && taint.level === CONTENT) this.tainted.set(this.model.fold(to.file), taint);
+    };
+    route(out, fds[1]);
+    route(err, fds[2]);
     return result;
   }
 
@@ -784,8 +803,9 @@ class Analysis {
     for (const a of cmd.assigns) this.assign(a.name, this.word(a.value));
     const args = cmd.words.map((tok) => this.word(tok));
     // zsh prints a bare input redirection (`< file`), and `$(< file)` expands to the file.
+    this.stderr = null;
     const out = args.length ? this.program(args, io) : io.redirected ? io.stdin : CLEAN_T;
-    return this.output(cmd.redirs, out);
+    return this.output(cmd.redirs, out, this.stderr);
   }
 
   program(args, io) {
@@ -850,6 +870,9 @@ class Analysis {
       if (namesOnly) return out.level === CLEAN ? CLEAN_T : T(PATHS);
     }
     if (DIFFS.has(name) && (/q/u.test(flags) || longs.has("--brief"))) return CLEAN_T;
+    // A program (awk, sed, jq) can write what it reads to stderr itself.
+    const programText = programs.map((w) => w.value ?? w.pattern ?? "").join("\n");
+    if (out.level === CONTENT && (programFiles.length > 0 || STDERR_CAPABLE.test(programText))) this.stderr = out;
     return out;
   }
 
@@ -879,6 +902,13 @@ class Analysis {
       code = synthetic(CLEAN, "", io.heredoc);
     }
     const text = code.value ?? code.pattern ?? "";
+    const result = this.inlineTaint(name, text, code, after, io);
+    // Inline code can print to stderr as easily as to stdout.
+    if (result.level === CONTENT) this.stderr = result;
+    return result;
+  }
+
+  inlineTaint(name, text, code, after, io) {
     if (textNamesCustody(text) || this.codeNamesCustodyPath(text)) return T(CONTENT, `inline \`${name}\` code opens custody`);
     if (code.level === CONTENT) return T(CONTENT, `inline \`${name}\` code embeds a value from ${code.origin ?? "custody"}`, code.origin);
     if (this.model.isCustodyPath(this.cwd)) return T(CONTENT, `inline \`${name}\` code runs inside custody ${this.show(this.cwd)}`);
@@ -999,14 +1029,24 @@ function copyLike(name, rest) {
   const dest = operands.at(-1);
   if (operands.length < 2 || dest.value === null || /^[^/]+:/u.test(dest.value)) return CLEAN_T;
   const target = resolve(this.cwd, dest.value);
+  let out = CLEAN_T;
   for (const w of operands.slice(0, -1)) {
     const p = this.pathOf(w);
     if (!p?.path || !(p.custody || p.tainted)) continue;
     const why = T(CONTENT, `${this.show(p.path)} copied by \`${name}\``, p.tainted?.origin ?? this.describe(p));
+    const device = this.destination(dest.value, { 1: "out", 2: "err" });
+    if (device === "out") {
+      out = why;
+      continue;
+    }
+    if (device === "err" || device === "tty") {
+      this.find(`\`${name}\` copies ${this.describe(p)} to ${dest.value}`);
+      continue;
+    }
     this.tainted.set(this.model.fold(target), why);
     this.tainted.set(this.model.fold(join(target, basename(p.path))), why);
   }
-  return CLEAN_T;
+  return out;
 }
 
 function readsWhen(test) {
@@ -1132,6 +1172,25 @@ const HANDLERS = {
     if (rest.some((w) => w.value === null)) return rest.some((w) => w.level === CONTENT) ? T(CONTENT, "`eval` runs a custody value") : CLEAN_T;
     return this.source(rest.map((w) => w.value).join(" "), io.stdin);
   },
+  dd(name, rest, io) {
+    const operand = (key) => {
+      const w = rest.find((x) => (x.value ?? x.pattern ?? "").startsWith(`${key}=`));
+      return w ? { ...w, value: w.value === null ? null : w.value.slice(key.length + 1), pattern: (w.pattern ?? "").slice(key.length + 1) } : null;
+    };
+    const input = operand("if");
+    let content = io.stdin;
+    if (input) {
+      const p = this.pathOf(input);
+      content = p?.custody ? T(CONTENT, `\`dd\` reads ${this.describe(p)}`, this.describe(p)) : (p?.tainted ?? CLEAN_T);
+    }
+    const output = operand("of");
+    if (!output) return content;
+    const to = this.destination(output.value, { 1: "out", 2: "err" });
+    if (to === "out") return content;
+    if ((to === "err" || to === "tty") && content.level === CONTENT) this.find(`${content.why}, written by \`dd\` to ${output.value}`);
+    else if (to?.file && content.level === CONTENT) this.tainted.set(this.model.fold(to.file), content);
+    return CLEAN_T;
+  },
   cmp: readsWhen((v) => v.some((x) => x === "--verbose" || x === "--print-bytes" || /^-[A-Za-z]*[lb]/u.test(x))),
   openssl(name, rest, io) {
     const sub = valueOf(rest[0]);
@@ -1238,7 +1297,7 @@ export function custodyLeaks(command, { model, cwd, env = process.env }) {
   const analysis = new Analysis({ model, cwd: isAbsolute(cwd ?? "") ? cwd : model.home, env });
   try {
     const out = analysis.list(parseShell(command), CLEAN_T);
-    if (out.level === CONTENT) analysis.find(`${out.why}, and the output reaches the transcript`);
+    if (out.level === CONTENT) analysis.findings.unshift(`${out.why}, and the output reaches the transcript`);
     return analysis.findings;
   } catch (error) {
     if (error instanceof ShellParseError) return coarse(command, model, analysis.cwd);
