@@ -9,6 +9,12 @@
 // nothing of what it read, so its output is CLEAN. CONTENT may flow into a
 // file, a hasher or a tool; it must not reach the transcript.
 //
+// The agent's shell is bash or zsh (Claude Code runs the user's shell, zsh on
+// macOS), and the two route output differently: zsh writes a descriptor
+// redirected twice to both targets (MULTIOS) and runs `cat` for redirections
+// without a command (NULLCMD). A command counts as printing when either
+// shell would print.
+//
 // This is an accident guard, not a sandbox: scripts run by path, unknown
 // programs and files written in an earlier command are trusted. The known
 // limits are listed in manual/security/local-secret-custody.md.
@@ -247,6 +253,8 @@ export function tokenize(src) {
 const literalOf = (tok) =>
   tok && tok.t === "word" && tok.parts.length === 1 && tok.parts[0].k === "lit" && !tok.parts[0].q ? tok.parts[0].v : null;
 const listOf = (cmd) => ({ type: "list", items: [{ type: "pipeline", cmds: [cmd] }] });
+// `a |& b` is `a 2>&1 | b`, applied after a's own redirections in both shells.
+const STDERR_TO_PIPE = Object.freeze({ t: "redir", op: ">&", fd: 2, target: { t: "word", parts: [{ k: "lit", v: "1", q: false }] } });
 
 class Parser {
   constructor(tokens) {
@@ -295,6 +303,7 @@ class Parser {
     if (this.word() === "!") this.i += 1;
     const cmds = [this.command()];
     while (this.isOp("|") || this.isOp("|&")) {
+      if (this.isOp("|&")) cmds.at(-1).redirs.push(STDERR_TO_PIPE);
       this.i += 1;
       this.skip("\n");
       cmds.push(this.command());
@@ -528,13 +537,20 @@ const WELL_KNOWN_VARS = words("HOME PWD OLDPWD PATH USER LOGNAME SHELL TMPDIR TE
 const PATH_VARS = words("TMPDIR XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME USER LOGNAME");
 const ENV_ACCESS = /environ|getenv|process\.env|Bun\.env|Deno\.env|ENV\[|\$ENV\{/u;
 const PYTHON_READER_MODULES = words("json.tool base64 pickletools pickle quopri uu pprint");
-const TRANSCRIPT_DEVICES = words("/dev/stderr /dev/fd/2 /dev/tty");
-const STDERR_CAPABLE = /\/dev\/(stderr|tty|fd\/2)|\bstderr\b|\bdebug\b|>&\s*2|\bsystem\s*\(|\|\s*"/u;
+// Program text that can write what it reads somewhere other than stdout:
+// stderr (awk/sed device names, jq builtins), any open descriptor, the tty.
+const STDERR_CAPABLE = /\/dev\/(stderr|fd\/2)|>&\s*2|\bsystem\s*\(|\|\s*"/u;
+const JQ_LIKE = words("jq gojq jaq yq");
+const JQ_STDERR = /\b(?:halt_error|error|debug|stderr)\b/u;
+const ANY_FD = /\/dev\/fd\/\d|\bsystem\s*\(|\|\s*"/u;
 
 const valueOf = (w) => w?.value ?? "";
 const isOption = (w) => valueOf(w).startsWith("-") && valueOf(w) !== "-";
 const flagChars = (v) => (/^-[A-Za-z0-9.]+$/u.test(v) ? v.slice(1) : "");
-const progName = (w) => (w && w.value ? basename(w.value).toLowerCase() : null);
+// zsh runs `=cat` as the path of `cat` (EQUALS).
+const progName = (w) => (w && w.value ? basename(w.value.replace(/^=/u, "")).toLowerCase() : null);
+const INPUT_OPS = new Set(["<", "<>", "<<<", "<<", "<<-", "<&"]);
+const noInput = () => ({ stdin: CLEAN_T, other: CLEAN_T, heredoc: null });
 
 class Analysis {
   constructor({ model, cwd, env }) {
@@ -547,7 +563,14 @@ class Analysis {
     this.sourced = null;
     this.xtrace = false;
     this.findings = [];
-    this.stderr = null;
+    // The scope collects content that reaches descriptors the current
+    // commands inherit (stderr, fd 3…); `side` is what the running command
+    // writes besides its stdout, keyed by descriptor ("*" = any open one).
+    this.scope = { emitted: new Map() };
+    this.side = new Map();
+    // `exec` with only redirections keeps them for later commands, so a
+    // descriptor it opens may lead to the transcript.
+    this.execRedirects = false;
     this.depth = 0;
     this.budget = 50_000;
   }
@@ -693,100 +716,165 @@ class Analysis {
 
   // --- structure
 
-  source(src, stdin, { positional = null, xtrace = false } = {}) {
+  // Runs nested shell code. A child process (`bash -c`, `eval`, ssh) writes
+  // its stderr and other descriptors through the calling command; an
+  // expansion (`$(…)`, `<(…)`) writes them to the enclosing scope.
+  source(src, stdin, { positional = null, xtrace = false, child = false } = {}) {
     if (++this.depth > 8) throw new ShellParseError("nesting too deep");
-    const saved = { positional: this.positional, xtrace: this.xtrace, cwd: this.cwd, stderr: this.stderr };
+    const saved = { positional: this.positional, xtrace: this.xtrace, cwd: this.cwd, scope: this.scope, side: this.side };
+    const nested = { emitted: new Map() };
     if (positional) this.positional = positional;
     if (xtrace) this.xtrace = true;
+    this.scope = nested;
     try {
       return this.list(parseShell(src), stdin);
     } finally {
       Object.assign(this, saved);
       this.depth -= 1;
+      for (const [fd, taint] of nested.emitted) (child ? this.addSide(fd, taint) : this.emit(fd, taint));
     }
+  }
+
+  emit(fd, taint) {
+    if (taint.level === CONTENT) this.scope.emitted.set(fd, max(this.scope.emitted.get(fd) ?? CLEAN_T, taint));
+  }
+
+  addSide(fd, taint) {
+    if (taint.level === CONTENT) this.side.set(fd, max(this.side.get(fd) ?? CLEAN_T, taint));
   }
 
   list(list, stdin) {
     let out = CLEAN_T;
     for (const pipeline of list.items) {
       let flow = stdin;
-      for (const cmd of pipeline.cmds) flow = this.command(cmd, flow);
+      const last = pipeline.cmds.length - 1;
+      pipeline.cmds.forEach((cmd, k) => {
+        flow = this.command(cmd, flow, { pipeIn: k > 0, pipeOut: k < last });
+      });
       out = max(out, flow);
     }
     return out;
   }
 
-  input(redirs, stdin) {
-    const io = { stdin, heredoc: null, redirected: false };
+  // A command's stdin. bash reads the last input redirection; zsh reads all
+  // of them in turn, after the pipe the command already reads from (MULTIOS).
+  // `stdin` covers both; `other` leaves out here-documents and here-strings,
+  // which a shell or interpreter reading its code from stdin runs as `heredoc`.
+  input(redirs, stdin, pipeIn = false) {
+    const io = { stdin, other: stdin, heredoc: null };
+    const piped = pipeIn ? stdin : CLEAN_T;
+    let all = null;
+    let other = piped;
+    const code = (text) => {
+      io.heredoc = io.heredoc === null ? text : `${io.heredoc}\n${text}`;
+    };
     for (const r of redirs) {
       if (r.fd !== null && r.fd !== 0) continue;
+      let taint;
       if (r.op === "<" || r.op === "<>") {
         const p = this.pathOf(this.word(r.target));
-        io.redirected = true;
-        if (p?.proc) io.stdin = p.proc;
-        else if (p?.custody) io.stdin = T(CONTENT, `input from ${this.describe(p)}`, this.describe(p));
-        else if (p?.tainted) io.stdin = T(CONTENT, `input from ${this.show(p.path)}, written from ${p.tainted.origin ?? "custody"} earlier in this command`, p.tainted.origin);
-        else io.stdin = CLEAN_T;
+        if (p?.proc) taint = p.proc;
+        else if (p?.custody) taint = T(CONTENT, `input from ${this.describe(p)}`, this.describe(p));
+        else if (p?.tainted) taint = T(CONTENT, `input from ${this.show(p.path)}, written from ${p.tainted.origin ?? "custody"} earlier in this command`, p.tainted.origin);
+        else taint = CLEAN_T;
+        other = max(other, taint);
       } else if (r.op === "<<<") {
         const w = this.word(r.target);
-        io.stdin = w.level === CONTENT ? w : this.pathOf(w)?.custody ? T(PATHS) : CLEAN_T;
+        taint = w.level === CONTENT ? w : this.pathOf(w)?.custody ? T(PATHS) : CLEAN_T;
+        if (w.value !== null) code(w.value);
+        else other = max(other, taint);
       } else if (r.op === "<<" || r.op === "<<-") {
-        io.heredoc = r.body ?? "";
-        let taint = textNamesCustody(io.heredoc) ? T(PATHS) : CLEAN_T;
+        code(r.body ?? "");
+        taint = textNamesCustody(r.body ?? "") ? T(PATHS) : CLEAN_T;
         if (!r.quoted) {
           const parts = [];
-          lexQuoted(io.heredoc, 0, parts, true);
+          lexQuoted(r.body ?? "", 0, parts, true);
           taint = max(taint, this.word({ parts }));
         }
-        io.stdin = taint;
-      }
+      } else continue;
+      all = max(all ?? piped, taint);
+    }
+    if (all !== null) {
+      io.stdin = all;
+      io.other = other;
     }
     return io;
   }
 
-  // Where a file name sends a descriptor: "out" (the pipe or, at the top,
-  // the transcript), "err" and "tty" (the transcript), "null", or a file.
-  destination(target, fds) {
+  // Where a file name sends a descriptor: an inherited descriptor
+  // ({ inherit: n }), "tty", "null", a file, or what `fd(n)` holds for
+  // /dev/stdout, /dev/stderr and /dev/fd/n.
+  destination(target, fd) {
     if (target === null) return { file: null };
     if (target === "/dev/null") return "null";
     if (target === "/dev/tty") return "tty";
-    if (target === "/dev/stdout") return fds[1];
-    if (target === "/dev/stderr") return fds[2];
-    const fd = /^\/dev\/fd\/(\d+)$/u.exec(target);
-    if (fd) return fds[fd[1]] ?? "null";
+    if (target === "/dev/stdout") return fd(1);
+    if (target === "/dev/stderr") return fd(2);
+    const n = /^\/dev\/fd\/(\d+)$/u.exec(target);
+    if (n) return fd(Number(n[1]));
     return { file: resolve(this.cwd, target) };
   }
 
-  // Applies output redirections left to right, as the shell does, to the
-  // command's stdout taint `out` and the CONTENT it may write to stderr.
-  output(redirs, out, err = null) {
-    const fds = { 1: "out", 2: "err" };
+  // Applies a command's output redirections left to right to its stdout
+  // taint and to what it writes elsewhere (`side`), once as bash does (each
+  // redirection replaces the descriptor) and once as zsh does (MULTIOS: a
+  // descriptor redirected again, or one already feeding a pipe, writes to
+  // every target). Every route either shell takes counts. Stdout that stays
+  // on inherited fd 1 is returned and flows on; content on another inherited
+  // descriptor goes to the enclosing scope; the tty is the transcript at once.
+  output(redirs, out, side = null, pipeOut = false) {
+    const shells = [
+      { multios: false, fds: new Map() },
+      { multios: true, fds: new Map(pipeOut ? [[1, [{ inherit: 1 }]]] : []) },
+    ];
     for (const r of redirs) {
-      if (["<", "<>", "<<<", "<<", "<<-", "<&"].includes(r.op)) continue;
+      if (INPUT_OPS.has(r.op)) continue;
       const target = this.word(r.target).value;
-      if (r.op === ">&" && target !== null && /^(\d+|-)$/u.test(target)) {
-        fds[r.fd ?? 1] = target === "-" ? "null" : (fds[target] ?? "null");
-      } else if (r.op === "&>" || r.op === "&>>" || r.op === ">&") {
-        fds[1] = fds[2] = this.destination(target, fds);
-      } else {
-        fds[r.fd ?? 1] = this.destination(target, fds);
+      for (const { multios, fds } of shells) {
+        const fd = (n) => fds.get(n) ?? [{ inherit: n }];
+        const add = (n, to) => fds.set(n, multios && fds.has(n) ? [...fds.get(n), ...to] : to);
+        const destination = () => [this.destination(target, fd)].flat();
+        if (r.op === ">&" && target !== null && /^(\d+|-)$/u.test(target)) {
+          if (target === "-") fds.set(r.fd ?? 1, ["null"]);
+          else add(r.fd ?? 1, fd(Number(target)));
+        } else if (r.op === "&>" || r.op === "&>>" || r.op === ">&") {
+          const to = destination();
+          add(1, to);
+          add(2, to);
+        } else {
+          add(r.fd ?? 1, destination());
+        }
       }
     }
     let result = CLEAN_T;
     const route = (taint, to) => {
-      if (!taint || taint.level === CLEAN) return;
-      if (to === "out") result = max(result, taint);
-      else if ((to === "err" || to === "tty") && taint.level === CONTENT) this.find(`${taint.why}, sent to ${to === "tty" ? "/dev/tty" : "stderr"}`);
-      else if (to?.file && taint.level === CONTENT) this.tainted.set(this.model.fold(to.file), taint);
+      if (!taint || taint.level === CLEAN || to === "null") return;
+      if (to?.inherit === 1) result = max(result, taint);
+      else if (taint.level !== CONTENT) return;
+      else if (to === "tty") this.find(`${taint.why}, sent to /dev/tty`);
+      else if (to?.file) this.tainted.set(this.model.fold(to.file), taint);
+      else if (to?.inherit !== undefined) this.emit(to.inherit, taint);
     };
-    route(out, fds[1]);
-    route(err, fds[2]);
+    const send = (taint, n) => {
+      for (const { fds } of shells) for (const to of fds.get(n) ?? [{ inherit: n }]) route(taint, to);
+    };
+    send(out, 1);
+    for (const [n, taint] of side ?? []) {
+      if (n === "tty") route(taint, "tty");
+      else if (n !== "*") send(taint, n);
+      else {
+        // A program that can open any descriptor reaches every one opened
+        // here, and whatever the enclosing scopes opened.
+        for (const { fds } of shells) for (const [k, list] of fds) if (k >= 3) for (const to of list) route(taint, to);
+        this.emit("*", taint);
+      }
+    }
     return result;
   }
 
-  command(cmd, stdin) {
+  command(cmd, stdin, { pipeIn = false, pipeOut = false } = {}) {
     if (--this.budget < 0) throw new ShellParseError("analysis budget exceeded");
-    const io = this.input(cmd.redirs, stdin);
+    const io = this.input(cmd.redirs, stdin, pipeIn);
     if (cmd.type === "compound") {
       const cwd = this.cwd;
       if (cmd.loopVar) {
@@ -795,29 +883,50 @@ class Analysis {
         this.vars.set(cmd.loopVar, { value: ws.length === 1 ? ws[0].value : null, pattern: "", level: taint.level, why: taint.why, origin: taint.origin ?? null, proc: null });
       }
       if (cmd.subject) this.word(cmd.subject);
+      const scope = this.scope;
+      const inner = { emitted: new Map() };
+      this.scope = inner;
       let out = CLEAN_T;
-      for (const list of cmd.body) out = max(out, this.list(list, io.stdin));
+      try {
+        for (const list of cmd.body) out = max(out, this.list(list, io.stdin));
+      } finally {
+        this.scope = scope;
+      }
       if (cmd.subshell) this.cwd = cwd;
-      return this.output(cmd.redirs, out);
+      return this.output(cmd.redirs, out, inner.emitted, pipeOut);
     }
     for (const a of cmd.assigns) this.assign(a.name, this.word(a.value));
     const args = cmd.words.map((tok) => this.word(tok));
-    // zsh prints a bare input redirection (`< file`), and `$(< file)` expands to the file.
-    this.stderr = null;
-    const out = args.length ? this.program(args, io) : io.redirected ? io.stdin : CLEAN_T;
-    return this.output(cmd.redirs, out, this.stderr);
+    const side = this.side;
+    this.side = new Map();
+    try {
+      // For redirections without a command or assignment, zsh runs `cat`
+      // (`more` for a lone `<`, NULLCMD and READNULLCMD) on them; `$(< file)`
+      // expands to the file in both shells.
+      const nullcmd = cmd.assigns.length === 0 && cmd.redirs.length > 0;
+      const out = args.length ? this.program(args, io) : nullcmd ? io.stdin : CLEAN_T;
+      return this.output(cmd.redirs, out, this.side, pipeOut);
+    } finally {
+      this.side = side;
+    }
   }
 
   program(args, io) {
     let i = 0;
+    let exec = false;
     for (let guard = 0; guard < 16 && i < args.length; guard += 1) {
-      const wrapper = own(WRAPPERS, progName(args[i]));
+      const wrapperName = progName(args[i]);
+      const wrapper = own(WRAPPERS, wrapperName);
       const next = wrapper ? wrapper(args, i + 1, this) : null;
       if (next === null) break;
+      exec ||= wrapperName === "exec";
       i = next;
     }
     const name = progName(args[i]);
-    if (!name) return CLEAN_T;
+    if (!name) {
+      if (exec) this.execRedirects = true;
+      return CLEAN_T;
+    }
     const rest = args.slice(i + 1);
     const handler = own(HANDLERS, name);
     if (handler) return handler.call(this, name, rest, io);
@@ -870,9 +979,15 @@ class Analysis {
       if (namesOnly) return out.level === CLEAN ? CLEAN_T : T(PATHS);
     }
     if (DIFFS.has(name) && (/q/u.test(flags) || longs.has("--brief"))) return CLEAN_T;
-    // A program (awk, sed, jq) can write what it reads to stderr itself.
-    const programText = programs.map((w) => w.value ?? w.pattern ?? "").join("\n");
-    if (out.level === CONTENT && (programFiles.length > 0 || STDERR_CAPABLE.test(programText))) this.stderr = out;
+    // A program (awk, sed, jq) can write what it reads to stderr, another
+    // descriptor or the tty itself; a program file is not inspected.
+    if (out.level === CONTENT && PROGRAM_FIRST.has(name)) {
+      const text = programs.map((w) => w.value ?? w.pattern ?? "").join("\n");
+      const opaque = programFiles.length > 0;
+      if (opaque || (JQ_LIKE.has(name) ? JQ_STDERR : STDERR_CAPABLE).test(text)) this.addSide(2, out);
+      if (opaque || ANY_FD.test(text)) this.addSide("*", out);
+      if (/\/dev\/tty/u.test(text)) this.addSide("tty", out);
+    }
     return out;
   }
 
@@ -897,26 +1012,43 @@ class Analysis {
       if (valueFlags.has(v)) k += 1;
       else if (!v.startsWith("-")) return CLEAN_T;
     }
+    // What the code can read on stdin: all of it, or, when the code is the
+    // here-document itself, whatever else stdin carries.
+    let stdin = io.stdin;
     if (code === null) {
       if (io.heredoc === null) return io.stdin.level === CONTENT ? T(CONTENT, `\`${name}\` runs content from ${io.stdin.origin ?? "custody"} as code`, io.stdin.origin) : CLEAN_T;
       code = synthetic(CLEAN, "", io.heredoc);
+      stdin = io.other;
     }
     const text = code.value ?? code.pattern ?? "";
-    const result = this.inlineTaint(name, text, code, after, io);
-    // Inline code can print to stderr as easily as to stdout.
-    if (result.level === CONTENT) this.stderr = result;
+    const result = this.inlineTaint(name, text, code, after, stdin);
+    // Inline code can write to stderr or any open descriptor as easily as to
+    // stdout, and to the tty when it names it.
+    if (result.level === CONTENT) {
+      this.addSide(2, result);
+      this.addSide("*", result);
+      if (/\/dev\/tty/u.test(text)) this.addSide("tty", result);
+    }
     return result;
   }
 
-  inlineTaint(name, text, code, after, io) {
+  inlineTaint(name, text, code, after, stdin) {
     if (textNamesCustody(text) || this.codeNamesCustodyPath(text)) return T(CONTENT, `inline \`${name}\` code opens custody`);
     if (code.level === CONTENT) return T(CONTENT, `inline \`${name}\` code embeds a value from ${code.origin ?? "custody"}`, code.origin);
     if (this.model.isCustodyPath(this.cwd)) return T(CONTENT, `inline \`${name}\` code runs inside custody ${this.show(this.cwd)}`);
     if (this.sourced && ENV_ACCESS.test(text)) return T(CONTENT, `inline \`${name}\` code reads the environment after ${this.sourced.label}`, this.sourced.origin);
     const fromArgs = this.readArgs(name, after);
     if (fromArgs.level === CONTENT) return T(CONTENT, `inline \`${name}\` code ${fromArgs.why.replace(/^`[^`]+` /u, "")}`, fromArgs.origin);
-    if (io.stdin.level === CONTENT && io.heredoc === null) return T(CONTENT, `inline \`${name}\` code reads ${io.stdin.origin ?? "custody"}`, io.stdin.origin);
+    if (stdin.level === CONTENT) return T(CONTENT, `inline \`${name}\` code reads ${stdin.origin ?? "custody"}`, stdin.origin);
     return CLEAN_T;
+  }
+
+  // A shell reading its script on stdin: here-document code is read as shell;
+  // any other content on stdin is run as code, which can echo it in errors.
+  script(label, io, xtrace = false) {
+    const ran = io.heredoc === null ? CLEAN_T : this.source(io.heredoc, CLEAN_T, { xtrace, child: true });
+    const data = io.heredoc === null ? io.stdin : io.other;
+    return data.level === CONTENT ? max(ran, T(CONTENT, `${label} runs content from ${data.origin ?? "custody"}`, data.origin)) : ran;
   }
 
   codeNamesCustodyPath(text) {
@@ -950,7 +1082,7 @@ class Analysis {
         const code = rest[k + 1];
         if (!code) return CLEAN_T;
         if (code.value === null) return code.level === CONTENT ? T(CONTENT, `\`${name} -c\` runs a value from ${code.origin ?? "custody"}`, code.origin) : CLEAN_T;
-        return this.source(code.value, io.stdin, { positional: rest.slice(k + 2), xtrace });
+        return this.source(code.value, io.stdin, { positional: rest.slice(k + 2), xtrace, child: true });
       }
       if (v === "-o" || v === "+o" || cluster.endsWith("o")) {
         if (!v.startsWith("+") && /^(xtrace|verbose)$/u.test(valueOf(rest[k + 1]))) xtrace = true;
@@ -961,8 +1093,7 @@ class Analysis {
         return xtrace && handlesCustody ? T(CONTENT, `\`${name} -x\` traces a script that handles custody`) : CLEAN_T;
       }
     }
-    if (io.heredoc !== null) return this.source(io.heredoc, CLEAN_T, { xtrace });
-    return io.stdin.level === CONTENT ? T(CONTENT, `\`${name}\` runs content from ${io.stdin.origin ?? "custody"}`, io.stdin.origin) : CLEAN_T;
+    return this.script(`\`${name}\``, io, xtrace);
   }
 }
 
@@ -1034,13 +1165,13 @@ function copyLike(name, rest) {
     const p = this.pathOf(w);
     if (!p?.path || !(p.custody || p.tainted)) continue;
     const why = T(CONTENT, `${this.show(p.path)} copied by \`${name}\``, p.tainted?.origin ?? this.describe(p));
-    const device = this.destination(dest.value, { 1: "out", 2: "err" });
-    if (device === "out") {
+    const device = this.destination(dest.value, (n) => ({ inherit: n }));
+    if (device?.inherit === 1) {
       out = why;
       continue;
     }
-    if (device === "err" || device === "tty") {
-      this.find(`\`${name}\` copies ${this.describe(p)} to ${dest.value}`);
+    if (device === "tty" || device?.inherit !== undefined) {
+      this.addSide(device === "tty" ? "tty" : device.inherit, why);
       continue;
     }
     this.tainted.set(this.model.fold(target), why);
@@ -1130,9 +1261,9 @@ const HANDLERS = {
     for (const w of rest) {
       const v = valueOf(w);
       if (!v || isOption(w)) continue;
-      if (TRANSCRIPT_DEVICES.has(v)) {
-        if (io.stdin.level === CONTENT) this.find(`${io.stdin.why}, copied by \`tee\` to ${v}`);
-      } else if (io.stdin.level === CONTENT) this.tainted.set(this.model.fold(resolve(this.cwd, v)), io.stdin);
+      const to = this.destination(v, (n) => ({ inherit: n }));
+      if (to === "tty" || (to?.inherit !== undefined && to.inherit !== 1)) this.addSide(to === "tty" ? "tty" : to.inherit, io.stdin);
+      else if (to?.file && io.stdin.level === CONTENT) this.tainted.set(this.model.fold(to.file), io.stdin);
     }
     return io.stdin;
   },
@@ -1148,9 +1279,9 @@ const HANDLERS = {
     while (k < rest.length && isOption(rest[k])) k += withValue.has(rest[k].value) ? 2 : 1;
     const command = rest.slice(k);
     if (command.length === 0) command.push(synthetic(CLEAN, "", "echo"));
-    if (io.stdin.level === CLEAN) return this.program(command, { stdin: CLEAN_T, heredoc: null, redirected: false });
+    if (io.stdin.level === CLEAN) return this.program(command, noInput());
     const fed = io.stdin.level === CONTENT ? synthetic(CONTENT, io.stdin.why, null, io.stdin.origin) : synthetic(PATHS, "custody paths from the pipe");
-    return this.program([...command, fed], { stdin: CLEAN_T, heredoc: null, redirected: false });
+    return this.program([...command, fed], noInput());
   },
   find(name, rest) {
     let k = 0;
@@ -1164,13 +1295,13 @@ const HANDLERS = {
       for (k += 1; k < rest.length && rest[k].value !== ";" && rest[k].value !== "+"; k += 1) {
         command.push(rest[k].value === "{}" && reaches ? synthetic(PATHS, "custody files found by `find`") : rest[k]);
       }
-      if (command.length) out = max(out, this.program(command, { stdin: CLEAN_T, heredoc: null, redirected: false }));
+      if (command.length) out = max(out, this.program(command, noInput()));
     }
     return out;
   },
   eval(name, rest, io) {
     if (rest.some((w) => w.value === null)) return rest.some((w) => w.level === CONTENT) ? T(CONTENT, "`eval` runs a custody value") : CLEAN_T;
-    return this.source(rest.map((w) => w.value).join(" "), io.stdin);
+    return this.source(rest.map((w) => w.value).join(" "), io.stdin, { child: true });
   },
   dd(name, rest, io) {
     const operand = (key) => {
@@ -1185,9 +1316,9 @@ const HANDLERS = {
     }
     const output = operand("of");
     if (!output) return content;
-    const to = this.destination(output.value, { 1: "out", 2: "err" });
-    if (to === "out") return content;
-    if ((to === "err" || to === "tty") && content.level === CONTENT) this.find(`${content.why}, written by \`dd\` to ${output.value}`);
+    const to = this.destination(output.value, (n) => ({ inherit: n }));
+    if (to?.inherit === 1) return content;
+    if (to === "tty" || to?.inherit !== undefined) this.addSide(to === "tty" ? "tty" : to.inherit, content);
     else if (to?.file && content.level === CONTENT) this.tainted.set(this.model.fold(to.file), content);
     return CLEAN_T;
   },
@@ -1237,7 +1368,7 @@ const HANDLERS = {
   node: inlineWith(["-e", "--eval", "-p", "--print"]),
   bun(name, rest, io) {
     const sub = valueOf(rest[0]);
-    if (sub === "exec") return rest[1]?.value ? this.source(rest[1].value, io.stdin) : CLEAN_T;
+    if (sub === "exec") return rest[1]?.value ? this.source(rest[1].value, io.stdin, { child: true }) : CLEAN_T;
     if (sub === "x") return this.program(rest.slice(1), io);
     if (sub === "run") return valueOf(rest[1]) === "-" ? this.inline(name, rest.slice(1), io, []) : CLEAN_T;
     return this.inline(name, rest, io, ["-e", "--eval", "-p", "--print"]);
@@ -1247,12 +1378,9 @@ const HANDLERS = {
     let k = 0;
     while (k < rest.length && isOption(rest[k])) k += withValue.has(rest[k].value) ? 2 : 1;
     const remote = rest.slice(k + 1);
-    if (remote.length === 0) {
-      if (io.heredoc !== null) return this.source(io.heredoc, CLEAN_T);
-      return io.stdin.level === CONTENT ? T(CONTENT, `the remote shell runs content from ${io.stdin.origin ?? "custody"}`, io.stdin.origin) : CLEAN_T;
-    }
+    if (remote.length === 0) return this.script("the remote shell", io);
     if (remote.some((w) => w.value === null)) return remote.some((w) => w.level === CONTENT) ? T(CONTENT, "a remote command embeds a custody value") : CLEAN_T;
-    const out = this.source(remote.map((w) => w.value).join(" "), io.heredoc !== null ? CLEAN_T : io.stdin);
+    const out = this.source(remote.map((w) => w.value).join(" "), io.stdin, { child: true });
     return out.level === CONTENT ? T(CONTENT, `on the remote host, ${out.why}`, out.origin) : out;
   },
   docker(name, rest, io) {
@@ -1297,6 +1425,12 @@ export function custodyLeaks(command, { model, cwd, env = process.env }) {
   const analysis = new Analysis({ model, cwd: isAbsolute(cwd ?? "") ? cwd : model.home, env });
   try {
     const out = analysis.list(parseShell(command), CLEAN_T);
+    // At the top, inherited stderr is the transcript; other descriptors are
+    // not open unless `exec` opened them.
+    for (const [fd, taint] of analysis.scope.emitted) {
+      if (fd === 2) analysis.find(`${taint.why}, sent to stderr`);
+      else if (analysis.execRedirects) analysis.find(`${taint.why}, sent to a descriptor that \`exec\` opened`);
+    }
     if (out.level === CONTENT) analysis.findings.unshift(`${out.why}, and the output reaches the transcript`);
     return analysis.findings;
   } catch (error) {

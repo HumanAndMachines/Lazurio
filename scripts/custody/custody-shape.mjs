@@ -52,7 +52,24 @@ function stableJson(value) {
 
 // A key that looks like a credential itself is shown by length only: a known
 // token prefix, or a long run of mixed letters and digits.
-const CREDENTIAL_PREFIX = /^(?:(?:sk|pk|rk)_(?:live|test)_|gh[pousr]_|github_pat_|xox[abposr]-|AKIA|ASIA|AIza|glpat-|eyJ[A-Za-z0-9_-]{8})/u;
+// Token prefixes count at the start of any segment (`account/xoxb-…`,
+// `prod_sk_live_…`), with the length real tokens have, so words such as
+// `ASIA` or `error` stay readable.
+const CREDENTIAL_PREFIX = new RegExp(
+  "(?:^|[^A-Za-z0-9])(?:" +
+    [
+      "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}",
+      "gh[pousr]_[A-Za-z0-9]{20,}",
+      "github_pat_[A-Za-z0-9_]{20,}",
+      "xox[abposr]-[A-Za-z0-9-]{10,}",
+      "(?:AKIA|ASIA)[0-9A-Z]{12,}",
+      "AIza[0-9A-Za-z_-]{20,}",
+      "glpat-[0-9A-Za-z_-]{16,}",
+      "eyJ[A-Za-z0-9_-]{8,}",
+    ].join("|") +
+    ")",
+  "u",
+);
 function showKey(key) {
   const randomRun = (key.match(/[A-Za-z0-9+=]{16,}/gu) ?? []).some((run) => /[0-9]/u.test(run) && /[A-Za-z]/u.test(run));
   return CREDENTIAL_PREFIX.test(key) || randomRun ? `<key len=${key.length}>` : key;

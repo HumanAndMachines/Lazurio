@@ -111,9 +111,42 @@ describe("denies a command that prints custody values", () => {
     ["cp to stdout", `cp ${ENV} /dev/stdout`],
     ["cp to stderr", `cp ${ENV} /dev/stderr`],
     ["a symlink with a public name pointing at a secret", "cat ~/.config/lazurio/credentials/lane/export.pub"],
+    // Review of 71e74444: jq builtins and descriptors the program opens itself.
+    ["jq halt_error writes the input to stderr", `jq -R 'halt_error(1)' ${ENV} > /dev/null`],
+    ["jq error writes the value to stderr", `jq '.keycloak_env | error' ${SECRETS} > /dev/null`],
+    ["awk to /dev/fd/3 routed to stderr", `awk '{ print > "/dev/fd/3" }' ${ENV} 3>&2 > /dev/null`],
+    ["awk to /dev/fd/3 opened by an enclosing group", `{ awk '{ print > "/dev/fd/3" }' ${ENV} > /dev/null; } 3>&2`],
+    ["tee to /dev/stderr", `tee /dev/stderr < ${ENV} > /dev/null`],
+    ["stderr of a command substitution is not covered by the command's redirection", `X=$(cat ${ENV} >&2) 2>/dev/null`],
     ["custody compressed from stdin and encoded", `cat ${SECRETS} | gzip | base64`],
     ["gzip -c of custody", `gzip -c ${ENV} | xxd`],
     ["zip to stdout", "zip -r - ~/.config/lazurio/credentials/lane | base64"],
+    // zsh, which Claude Code runs on macOS: a descriptor redirected twice, or
+    // one already feeding a pipe, writes to every target (MULTIOS); input
+    // redirections are concatenated; redirections without a command run `cat`.
+    ["zsh: stdout onto stderr and /dev/null", `cat ${ENV} >&2 > /dev/null`],
+    ["zsh: stdout into a file and the pipe", `cat ${ENV} > /tmp/env.copy | cat`],
+    ["zsh: stdout into /dev/null and the pipe, after stderr onto it", `grep KC_ ${ENV} 2>&1 > /dev/null | head`],
+    ["zsh: &> /dev/null still feeds the pipe", `jq . ${SECRETS} &> /dev/null | cat`],
+    ["zsh: a group into /dev/null and the pipe", `{ cat ${ENV}; } > /dev/null | cat`],
+    ["zsh: tee into /dev/null and the pipe", `cat ${ENV} | tee /tmp/env.copy > /dev/null | cat`],
+    ["zsh: >&1 keeps the transcript next to a file", `cat ${ENV} >&1 > /tmp/env.copy`],
+    ["zsh: descriptor 3 carries stderr to stdout", `cat ${ENV} 3>&2 >&3 > /dev/null`],
+    ["zsh: input redirections are concatenated", `cat < ${ENV} < /dev/null`],
+    ["zsh: an input redirection adds to the pipe", `cat ${ENV} | cat < /dev/null`],
+    ["zsh: a here-string adds to the pipe", `cat ${ENV} | cat <<< x`],
+    ["zsh: redirections without a command run cat", `< ${ENV} >&2`],
+    ["zsh: a pipe into redirections without a command", `cat ${ENV} | >&2`],
+    ["zsh: a here-string without a command", `X=$(jq -r .keycloak_env ${SECRETS}); <<< "$X"`],
+    ["zsh: a here-document without a command", `<<EOF\n$(cat ${ENV})\nEOF`],
+    ["zsh: =cat runs cat", `=cat ${ENV}`],
+    ["zsh: the pipe runs before a here-document as code", `cat ${ENV} | python3 - <<'PY'\nprint(1)\nPY`],
+    // Both shells.
+    ["|& sends stderr into the pipe after the command's redirections", `bash -c 'cat ${ENV} >&2' 2>/dev/null |& cat`],
+    ["exec opens a descriptor onto stderr for later commands", `exec 3>&2; cat ${ENV} >&3`],
+    ["a here-string as a shell script", `bash <<< "cat ${ENV}"`],
+    ["inline code reading a here-document that holds a value", `python3 -c 'import sys; print(sys.stdin.read())' <<EOF\n$(cat ${ENV})\nEOF`],
+    ["stderr of a command substitution in a command's arguments", `echo "$(cat ${ENV} >&2)" 2>/dev/null`],
   ];
   for (const [name, command, cwd] of cases) {
     test(name, () => {
@@ -198,7 +231,16 @@ describe("allows normal work with custody", () => {
     ["inline code with stdout and stderr sunk", `python3 -c "print(open('${ENV}').read())" > /tmp/out.txt 2>&1`],
     ["inline code sunk inside bash -c", `bash -c "python3 -c 'print(open(\\"${ENV}\\").read())' > /tmp/o 2>/dev/null"`],
     ["dd into a file", `dd if=${ENV} of=/tmp/env.bin`],
+    ["a child shell whose stderr is sunk by the caller", `bash -c 'cat ${ENV} >&2' 2>/dev/null`],
+    ["a group whose stderr is sunk", `{ cat ${ENV} >&2; } 2>/dev/null`],
+    ["tee to /dev/stderr with stderr sunk", `tee /dev/stderr < ${ENV} > /dev/null 2>/dev/null`],
+    ["awk to /dev/fd/3 opened onto a file", `awk '{ print > "/dev/fd/3" }' ${ENV} 3>/tmp/fd3.out > /dev/null`],
     ["compressed in place", `gzip ${ENV}`],
+    ["stdout into two files (zsh writes both)", `jq . ${SECRETS} > /tmp/a.json > /tmp/b.json`],
+    ["stdout into a file and the pipe to a hasher", `cat ${ENV} > /tmp/env.copy | shasum -a 256`],
+    ["redirections without a command, into a file", `< ${ENV} > /tmp/env.copy`],
+    ["a pipe into redirections without a command, into a file", `cat ${ENV} | > /tmp/env.copy`],
+    ["an assignment with an input redirection runs nothing", `X=1 < ${ENV}`],
   ];
   for (const [name, command, cwd] of cases) {
     test(name, () => {
@@ -221,6 +263,102 @@ describe("allows normal work with custody", () => {
     expect(custodyReason({ tool_name: "Bash", tool_input: {} }, { model })).toBeNull();
     expect(custodyReason(null, { model })).toBeNull();
   });
+});
+
+// Ground truth: each command runs on synthetic custody holding a marker,
+// under bash and, where it is installed, zsh (Claude Code runs the user's
+// shell, zsh on macOS). A row says whether the marker reaches stdout or
+// stderr under bash and under zsh; the real runs check both columns, and the
+// guard must deny exactly the rows where either shell prints (review of
+// 71e74444 asked for real output, not only taint).
+describe("the guard agrees with what bash and zsh really print", () => {
+  const MARKER = "zq8x-synthetic-custody-marker";
+  const home2 = join(sandbox, "oracle-home");
+  const root2 = join(home2, "Lazurio");
+  const dir = join(home2, ".config/lazurio/credentials/lane");
+  write(join(dir, "secret.env"), `TOKEN=${MARKER}\n`);
+  write(join(dir, "secret.json"), JSON.stringify({ token: MARKER }));
+  mkdirSync(root2, { recursive: true });
+  const model2 = createCustodyModel({ home: home2, lazurioRoot: root2, caseInsensitive: false });
+  const E = "~/.config/lazurio/credentials/lane/secret.env";
+  const J = "~/.config/lazurio/credentials/lane/secret.json";
+  const ABS = join(dir, "secret.env");
+  const cases = [
+    // command, bash prints, zsh prints, program the row needs
+    [`cat ${E}`, true, true],
+    [`cat ${E} >/dev/null 1>&2`, true, true],
+    [`cat ${E} > copy.out >&2`, true, true],
+    [`cat ${E} > /dev/null 2>&1`, false, false],
+    [`cat ${E} 2>&1 > copy.out`, false, false],
+    [`awk '{ print > "/dev/stderr" }' ${E} > /dev/null`, true, true, "awk"],
+    [`awk '{ print > "/dev/fd/3" }' ${E} 3>&2 > /dev/null`, true, true, "awk"],
+    [`awk '{ print > "/dev/fd/3" }' ${E} 3> fd3.out > /dev/null`, false, false, "awk"],
+    [`{ awk '{ print > "/dev/fd/3" }' ${E} > /dev/null; } 3>&2`, true, true, "awk"],
+    [`sed -n 'w /dev/stderr' ${E} > /dev/null`, true, true, "sed"],
+    [`jq -R 'halt_error(1)' ${E} > /dev/null`, true, true, "jq"],
+    [`jq '.token | error' ${J} > /dev/null`, true, true, "jq"],
+    [`jq '.token' ${J} > copy.json`, false, false, "jq"],
+    // zsh expands `~` after `=` only with MAGIC_EQUAL_SUBST, so dd gets the absolute path.
+    [`dd if=${ABS} 2>/dev/null`, true, true, "dd"],
+    [`dd if=${ABS} of=copy.bin 2>/dev/null`, false, false, "dd"],
+    [`cp ${E} copy.env`, false, false],
+    [`tee /dev/stderr < ${E} > /dev/null`, true, true, "tee"],
+    [`tee /dev/stderr < ${E} > /dev/null 2>/dev/null`, false, false, "tee"],
+    [`bash -c 'cat ${E} >&2'`, true, true],
+    [`bash -c 'cat ${E} >&2' 2>/dev/null`, false, false],
+    [`{ cat ${E} >&2; } 2>/dev/null`, false, false],
+    [`python3 -c "import sys; sys.stderr.write(open('${ABS}').read())" > /dev/null`, true, true, "python3"],
+    [`python3 -c "print(open('${ABS}').read())" > copy.txt 2>&1`, false, false, "python3"],
+    [`shasum -a 256 ${E} | cut -c1-8`, false, false, "shasum"],
+    [`wc -c < ${E}`, false, false],
+    [`grep -q TOKEN ${E} && echo present`, false, false],
+    [`exec 3>&2; cat ${E} >&3`, true, true],
+    [`bash <<< "cat ${E}"`, true, true],
+    [`echo "$(cat ${E} >&2)" 2>/dev/null`, true, true],
+    // Where the shells differ. bash runs an assignment's substitution
+    // outside the command's redirections.
+    [`X=$(cat ${E} >&2) 2>/dev/null`, true, false],
+    // zsh MULTIOS: every target of a descriptor redirected twice, the pipe included.
+    [`cat ${E} >&2 > /dev/null`, false, true],
+    [`cat ${E} >&1 > copy.out`, false, true],
+    [`cat ${E} 3>&2 >&3 > /dev/null`, false, true],
+    [`cat ${E} > copy.out > /dev/null`, false, false],
+    [`cat ${E} > /dev/null | cat`, false, true],
+    [`cat ${E} 2>&1 > /dev/null | cat`, false, true],
+    [`cat ${E} &> /dev/null | cat`, false, true],
+    [`{ cat ${E}; } > /dev/null | cat`, false, true],
+    [`cat ${E} | tee copy.out > /dev/null | cat`, false, true, "tee"],
+    [`cat ${E} > copy.out | wc -c`, false, false],
+    [`cat < ${E} < /dev/null`, false, true],
+    [`cat ${E} | cat < /dev/null`, false, true],
+    // zsh NULLCMD and READNULLCMD: redirections without a command run `cat`.
+    [`< ${E}`, false, true],
+    [`< ${E} >&2`, false, true],
+    [`cat ${E} | >&2`, false, true],
+    [`<<< "$(cat ${E})"`, false, true],
+    [`< ${E} > copy.out`, false, false],
+    [`X=1 < ${E}`, false, false],
+    // zsh EQUALS.
+    [`=cat ${E}`, false, true],
+  ];
+  for (const [command, bashPrints, zshPrints, needs] of cases) {
+    const leaks = bashPrints || zshPrints;
+    test(`${leaks ? "denies" : "allows"}: ${command}`, () => {
+      const reason = custodyReason({ tool_name: "Bash", tool_input: { command }, cwd: root2 }, { model: model2, env: {} });
+      expect(reason !== null).toBe(leaks);
+    });
+    for (const [shell, prints] of [
+      ["bash", bashPrints],
+      ["zsh", zshPrints],
+    ]) {
+      const runnable = Boolean(Bun.which(shell)) && (!needs || Boolean(Bun.which(needs)));
+      test.skipIf(!runnable)(`${shell} ${prints ? "prints" : "keeps it out"}: ${command}`, () => {
+        const env = { PATH: process.env.PATH ?? "", HOME: home2, LANG: "C" };
+        const run = Bun.spawnSync([shell, "-c", command], { cwd: root2, env, stdin: "ignore" });
+        expect(`${run.stdout}${run.stderr}`.includes(MARKER)).toBe(prints);
+      });
+    }
+  }
 });
 
 describe("hook protocol", () => {

@@ -49,7 +49,19 @@ const fixtures = {
   env: file("broker.env", `# broker\nexport TOKEN=${SECRETS.token}\nOIDC='${SECRETS.oidc}'\n\nPORT=${SECRETS.number}\n${SECRETS.client}${SECRETS.db}=keyed\n`),
   pem: file("id_example", `-----BEGIN OPENSSH PRIVATE KEY-----\n${SECRETS.key}\n-----END OPENSSH PRIVATE KEY-----\n`),
   nested: file("nested.json", JSON.stringify({ outer: [[{ inner: SECRETS.token }], { json: JSON.stringify({ deep: SECRETS.db }) }], [`${SECRETS.client}${SECRETS.token}`]: "keyed" })),
-  keyed: file("token-keys.json", JSON.stringify({ [`sk_live_${SECRETS.admin}`]: 1, [`eyJhbGciOiJIUzI1NiJ9.${SECRETS.oidc}`]: 2, [`ghp_${SECRETS.short}`]: 3, "credentials/vm101-ssh": { path: "/nonexistent" } })),
+  keyed: file(
+    "token-keys.json",
+    JSON.stringify({
+      [`sk_live_${SECRETS.admin}`]: 1,
+      [`eyJhbGciOiJIUzI1NiJ9.${SECRETS.oidc}`]: 2,
+      [`ghp_${SECRETS.client}${SECRETS.short}`]: 3,
+      // A token after a structural prefix, with no long mixed run (review of 71e74444).
+      [`account/xoxb-${SECRETS.short}123-${SECRETS.short}abc-${SECRETS.short}789`]: 4,
+      "credentials/vm101-ssh": { path: "/nonexistent" },
+      ASIA_PACIFIC: 5,
+      error_count: 6,
+    }),
+  ),
   yaml: file("values.yaml", `service:\n  password: ${SECRETS.yaml}\n  user: admin\n`),
   toml: file("values.toml", `[service]\npassword = "${SECRETS.yaml}"\n`),
   invalid: file("broken.json", `{"password": "${SECRETS.db}", trailing`),
@@ -110,8 +122,10 @@ describe("shows the structure", () => {
 
   test("keys shaped like credentials are shown by length, schema names are not", () => {
     const output = shape(fixtures.keyed);
-    expect(output.match(/<key len=\d+>/gu)?.length).toBe(3);
+    expect(output.match(/<key len=\d+>/gu)?.length).toBe(4);
     expect(output).toContain('$["credentials/vm101-ssh"]');
+    expect(output).toContain("$.ASIA_PACIFIC");
+    expect(output).toContain("$.error_count");
   });
 
   test("YAML and TOML", () => {

@@ -101,7 +101,10 @@ inline interpretery, `bash -c`, `dd`, archiv nebo komprese na stdout …)
 nakrmený cestou do custody, a to i přes proměnnou, `$(…)`, rouru, `xargs`,
 `find -exec`, `cd` do custody, `source` se `set -x` nebo výpisem prostředí,
 nebo kopii pořízenou tímtéž příkazem. Přesměrování vyhodnocuje zleva doprava
-jako shell; inline kód a programy `awk`, `sed` nebo `jq`, které umějí psát na
+jako shell, a to zvlášť podle pravidel bashe i zsh (Claude Code na macOS
+pouští příkazy v zsh, kde jeden deskriptor přesměrovaný dvakrát píše do všech
+cílů a samotné `< soubor` soubor vypíše); zamítne, když by obsah vypsal
+kterýkoli z nich. Inline kód a programy `awk`, `sed` nebo `jq`, které umějí psát na
 stderr, musí mít přesměrovaný i stderr (`> soubor 2>&1`). Dále
 Read souboru v custody a Grep v content módu nad custody, nad `~/.config`
 nebo nad `~`. Zamítnutí vysvětlí důvod a ukáže helper. Výjimku nemá: žádná
@@ -138,6 +141,9 @@ Guard chrání před nehodou, není to sandbox:
 - custody na vzdáleném hostu hlídá jen v textu vzdáleného příkazu;
 - inline kód nad custody je zakázaný celý, i když by vypsal jen klíče: na to
   je helper;
+- `jq … > soubor` zůstává povolené, ale chybová hláška jq o typu hodnoty umí na
+  stderr ocitovat zhruba prvních 10 znaků hodnoty; při zápisu custody přes jq
+  proto přesměruj i stderr (`2>/dev/null` nebo do souboru v custody);
 - čtení přes `find` nebo `grep -r` z adresáře, který custody obsahuje (třeba
   kořen Organizace), je zakázané celé; `rg` a nástroj Grep custody ignorovanou
   Gitem přeskočí;
