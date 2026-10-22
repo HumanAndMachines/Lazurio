@@ -522,6 +522,10 @@ const STDIN_ONLY = words("tr");
 const LISTERS = words("ls tree realpath readlink dirname basename du stat file");
 const DIFFS = words("diff colordiff sdiff delta difft icdiff");
 const WELL_KNOWN_VARS = words("HOME PWD OLDPWD PATH USER LOGNAME SHELL TMPDIR TERM LANG LC_ALL PS1");
+// The only environment values used to resolve paths. Other variables may hold
+// secrets (tokens in the agent's environment), and a resolved value can end up
+// in a deny reason, so they stay unknown.
+const PATH_VARS = words("TMPDIR XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME USER LOGNAME");
 const ENV_ACCESS = /environ|getenv|process\.env|Bun\.env|Deno\.env|ENV\[|\$ENV\{/u;
 const PYTHON_READER_MODULES = words("json.tool base64 pickletools pickle quopri uu pprint");
 const TRANSCRIPT_DEVICES = words("/dev/stderr /dev/fd/2 /dev/tty");
@@ -565,7 +569,7 @@ class Analysis {
     if (name === "HOME") return synthetic(CLEAN, "", this.model.home);
     if (name === "PWD") return synthetic(CLEAN, "", this.cwd);
     if (this.sourced && !WELL_KNOWN_VARS.has(name)) return synthetic(CONTENT, `$${name} after ${this.sourced.label}`, null, this.sourced.origin);
-    if (typeof this.env?.[name] === "string" && this.env[name] !== "") return synthetic(CLEAN, "", this.env[name]);
+    if (PATH_VARS.has(name) && typeof this.env?.[name] === "string" && this.env[name] !== "") return synthetic(CLEAN, "", this.env[name]);
     return part.fallback === null ? synthetic(CLEAN, "") : this.word(lexWord(part.fallback, 0).tok);
   }
 

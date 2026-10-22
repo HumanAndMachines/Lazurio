@@ -112,6 +112,16 @@ describe("denies a command that prints custody values", () => {
     expect(custodyReason({ tool_name: "Monitor", tool_input: { command: `tail -f ${ENV}` }, cwd: lazurio }, { model, env: {} })).toEqual(expect.any(String));
   });
 
+  test("a secret in the environment never reaches the deny reason", () => {
+    const secret = "tok-Zq8xVk2mWp9Lr4Tn8Yc1";
+    const reason = custodyReason(
+      { tool_name: "Bash", tool_input: { command: "cat ~/.config/lazurio/credentials/$API_TOKEN" }, cwd: lazurio },
+      { model, env: { API_TOKEN: secret } },
+    );
+    expect(reason).toEqual(expect.any(String));
+    expect(reason).not.toContain(secret);
+  });
+
   test("Read of a custody file", () => {
     expect(custodyReason({ tool_name: "Read", tool_input: { file_path: join(lane, "issuer-secrets.json") }, cwd: lazurio }, { model })).toContain("Read would show");
   });

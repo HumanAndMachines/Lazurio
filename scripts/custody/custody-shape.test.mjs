@@ -46,7 +46,7 @@ const fixtures = {
     }),
   ),
   map: file("credential-map.json", JSON.stringify({ credentials: { "credentials/oidc": { path: pointerTarget }, "credentials/gone": { path: "/nonexistent/qz7vkx-not-a-path.json" } } })),
-  env: file("broker.env", `# broker\nexport TOKEN=${SECRETS.token}\nOIDC='${SECRETS.oidc}'\n\nPORT=${SECRETS.number}\n`),
+  env: file("broker.env", `# broker\nexport TOKEN=${SECRETS.token}\nOIDC='${SECRETS.oidc}'\n\nPORT=${SECRETS.number}\n${SECRETS.client}${SECRETS.db}=keyed\n`),
   pem: file("id_example", `-----BEGIN OPENSSH PRIVATE KEY-----\n${SECRETS.key}\n-----END OPENSSH PRIVATE KEY-----\n`),
   nested: file("nested.json", JSON.stringify({ outer: [[{ inner: SECRETS.token }], { json: JSON.stringify({ deep: SECRETS.db }) }], [`${SECRETS.client}${SECRETS.token}`]: "keyed" })),
   yaml: file("values.yaml", `service:\n  password: ${SECRETS.yaml}\n  user: admin\n`),
@@ -93,6 +93,7 @@ describe("shows the structure", () => {
     expect(output).toMatch(/\n  env · \d+ bytes/u);
     expect(output).toMatch(new RegExp(`TOKEN\\s+len=${SECRETS.token.length}`, "u"));
     expect(output).toMatch(new RegExp(`OIDC\\s+len=${SECRETS.oidc.length}`, "u"));
+    expect(output).toMatch(/<key len=\d+>/u);
   });
 
   test("PEM label only", () => {

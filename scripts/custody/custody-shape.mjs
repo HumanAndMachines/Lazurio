@@ -119,7 +119,7 @@ class Shape {
     const env = lines > 1 ? envEntries(value) : null;
     if (env) {
       this.row(path, `${base} · env block, ${env.length} keys`, value);
-      for (const [key, v] of env) this.row(`${path} ${key}`, this.leaf(v), v);
+      for (const [key, v] of env) this.row(`${path} ${showKey(key)}`, this.leaf(v), v);
       return;
     }
     if (/^\s*[[{]/u.test(value)) {
@@ -161,7 +161,7 @@ class Shape {
     }
     const env = envEntries(text);
     if (env && ![".yaml", ".yml", ".toml"].includes(extension)) {
-      for (const [key, v] of env) this.row(key, this.leaf(v), v);
+      for (const [key, v] of env) this.row(showKey(key), this.leaf(v), v);
       return "env";
     }
     const structured = extension === ".toml" ? globalThis.Bun?.TOML : [".yaml", ".yml"].includes(extension) ? globalThis.Bun?.YAML : null;
@@ -178,7 +178,7 @@ class Shape {
       return m && !line.trim().startsWith("#") ? [[m[1].length, m[2], unquote(m[3].trim())]] : [];
     });
     if (keyed.length > 0) {
-      for (const [indent, key, v] of keyed) this.row(`${" ".repeat(Math.min(indent, 12))}${key}`, v === "" ? "(section)" : this.leaf(v), v === "" ? undefined : v);
+      for (const [indent, key, v] of keyed) this.row(`${" ".repeat(Math.min(indent, 12))}${showKey(key)}`, v === "" ? "(section)" : this.leaf(v), v === "" ? undefined : v);
       return "key lines";
     }
     const lines = text.split("\n").filter((line) => line.length > 0);
