@@ -1157,8 +1157,22 @@ const HANDLERS = {
     return valueOf(rest[0]) === "read" ? this.reader(name, rest.slice(1), io) : CLEAN_T;
   },
   unzip: readsWhen((v) => v.some((x) => /^-[A-Za-z]*[pc]/u.test(x))),
-  tar: readsWhen((v) => v.includes("--to-stdout") || v.some((x, k) => /^-[A-Za-z]*O/u.test(x) || (k === 0 && /^[A-Za-z]*O[A-Za-z]*$/u.test(x)))),
-  gzip: readsWhen((v) => v.some((x) => x === "--stdout" || x === "--to-stdout" || /^-[A-Za-z0-9]*c/u.test(x))),
+  // Archives and compressed streams written to stdout carry the content.
+  tar: readsWhen((v) => {
+    const cluster = (x, k) => (x.startsWith("-") && !x.startsWith("--") ? x.slice(1) : k === 0 ? x : "");
+    const extractsToStdout = v.includes("--to-stdout") || v.some((x, k) => cluster(x, k).includes("O"));
+    const creates = v.includes("--create") || v.some((x, k) => /c/u.test(cluster(x, k)));
+    const archive = v.findIndex((x, k) => x === "--file" || x.startsWith("--file=") || /f$/u.test(cluster(x, k)));
+    const toStdout = archive < 0 || v[archive] === "--file=-" || v[archive + 1] === "-";
+    return extractsToStdout || (creates && toStdout);
+  }),
+  zip: readsWhen((v) => v.filter((x) => !x.startsWith("-") || x === "-")[0] === "-"),
+  gzip(name, rest, io) {
+    const v = rest.map(valueOf);
+    const toStdout = v.some((x) => x === "--stdout" || x === "--to-stdout" || /^-[A-Za-z0-9]*c/u.test(x));
+    const fromStdin = !rest.some((w) => !isOption(w));
+    return toStdout || fromStdin ? this.reader(name, rest, io) : CLEAN_T;
+  },
   gpg: readsWhen((v) => !v.some((x) => x === "-o" || x.startsWith("--output")) && (v.some((x) => x === "--decrypt" || /^-[A-Za-z]*d/u.test(x)) || !v.some((x) => x.startsWith("-")))),
   sops: readsWhen((v) => v.some((x) => ["-d", "--decrypt", "decrypt"].includes(x)) && !v.includes("--output")),
   vim: readsWhen((v) => v.some((x) => ["-e", "-E", "-es", "-Es", "--headless", "-c", "-s"].includes(x) || x.startsWith("+"))),
@@ -1230,7 +1244,7 @@ alias("pushd", HANDLERS.cd);
 alias("readarray", HANDLERS.mapfile);
 alias("printf print", HANDLERS.echo);
 alias("fdfind", HANDLERS.fd);
-alias("gunzip bzip2 bunzip2 xz unxz zstd unzstd lz4", HANDLERS.gzip);
+alias("gunzip bzip2 bunzip2 xz unxz zstd unzstd lz4 brotli compress", HANDLERS.gzip);
 alias("age", HANDLERS.gpg);
 alias("vi nvim view", HANDLERS.vim);
 alias("powershell", HANDLERS.pwsh);

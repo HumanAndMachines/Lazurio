@@ -97,6 +97,10 @@ describe("denies a command that prints custody values", () => {
     ["Personalspace custody", "jq . personalspace/owner_GEN3/secrets/token.json"],
     ["a custody log", "tail -f ~/.config/lazurio/custody/run/apply.log"],
     ["unparseable but names custody next to a reader", `cat ${SECRETS} "unterminated`],
+    ["custody archived to stdout and encoded", "tar -cf - ~/.config/lazurio/credentials/lane | base64"],
+    ["custody compressed from stdin and encoded", `cat ${SECRETS} | gzip | base64`],
+    ["gzip -c of custody", `gzip -c ${ENV} | xxd`],
+    ["zip to stdout", "zip -r - ~/.config/lazurio/credentials/lane | base64"],
   ];
   for (const [name, command, cwd] of cases) {
     test(name, () => {
@@ -161,6 +165,8 @@ describe("allows normal work with custody", () => {
     ["subshell cd does not leak", "(cd ~/.config/lazurio/credentials/lane && ls) && cat README.md"],
     ["unrelated", "git status --short && git log --oneline -3 && cat README.md | head -5"],
     ["grep over a tree without custody", "grep -rn record infra/machines", org],
+    ["archive of custody into custody", "tar -czf ~/.config/lazurio/custody/run/lane.tgz -C ~/.config/lazurio/credentials lane"],
+    ["compressed in place", `gzip ${ENV}`],
   ];
   for (const [name, command, cwd] of cases) {
     test(name, () => {
