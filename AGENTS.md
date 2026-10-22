@@ -750,6 +750,7 @@ Root upravuj jen když se mění:
 - Lokální secret custody standard: `manual/security/local-secret-custody.md`;
   secrets rootu a uživatele patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
   organization/AI-colleague secrets do organization-local `private/secrets/...`.
+  Hodnoty z custody nikdy nevypisuj: strukturu ukáže `scripts/custody/custody-shape.mjs`, výpis hlídá hook `scripts/custody/custody-guard.mjs`.
 - Lokální drafty: `drafts/`
 - Refactor dělá Agent, skript jen doplňuje (decision 0173 v
   manual/decision-register.md): kde se stará struktura má zahodit nebo
