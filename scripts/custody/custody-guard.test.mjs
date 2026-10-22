@@ -302,7 +302,9 @@ describe("the guard agrees with what bash and zsh really print", () => {
     [`dd if=${ABS} 2>/dev/null`, true, true, "dd"],
     [`dd if=${ABS} of=copy.bin 2>/dev/null`, false, false, "dd"],
     [`cp ${E} copy.env`, false, false],
-    [`tee /dev/stderr < ${E} > /dev/null`, true, true, "tee"],
+    // Opens /dev/stderr by path; where the test's stderr is a socket (Linux CI)
+    // the open fails and nothing prints, but the guard still denies.
+    [`tee /dev/stderr < ${E} > /dev/null`, true, true, "tee", "dev-stderr-path"],
     [`tee /dev/stderr < ${E} > /dev/null 2>/dev/null`, false, false, "tee"],
     [`bash -c 'cat ${E} >&2'`, true, true],
     [`bash -c 'cat ${E} >&2' 2>/dev/null`, false, false],
@@ -341,7 +343,11 @@ describe("the guard agrees with what bash and zsh really print", () => {
     // zsh EQUALS.
     [`=cat ${E}`, false, true],
   ];
-  for (const [command, bashPrints, zshPrints, needs] of cases) {
+  // Whether a child of this test runner can open its stderr by path. On macOS
+  // it can; on Linux CI the runner hands the child a socket, which
+  // /dev/stderr (/proc/self/fd/2) cannot reopen.
+  const devStderrByPath = `${Bun.spawnSync(["sh", "-c", "echo probe | tee /dev/stderr > /dev/null"], { stdin: "ignore" }).stderr}`.includes("probe");
+  for (const [command, bashPrints, zshPrints, needs, platform] of cases) {
     const leaks = bashPrints || zshPrints;
     test(`${leaks ? "denies" : "allows"}: ${command}`, () => {
       const reason = custodyReason({ tool_name: "Bash", tool_input: { command }, cwd: root2 }, { model: model2, env: {} });
@@ -355,7 +361,8 @@ describe("the guard agrees with what bash and zsh really print", () => {
       test.skipIf(!runnable)(`${shell} ${prints ? "prints" : "keeps it out"}: ${command}`, () => {
         const env = { PATH: process.env.PATH ?? "", HOME: home2, LANG: "C" };
         const run = Bun.spawnSync([shell, "-c", command], { cwd: root2, env, stdin: "ignore" });
-        expect(`${run.stdout}${run.stderr}`.includes(MARKER)).toBe(prints);
+        const expected = platform === "dev-stderr-path" && !devStderrByPath ? false : prints;
+        expect(`${run.stdout}${run.stderr}`.includes(MARKER)).toBe(expected);
       });
     }
   }
