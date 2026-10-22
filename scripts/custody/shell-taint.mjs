@@ -798,7 +798,6 @@ class Analysis {
     const handler = own(HANDLERS, name);
     if (handler) return handler.call(this, name, rest, io);
     if (/^python[0-9.]*$|^pypy3?$/u.test(name)) return this.python(name, rest, io);
-    if (/^lua(jit|[0-9.]*)$/u.test(name)) return this.inline(name, rest, io, ["-e"]);
     if (READERS.has(name)) return this.reader(name, rest, io);
     if (LISTERS.has(name)) return this.reachesCustody(rest) ? T(PATHS) : CLEAN_T;
     return CLEAN_T;
@@ -1125,19 +1124,6 @@ const HANDLERS = {
     }
     return out;
   },
-  fd(name, rest) {
-    const exec = rest.findIndex((w) => ["-x", "--exec", "-X", "--exec-batch"].includes(w.value));
-    const ownArgs = exec < 0 ? rest : rest.slice(0, exec);
-    const values = ownArgs.map(valueOf);
-    const hidden = values.some((v) => v === "--hidden" || /^-[A-Za-z]*[Hu]/u.test(v));
-    const noIgnore = values.some((v) => v === "--no-ignore" || /^-[A-Za-z]*[Iu]/u.test(v));
-    const dirs = ownArgs.filter((w) => !isOption(w)).slice(1);
-    const reaches = this.reachesCustody(dirs.length ? dirs : [synthetic(CLEAN, "", ".")], { skipsHidden: !hidden, respectsGitignore: !noIgnore });
-    if (!reaches) return CLEAN_T;
-    if (exec < 0) return T(PATHS);
-    const command = rest.slice(exec + 1).filter((w) => w.value !== ";");
-    return max(T(PATHS), this.program([...command, synthetic(PATHS, "custody files found by `fd`")], { stdin: CLEAN_T, heredoc: null, redirected: false }));
-  },
   eval(name, rest, io) {
     if (rest.some((w) => w.value === null)) return rest.some((w) => w.level === CONTENT) ? T(CONTENT, "`eval` runs a custody value") : CLEAN_T;
     return this.source(rest.map((w) => w.value).join(" "), io.stdin);
@@ -1152,9 +1138,6 @@ const HANDLERS = {
     const v = rest.map(valueOf);
     const prints = v.includes("-p") || v.some((x, k) => x === "-o" && v[k + 1] === "-");
     return prints ? this.reader(name, rest.filter((w) => !["-o", "-"].includes(w.value)), io) : CLEAN_T;
-  },
-  defaults(name, rest, io) {
-    return valueOf(rest[0]) === "read" ? this.reader(name, rest.slice(1), io) : CLEAN_T;
   },
   unzip: readsWhen((v) => v.some((x) => /^-[A-Za-z]*[pc]/u.test(x))),
   // Archives and compressed streams written to stdout carry the content.
@@ -1174,8 +1157,6 @@ const HANDLERS = {
     return toStdout || fromStdin ? this.reader(name, rest, io) : CLEAN_T;
   },
   gpg: readsWhen((v) => !v.some((x) => x === "-o" || x.startsWith("--output")) && (v.some((x) => x === "--decrypt" || /^-[A-Za-z]*d/u.test(x)) || !v.some((x) => x.startsWith("-")))),
-  sops: readsWhen((v) => v.some((x) => ["-d", "--decrypt", "decrypt"].includes(x)) && !v.includes("--output")),
-  vim: readsWhen((v) => v.some((x) => ["-e", "-E", "-es", "-Es", "--headless", "-c", "-s"].includes(x) || x.startsWith("+"))),
   git(name, rest, io) {
     let k = 0;
     while (k < rest.length && isOption(rest[k])) k += ["-C", "-c", "--git-dir", "--work-tree"].includes(rest[k].value) ? 2 : 1;
@@ -1184,21 +1165,12 @@ const HANDLERS = {
     const reads = ["diff", "show", "cat-file", "blame", "log"].includes(sub) || (sub === "grep" && (v.includes("--no-index") || v.includes("--untracked")));
     return reads ? this.reader(`git ${sub}`, rest.slice(k + 1), io) : CLEAN_T;
   },
-  curl(name, rest) {
-    const files = rest.filter((w) => valueOf(w).startsWith("file://"));
-    if (files.length === 0 || rest.some((w) => ["-o", "--output", "-O", "--remote-name"].includes(w.value))) return CLEAN_T;
-    return this.readArgs(name, files);
-  },
   perl(name, rest, io) {
     return rest.some((w) => /^-[A-Za-z0-9]*i/u.test(valueOf(w))) ? CLEAN_T : this.inline(name, rest, io, ["-e", "-E"]);
   },
   ruby(name, rest, io) {
     return rest.some((w) => /^-[A-Za-z0-9]*i/u.test(valueOf(w))) ? CLEAN_T : this.inline(name, rest, io, ["-e"]);
   },
-  php: inlineWith(["-r", "-R", "-B", "-E"]),
-  osascript: inlineWith(["-e"]),
-  rscript: inlineWith(["-e"]),
-  pwsh: inlineWith(["-c", "-Command", "-command"]),
   node: inlineWith(["-e", "--eval", "-p", "--print"]),
   bun(name, rest, io) {
     const sub = valueOf(rest[0]);
@@ -1206,10 +1178,6 @@ const HANDLERS = {
     if (sub === "x") return this.program(rest.slice(1), io);
     if (sub === "run") return valueOf(rest[1]) === "-" ? this.inline(name, rest.slice(1), io, []) : CLEAN_T;
     return this.inline(name, rest, io, ["-e", "--eval", "-p", "--print"]);
-  },
-  deno(name, rest, io) {
-    const code = valueOf(rest[0]) === "eval" ? rest.slice(1).find((w) => !isOption(w)) : null;
-    return code ? this.inline(name, [synthetic(CLEAN, "", "-e"), code], io, ["-e"]) : CLEAN_T;
   },
   ssh(name, rest, io) {
     const withValue = new Set(["-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w", "-B"]);
@@ -1231,10 +1199,6 @@ const HANDLERS = {
     while (k < rest.length && isOption(rest[k])) k += withValue.has(rest[k].value) ? 2 : 1;
     return this.program(rest.slice(k + 1), io);
   },
-  kubectl(name, rest, io) {
-    const dash = rest.findIndex((w) => w.value === "--");
-    return valueOf(rest[0]) === "exec" && dash >= 0 ? this.program(rest.slice(dash + 1), io) : CLEAN_T;
-  },
 };
 const alias = (names, target) => {
   for (const name of names.split(" ")) HANDLERS[name] = target;
@@ -1243,14 +1207,9 @@ alias(".", HANDLERS.source);
 alias("pushd", HANDLERS.cd);
 alias("readarray", HANDLERS.mapfile);
 alias("printf print", HANDLERS.echo);
-alias("fdfind", HANDLERS.fd);
 alias("gunzip bzip2 bunzip2 xz unxz zstd unzstd lz4 brotli compress", HANDLERS.gzip);
 alias("age", HANDLERS.gpg);
-alias("vi nvim view", HANDLERS.vim);
-alias("powershell", HANDLERS.pwsh);
 alias("nodejs", HANDLERS.node);
-alias("wget", HANDLERS.curl);
-alias("podman", HANDLERS.docker);
 alias("sh bash zsh dash ksh mksh fish", function shellHandler(name, rest, io) {
   return this.shell(name, rest, io);
 });
@@ -1258,7 +1217,7 @@ alias("sh bash zsh dash ksh mksh fish", function shellHandler(name, rest, io) {
 // ------------------------------------------------------------------- api ---
 
 const READER_WORD = new RegExp(
-  `(^|[\\s;&|({\`$])(${[...READERS, "python[0-9.]*", "node", "bun", "perl", "ruby", "php", "osascript", "plutil", "source"].join("|")})(?=[\\s;&|)}\`]|$)`,
+  `(^|[\\s;&|({\`$])(${[...READERS, "python[0-9.]*", "node", "bun", "perl", "ruby", "plutil", "source"].join("|")})(?=[\\s;&|)}\`]|$)`,
   "u",
 );
 
