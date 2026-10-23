@@ -55,7 +55,7 @@ export async function buildWorktreeIndex({
     }));
     const scanned = await scanCanonicalOrganizationWorktrees({ companiesRoot, organization: org });
     scanned.push(...await scanOwnerRepositoryWorktrees({ companiesRoot, organization: org,
-      repos: inventory.repos.filter((repo) => repo.organization === org.slug && repo.repo_kind === "module" && (!module || repo.module === module)),
+      repos: inventory.repos.filter((repo) => repo.organization === org.slug && ["module", "root_repo"].includes(repo.repo_kind) && (!module || repo.module === module)),
     }));
     for (const worktree of scanned) {
       if (module && worktree.module !== module) continue;
@@ -129,7 +129,7 @@ async function scanOwnerRepositoryWorktrees({ companiesRoot, organization, repos
       const record = await buildWorktreeRecord({ companiesRoot, organization, organizationRoot,
         rootRealPath: checkoutBoundary.rootRealPath, absolutePath,
         sidecarPath: join(base, `${basename(absolutePath)}.worktree.json`),
-        workspace: "workspace", module: repo.module, repoKind: "module", ownerRepository: repo,
+        workspace: repo.space === "root" ? "root" : "workspace", module: repo.module, repoKind: repo.repo_kind, ownerRepository: repo,
       });
       output.push({ ...record, module_path: repo.slot_path,
         ...(record.metadata?.branch !== registeredBranch ? {
