@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 import { existsSync } from "fs";
 import { createServer } from "net";
 import { tmpdir } from "os";
@@ -66,11 +66,27 @@ function fixtureDependencyInstallScript(extra = "") {
   ].filter(Boolean).join("; ");
 }
 
-afterAll(async () => {
-  for (const fixture of tempRoots) {
-    await removeTempRootAfterChildExit(fixture);
+// A failing assertion or timed-out test must not leave its native App running
+// until suite exit. Keep the final hook as a fallback for interrupted teardown.
+afterEach(cleanupRegisteredRuntimeFixtures);
+afterAll(cleanupRegisteredRuntimeFixtures);
+
+async function cleanupRegisteredRuntimeFixtures() {
+  const fixtures = tempRoots.splice(0);
+  await cleanupRuntimeFixtures(fixtures);
+}
+
+async function cleanupRuntimeFixtures(fixtures) {
+  const failures = [];
+  for (const fixture of fixtures) {
+    try {
+      await removeTempRootAfterChildExit(fixture);
+    } catch (error) {
+      failures.push(error);
+    }
   }
-});
+  if (failures.length) throw new AggregateError(failures, "Runtime fixture cleanup failed");
+}
 
 test("runtime ownership považuje localhost a 127.0.0.1 za tentýž listener", () => {
   expect(canonicalRuntimeListenerHost("localhost")).toBe("127.0.0.1");
@@ -205,6 +221,91 @@ test("fixture cleanup uses an explicit bounded Windows retry after child exit", 
   );
   expect(removeAttempts).toBe(3);
 });
+
+test("fixture cleanup stops a native App left running after a failed assertion", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+  });
+  try {
+    await runtime.start("test-company-demo-v1");
+    await waitForFetch(`http://127.0.0.1:${port}/health`);
+    // A failed assertion skips the normal runtime.stop() path. The fixture
+    // hook still owns the exact native child created by this test.
+    const fixture = tempRoots.find((candidate) => candidate.root === root);
+    await removeTempRootAfterChildExit(fixture, { childExitAttempts: 1, retryDelayMs: 10 });
+    expect(existsSync(root)).toBe(false);
+    expect(await probeRuntimeListener(runtimeListener("web", "entrypoint", port))).toMatchObject({ reachable: false });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(10_000));
+
+test("fixture cleanup attempts later roots even when an earlier fixture cannot be removed", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const fixture = tempRoots.find((candidate) => candidate.root === root);
+  const blockedRoot = join(root, "blocked-root");
+  await writeFile(blockedRoot, "not a directory");
+  await expect(cleanupRuntimeFixtures([
+    { root: join(blockedRoot, "child"), owner: "failed cleanup", children: [] },
+    fixture,
+  ])).rejects.toThrow();
+  expect(existsSync(root)).toBe(false);
+});
+
+testOnPosix("fixture cleanup stops a detached App tree after its launcher has exited", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const launcher = spawnFixtureChild(root, [process.execPath, "-e", [
+    `Bun.spawn([${JSON.stringify(process.execPath)}, 'server.mjs'], { stdout: 'ignore', stderr: 'ignore' });`,
+    "process.exit(0);",
+  ].join("\n")], {
+    cwd: join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1"),
+    env: { ...process.env, LAZURIO_RUNTIME_HOST: "127.0.0.1", LAZURIO_RUNTIME_PORT: String(port) },
+    detached: true,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  try {
+    await launcher.exited;
+    await waitForFetch(`http://127.0.0.1:${port}/health`);
+    await removeTempRootAfterChildExit(tempRoots.find((candidate) => candidate.root === root));
+    expect(await probeRuntimeListener(runtimeListener("web", "entrypoint", port))).toMatchObject({ reachable: false });
+  } finally {
+    await killFixtureProcess(launcher, root);
+  }
+}, platformTestTimeout(10_000));
+
+test("fixture App exits when its test owner is killed without running teardown", async () => {
+  const port = await findFreePort();
+  const owner = Bun.spawn([process.execPath, "-e", "setInterval(() => {}, 1000)"], {
+    stdout: "ignore", stderr: "ignore",
+  });
+  const root = await createCompaniesWorkspaceFixture({ port, fixtureOwnerPid: owner.pid });
+  const app = spawnFixtureChild(root, [process.execPath, "server.mjs"], {
+    cwd: join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1"),
+    env: { ...process.env, LAZURIO_RUNTIME_HOST: "127.0.0.1", LAZURIO_RUNTIME_PORT: String(port) },
+    stdout: "ignore", stderr: "ignore",
+  });
+  try {
+    await waitForFetch(`http://127.0.0.1:${port}/health`);
+    owner.kill("SIGKILL");
+    await owner.exited;
+    const exitedWithoutTeardown = await Promise.race([
+      app.exited.then(() => true),
+      sleep(1_000).then(() => false),
+    ]);
+    expect(exitedWithoutTeardown).toBe(true);
+    expect(await probeRuntimeListener(runtimeListener("web", "entrypoint", port))).toMatchObject({ reachable: false });
+  } finally {
+    owner.kill("SIGKILL");
+    await owner.exited;
+    await killFixtureProcess(app, root);
+  }
+}, platformTestTimeout(10_000));
 
 test("runtime manager spustí, změří a zastaví managed aplikaci", async () => {
   const port = await findFreePort();
@@ -5655,6 +5756,7 @@ test("runtime manager vrací 404 pro aplikaci mimo discovery", async () => {
 
 async function createCompaniesWorkspaceFixture({
   port,
+  fixtureOwnerPid = process.pid,
   serverSource = null,
   packageManager = null,
   dependencies = null,
@@ -5772,7 +5874,17 @@ async function createCompaniesWorkspaceFixture({
   }
   await writeFile(
     join(appRoot, "server.mjs"),
-    serverSource ?? [
+    [
+      // afterEach cannot run if the test runner is forcibly killed. The
+      // fixture itself follows the creating test process, not its short-lived
+      // `bun run dev` launcher. It never signals any other process.
+      `const lazurioFixtureOwnerPid = ${fixtureOwnerPid};`,
+      "setInterval(() => {",
+      "  try { process.kill(lazurioFixtureOwnerPid, 0); } catch (error) {",
+      "    if (error.code === 'ESRCH') process.exit(0);",
+      "  }",
+      "}, 250).unref();",
+      serverSource ?? [
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
@@ -5786,6 +5898,7 @@ async function createCompaniesWorkspaceFixture({
       "console.log(`fixture listening ${server.port}`);",
       "setInterval(() => {}, 2147483647);",
       "",
+      ].join("\n"),
     ].join("\n"),
     "utf8",
   );
@@ -6223,7 +6336,7 @@ function createRuntimeManager(options) {
     spawnProcessIsNative: spawnProcess === Bun.spawn,
     spawnProcess(command, spawnOptions) {
       const child = spawnProcess(command, spawnOptions);
-      registerFixtureChild(options.companiesRoot, child);
+      registerFixtureChild(options.companiesRoot, child, spawnOptions);
       return child;
     },
   });
@@ -6240,7 +6353,7 @@ function registerTempRoot(root, { port = null } = {}) {
   tempRoots.push({ root, port, owner: caller, children: [] });
 }
 
-function registerFixtureChild(root, child) {
+function registerFixtureChild(root, child, spawnOptions = {}) {
   const fixture = tempRoots.find((candidate) => candidate.root === root);
   if (
     !fixture
@@ -6252,6 +6365,9 @@ function registerFixtureChild(root, child) {
   const trackedChild = {
     pid: child.pid,
     child,
+    // Only native handles and groups explicitly created by this test are
+    // cleanup targets. Never infer ownership from a port or scan other Apps.
+    detached: process.platform !== "win32" && spawnOptions.detached === true,
     exitConfirmed: false,
     exited: Promise.resolve(child.exited).then(
       (exitCode) => {
@@ -6270,7 +6386,7 @@ function registerFixtureChild(root, child) {
 }
 
 function spawnFixtureChild(root, command, options) {
-  return registerFixtureChild(root, Bun.spawn(command, options));
+  return registerFixtureChild(root, Bun.spawn(command, options), options);
 }
 
 async function removeTempRootAfterChildExit({ root, port, owner, children = [] }, {
@@ -6281,6 +6397,16 @@ async function removeTempRootAfterChildExit({ root, port, owner, children = [] }
   removeFn = rm,
   sleepFn = sleep,
 } = {}) {
+  // Kill every owned tree before waiting on any single exit, so a stubborn
+  // child cannot prevent teardown of siblings in this fixture.
+  const stopResults = await Promise.allSettled(children
+    .filter((child) => child.child)
+    .map((child) => killFixtureProcess(child.child, root, child)));
+  const stopFailures = stopResults.filter((result) => result.status === "rejected");
+  if (stopFailures.length) {
+    throw new AggregateError(stopFailures.map((result) => result.reason),
+      `Runtime fixture children could not stop: owner=${owner}; root=${root}`);
+  }
   for (const child of children) {
     let exitResult = null;
     for (let attempt = 0; attempt < childExitAttempts; attempt += 1) {
@@ -6351,16 +6477,44 @@ async function executeWindowsStopCommand(command) {
   return { ok: true, exitCode: 0, stdout: "", stderr: "" };
 }
 
-async function killFixtureProcess(child, root) {
+async function killFixtureProcess(child, root, capturedChild = null) {
   if (!child) return;
-  try {
-    child.kill("SIGKILL");
-  } catch {}
-  await Promise.resolve(child.exited).catch(() => {});
   const fixture = tempRoots.find((candidate) => candidate.root === root);
-  const trackedChild = fixture?.children
+  const trackedChild = capturedChild ?? fixture?.children
     .find((candidate) => candidate.child === child);
+  if (trackedChild?.cleanupConfirmed) return;
+  const detached = trackedChild?.detached === true;
+  if (detached) {
+    try { process.kill(-child.pid, "SIGKILL"); } catch (error) {
+      // macOS can briefly return EPERM for a group containing only a killed
+      // orphan being reaped. The exit/group proofs below must still succeed.
+      if (!["ESRCH", "EPERM"].includes(error.code)) throw error;
+    }
+  } else if (process.platform === "win32" && !trackedChild?.exitConfirmed) {
+    const stop = Bun.spawn(windowsTaskkillCommand(child.pid, { force: true }), {
+      stdout: "ignore", stderr: "ignore", windowsHide: true,
+    });
+    await stop.exited;
+  } else if (!trackedChild?.exitConfirmed) {
+    child.kill("SIGKILL");
+  }
+  const exited = await Promise.race([
+    Promise.resolve(child.exited).then(() => true),
+    sleep(2_000).then(() => false),
+  ]);
+  if (!exited) throw new Error(`Fixture child PID ${child.pid} did not exit after cleanup`);
+  if (detached) {
+    for (let attempt = 0; ; attempt += 1) {
+      try { process.kill(-child.pid, 0); } catch (error) {
+        if (error.code === "ESRCH") break;
+        if (error.code !== "EPERM") throw error;
+      }
+      if (attempt >= 20) throw new Error(`Fixture process group ${child.pid} survived cleanup`);
+      await sleep(100);
+    }
+  }
   if (trackedChild) {
+    trackedChild.cleanupConfirmed = true;
     trackedChild.exitConfirmed = true;
     trackedChild.exitCode = "confirmed-by-kill-fixture-process";
   } else if (fixture && typeof child.resourceUsage === "function") {
