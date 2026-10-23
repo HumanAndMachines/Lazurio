@@ -110,6 +110,13 @@ Konvence: `prepare:app` a `check:prepared`.
   package.json) je součástí přípravy, kterou drží Platforma; skript ji
   neopakuje.
 
+Sdílený Launchpad kontroluje deklarovanou připravenost také před Start/Open.
+Po skutečné změně source spouští `lazurio update` deklarovaný `prepare_script`
+i tehdy, když kontrola přijme starý build, a potom znovu ověří `check_script`.
+Nezměněný checkout se zbytečně nepřestavuje. Neúspěšná příprava blokuje update
+nebo start; update aplikace sám nespouští. Kontrakt a failure modes drží
+[`application-preparation.md`](application-preparation.md).
+
 ## 4. Start kontrakt
 
 ### 4.1 `dev` skript spouští jeden proces a nic jiného
