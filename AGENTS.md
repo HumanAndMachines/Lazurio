@@ -14,6 +14,16 @@ firma = jedna GitHub organizace = jedna access hranice) → **workspace modul**
 (aplikace uvnitř Organizace) a **productionspace** (org-level repa mimo
 workspace moduly). Datový model je níž v „Organization GEN3 model“.
 
+**Conglomerate není další access hranice.** Conglomerate je jedna hranice
+důvěry svého zakladatele či zakladatelů pro sdílený tailnet jeho Conglomerate
+Hostu (decision 0184, dodatek z 2026-10-23): do tohoto tailnetu se smí
+přihlásit člen kterékoli Organizace, kterou host obsluhuje, i bez členství
+v Organizaci, která host vlastní. Jde jen o transport a přihlášení do sítě.
+Organizace se tím neslučují: jejich data, členství, schválení zařízení ani
+granty se mezi nimi nepřenášejí, každá Organizace zůstává vlastní access
+hranicí a vstup do jejích Environmentů dál drží její členství a konkrétní
+grant (0192).
+
 Launchpad je **auto-discovery first**: dostupné Organizace objevuje skenem
 `organizations/*/company.gen3.json`. `launchpad.gen3.json` drží jen sdílená
 root metadata — není to allowlist; `planned` sloty a personalspace owner jsou
