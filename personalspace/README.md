@@ -1,6 +1,6 @@
 # Personalspace
 
-Mountpoint pro privátní prostory uživatelů a AI kolegů podle
+Mountpoint pro privátní prostory uživatelů podle
 `launchpad.gen3.json` (`personalspace_mountpoint`) a CompaniesAsCode
 decisions 0013 a 0021; strukturu definuje decision 0051
 (revidovaná pro self-service decision 0079; Buddyho v Osobním Prostředí
@@ -117,7 +117,7 @@ warningem a migrují se podle
 ## Spolupráce s Kolegy
 
 Personalspace se s Kolegy nesdílí, a to ani po jednotlivých modulech. Co má
-být součástí práce Organizace, přesune uživatel jako záměrný Draft do repa
+být součástí práce Organizace, přesune uživatel záměrně pull requestem do repa
 Organizace a podřídí to jeho GitHub oprávněním a review procesu. Export nebo
 předání výsledku nikdy nedává příjemci přístup k Personalspace, jeho manifestu,
 gbrainu ani secrets custody.

@@ -36,8 +36,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      Grant se odvozuje z aktuálního stavu (schválené zařízení × právě přidělené
      Environmenty) bez samostatné žádosti a sleduje změny přidělení, zařízení
      i členství (dodatek 0192 z 2026-10-07).
-     Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní,
-     týmové a automatizované Environmenty na zařízení nedosáhnou, kromě
+     Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní
+     a týmové Environmenty včetně Prostředí Henry na zařízení nedosáhnou, kromě
      výslovně deklarovaného zařízení Ownera podle pravidla 8.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává

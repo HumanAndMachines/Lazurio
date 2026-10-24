@@ -112,7 +112,7 @@
   "$defs": {
     "template_provenance": {
       "type": "object",
-      "description": "Volitelný zpětně kompatibilní záznam původu jednoho modulu: z jaké šablony, z jakého refu a z jakého přesného commitu byl materializovaný nebo forknutý. Stejný tvar jako personal.gen3.json template_provenance, navíc s vN dimenzí modulové appky. Tohle je strojově čitelný vstup pro tříkolejné rozhodnutí Buddyho nebo AI Kolegy Organizace: opravit bug lokálně, fork-syncnout, protože upstream ho už opravil, nebo nabídnout upstream PR (kudy PR vede, říká module_slots[].distribution_lane). Bez tohoto záznamu by se původ musel rekonstruovat archeologií na živém checkoutu.",
+      "description": "Volitelný zpětně kompatibilní záznam původu jednoho modulu: z jaké šablony, z jakého refu a z jakého přesného commitu byl materializovaný nebo forknutý. Stejný tvar jako personal.gen3.json template_provenance, navíc s vN dimenzí modulové appky. Tohle je strojově čitelný vstup pro tříkolejné rozhodnutí Buddyho nebo agenta Organizace: opravit bug lokálně, fork-syncnout, protože upstream ho už opravil, nebo nabídnout upstream PR (kudy PR vede, říká module_slots[].distribution_lane). Bez tohoto záznamu by se původ musel rekonstruovat archeologií na živém checkoutu.",
       "required": [
         "source_repository",
         "source_ref",
@@ -258,7 +258,7 @@
             "marketplace_instance",
             "private"
           ],
-          "description": "Volitelný distribuční kanál, ze kterého modul vznikl; určuje, kudy vede jeho feedback loop, a je kontraktem pro pozdější mechanismus. `public_template`: modul vznikl z veřejné šablony a feedback path je upstream PR do té šablony (Buddy nebo AI Kolega Organizace opravu obecného charakteru nabízí zpět běžným PR, viz docs/template-repo-strategy.md). `marketplace_instance`: modul je samostatná instance koupená přes Marketplace, kupující dostal nezávislou kopii a přístup do prodejcova privátního repa nemá, proto feedback path NENÍ upstream PR, ale Marketplace-side mechanismus, který se teprve navrhne (TBD); do té doby se oprava drží lokálně a upstream PR se nepokouší. `private`: modul nemá žádný upstream, feedback path neexistuje a oprava je vždy jen lokální. Chybějící pole = kanál není deklarovaný (starší manifesty), nikdy ne `private`.",
+          "description": "Volitelný distribuční kanál, ze kterého modul vznikl; určuje, kudy vede jeho feedback loop, a je kontraktem pro pozdější mechanismus. `public_template`: modul vznikl z veřejné šablony a feedback path je upstream PR do té šablony (Buddy nebo agent Organizace opravu obecného charakteru nabízí zpět běžným PR, viz docs/template-repo-strategy.md). `marketplace_instance`: modul je samostatná instance koupená přes Marketplace, kupující dostal nezávislou kopii a přístup do prodejcova privátního repa nemá, proto feedback path NENÍ upstream PR, ale Marketplace-side mechanismus, který se teprve navrhne (TBD); do té doby se oprava drží lokálně a upstream PR se nepokouší. `private`: modul nemá žádný upstream, feedback path neexistuje a oprava je vždy jen lokální. Chybějící pole = kanál není deklarovaný (starší manifesty), nikdy ne `private`.",
           "$comment": "Enum je záměrně jen deklarace kanálu a jeho feedback path. Marketplace, instantiation flow, licencování ani ceny do tohoto schématu nepatří."
         },
         "template_provenance": {

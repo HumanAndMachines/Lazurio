@@ -2,7 +2,7 @@
 //
 // PRIVÁTNÍ HRANICE JE TVRDÁ. Tato lane je úplně oddělená od organizations/*
 // auto-discovery (discovery-lib.mjs). Osobní prostor je privátní repo vlastníka
-// mašiny (nebo AI kolegy) na jeho osobním GitHubu, mimo firemní GitHub
+// mašiny na jeho osobním GitHubu, mimo firemní GitHub
 // organizace. Discovery skenuje výhradně personalspace/*/personal.gen3.json,
 // nikdy organizations/*. Obsah osobních modulů a gbrain zápisů se NIKDY
 // nepropisuje do org discovery, shared/doctor reportů ani templates — odsud

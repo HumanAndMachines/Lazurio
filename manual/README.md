@@ -181,6 +181,9 @@ runtime/cache cesty, ne custody source of truth.
   privátního notebooku do veřejného Lazuria.
 - [GEN2 → GEN3 migration manual](gen2-to-gen3-migration.md) — převod GEN2 workspace do Organization modelu včetně pravidla, že obecný Organization-local `guide/` se maže a nahrazuje shared `Lazurio/guide`.
 - [Workspace module version lifecycle](workspace-module-version-lifecycle.md) — standard `v0`/`v1`/`v2`/`v3` pro standardní workspace moduly, repository-db v3 pipeline od zápisu přes nepublikované změny k Publikaci, template propagation a Pricebook v3 dogfood.
+- [Práce s forky](forks.md) — distribuční a plný fork, obnova z releasu
+  upstreamu, release tagy a kontrola historie před přepsáním branche; model
+  Lazuria má přednost před modelem forku.
 - [Doctor worktree management](worktree-management.md) — shaping manuál a
   implementační řezy CAC-0065 pro jeden Organization environment se skutečnými
   nested Git worktrees, dependencies a bezpečným uvolněním disku po PR.
