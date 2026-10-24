@@ -912,6 +912,31 @@ nepřijme. Čistá oprava starý `node_modules` neuchovává: je to odvozený ca
 který lze z autoritativního lockfilu znovu vytvořit. Source ani jiná Git data
 nepřepisuje odhadem.
 
+Kód App (`Install`, `Repair`, start i obnovu balíčků po `lazurio update`)
+spouští přesně Bun, který App připíná v `package.json#packageManager`
+(`bun@x.y.z`, decision 0171 s dodatkem z 2026-10-24). Je to runtime App, ne
+nástroj uživatele: použije se Bun uživatele, když hlásí přesně tuto verzi
+(nic se nestahuje a prostředí App zůstává beze změny), jinak verze z mezipaměti
+runtime Lazuria, jinak ji Lazurio jednou ověřeně stáhne Bunovým vlastním
+instalátorem z oficiálního registru npm (`bun add --exact --ignore-scripts
+@oven/bun-<cíl>@<verze>` v soukromé složce s vlastním `package.json`, domovem
+a cache; integrita sha512, žádné instalační skripty, program musí hlásit
+přesnou verzi) a umístí ji jedním přejmenováním. Adresář verze jde v PATH
+procesů App na první místo, takže vnořený `bun`, `bun x` i `bunx` jsou tatáž
+verze. Mezipaměť sdílí s LazurioPlatform na téže mašině:
+`~/.local/share/lazurio/runtimes/bun/<verze>/`, změny jedné verze vylučuje
+jeden kernelový `flock` na `~/.local/share/lazurio/runtimes/bun.locks/<verze>`
+(soubor se nemaže, mrtvý držitel zámek uvolní). Na Windows leží mezipaměť
+v `%LOCALAPPDATA%\Lazurio\runtimes\bun\<verze>\` a zámek mezi procesy tam není,
+stejně jako v Platformě bez kvalifikovaného `flock`: dva procesy opravující
+tutéž rozbitou verzi se nevylučují, zůstává jen kontrola identity před
+odsunutím rozbité kopie a přejmenování jedním krokem. App bez přesného pinu
+běží Bunem uživatele jako dřív a vlastní procesy Lazuria zůstávají na Bunu,
+na kterém běží. Co nejde mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní
+nebo spustí, a nikdy nepoužije jinou verzi: `runtime-unavailable` (registr
+neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
+`runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
+
 Organization App může relativním `file:` specem deklarovat read-only package
 cíl v jiném checkoutu téže Organizace. Write a ancestor-resolution hranicí
 zůstává owning checkout; Lazurio přijme jen přesný canonical cíl a Bun
@@ -954,7 +979,9 @@ Runtime akční chyby z `Start`/`Install` vrací kromě `error`, `message` a
 `details` také `failure_kind`, když ho Launchpad umí určit. Aktuální hodnoty jsou
 `missing_dependencies`, `missing_script`, `port_conflict`, `bad_cwd`,
 `start_spawn_failed`, `unknown_early_exit` a dependency-state labely pro případy,
-kdy akci blokuje připravenost appky.
+kdy akci blokuje připravenost appky. Odmítnutí Bunu, který App připíná
+(`error: app_runtime_refused`, HTTP 409), nese jako `failure_kind` jeden
+z důvodů `runtime-*` výše a v `package_path` soubor, který verzi připíná.
 
 UI v1 je wireframe. Design není finální, ale každý ovládací prvek musí mít
 jasný mechanismus:

@@ -5,6 +5,13 @@ import {
   inspectDirectoryWithinCanonicalBoundary,
   readFileWithinCanonicalBoundary,
 } from "../core/path-boundary-lib.mjs";
+import {
+  BunRuntimeRefused,
+  bunRuntimeRefusalMessage,
+  createModuleBunResolver,
+  exactBunPin,
+  withModuleBun,
+} from "./bun-runtime-lib.mjs";
 
 const BUN_LOCKFILES = Object.freeze(["bun.lock", "bun.lockb"]);
 const PACKAGE_LOCKFILES = Object.freeze([
@@ -32,13 +39,25 @@ export async function runFrozenBunInstall({
   boundaryRoot,
   organizationDependencyRoot = null,
   mode = "ensure",
-  command = frozenBunInstallCommand(),
+  // An explicit command runs as given (the runtime manager resolves its App's
+  // Bun itself). Without one, the Bun the package pins installs it.
+  command = null,
   spawnProcess = Bun.spawn,
   env = process.env,
+  // The resolver of that pinned Bun (decision 0171, addendum of 2026-10-24);
+  // by default the one shared with the runtime manager's cache.
+  resolveBun = null,
   beforeFinalReadback = null,
 } = {}) {
   const packageRoot = await validatePackageRoot({ cwd, boundaryRoot, organizationDependencyRoot });
   if (!packageRoot.ok) return unchangedFailure(packageRoot, mode);
+  if (command === null) {
+    // Resolved before a clean repair removes anything: a refusal changes nothing.
+    const resolved = await pinnedPackageBun({ packageRoot, env, resolveBun });
+    if (!resolved.ok) return unchangedFailure(resolved, mode);
+    command = frozenBunInstallCommand(resolved.bun.executable);
+    env = withModuleBun(env, resolved.bun);
+  }
   if (!Array.isArray(command) || command.length === 0) {
     return unchangedFailure({ ok: false, reason: "install_command_missing", detail: "Chybí příkaz pro instalaci balíčků." }, mode);
   }
@@ -242,6 +261,34 @@ export async function runFrozenBunInstall({
     };
   }
   return { ...installResult, runtime_tree_usable: false };
+}
+
+// The Bun that installs this package: exactly the version its package.json
+// pins, read from the bytes that authorize the install, or the Bun Lazurio
+// runs on when it pins no exact version. A pin that cannot be had is a typed
+// result named by the package, never another version.
+async function pinnedPackageBun({ packageRoot, env, resolveBun }) {
+  const resolve = resolveBun ?? createModuleBunResolver({ userBun: process.execPath, env });
+  try {
+    return {
+      ok: true,
+      bun: await resolve({
+        packageManager: exactBunPin(packageRoot.package_json?.packageManager),
+        owner: packageRoot.cwd,
+      }),
+    };
+  } catch (error) {
+    if (!(error instanceof BunRuntimeRefused)) throw error;
+    return {
+      ok: false,
+      reason: error.reason,
+      detail: bunRuntimeRefusalMessage(error.reason, {
+        file: "package.json",
+        version: error.version,
+        cacheRoot: error.cacheRoot,
+      }),
+    };
+  }
 }
 
 function finalRuntimeTreeFailure(finalState) {
