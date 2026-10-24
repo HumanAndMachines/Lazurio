@@ -303,7 +303,12 @@ hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publ
 uživatele rozhodnutí nebo odpověď, polož otázku nástrojem svého harnessu na
 otázky (Claude Code `AskUserQuestion`, Codex `request_user_input`, Hermes
 `clarify`), ne jen textem ve zprávě: otázka v textu zapadne a vlákno vypadá,
-že pracuje, a přitom stojí. Nabídni 2–4 volby, doporučenou dej první
+že pracuje, a přitom stojí. Stejně polož i žádost, aby uživatel něco udělal:
+zadal ověřovací kód, přihlásil se, něco potvrdil nebo zkontroloval. Do
+otázky napiš, co přesně má udělat, s odkazem, kódem a do kdy platí, a volbami
+se nech říct, jak to dopadlo („Hotovo“, „Nejde to“). Otázka v T3 Code
+i v Codex Desktopu vyskočí jako upozornění, text ve zprávě ne (dodatek 0211
+z 2026-10-24). Nabídni 2–4 volby, doporučenou dej první
 s označením „(Doporučeno)“ a kontext napiš do zprávy nad otázku. Nejdřív
 udělej všechno, co na odpovědi nezávisí. Ptej se, jen když bez odpovědi
 nejde bezpečně pokračovat nebo když rozhodnutí patří uživateli; na nic, co
