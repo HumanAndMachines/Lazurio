@@ -133,6 +133,6 @@ pracovní Root.
 - `templates/` — šablony
 - `drafts/` — lokální netrackované návrhy bez dlouhodobé autority; sdílený návrh patří do příslušné Organizace, plan-owned worktree nebo PR
 - **V jakém světě jsi (koexistence Human↔Machine):** začni sekcí
-  `AGENTS.md → Model spolupráce → Koexistence Human and Machine`. Vysvětluje
-  hierarchii, hranice a procesy, ve kterých tenhle root a všechny Organizace
+  `AGENTS.md → Hranice`. Vysvětluje
+  hierarchii, hranice a procesy, ve kterých tento root a všechny Organizace
   fungují — pro uživatele i agenty.

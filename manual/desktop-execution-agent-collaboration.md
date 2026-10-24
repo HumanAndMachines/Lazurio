@@ -1,6 +1,6 @@
 # Desktop execution agent collaboration
 
-Tento manuálový záznam je součást základního balíku Konglomerátu. Popisuje,
+Tento manuálový záznam je součást základního balíku Lazuria. Popisuje,
 jak mají Buddy a Kolegové, kteří práci delegují, spolupracovat s viditelnými
 Claude/Codex Desktop App agenty.
 

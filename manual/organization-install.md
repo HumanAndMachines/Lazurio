@@ -144,7 +144,7 @@ scope.
 
 ### Design System: Read pro každého člena Organizace
 
-Každý aktivní člen Organizace, včetně účtů Automatizovaných Environmentů,
+Každý aktivní člen Organizace, včetně účtů jejích Prostředí Henry,
 má mít alespoň GitHub **Read** ke všem organizačním i produktovým Design
 Systemům, které Organizace vlastní. Pravidlo musí být také v jejím vlastním
 `AGENTS.md`; při forku nebo synchronizaci zachovej příslušný blok z

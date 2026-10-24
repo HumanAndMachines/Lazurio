@@ -51,7 +51,7 @@ používá následující pojmy s jejich přesným významem.
 | --- | --- |
 | **Uživatel** | Člověk, pro kterého a se kterým Agenti pracují. Ovládá Environment, a tím i Agenty, které v něm spouští: Agent pracuje pro něj, vychází z jeho oprávnění a poslední slovo má uživatel. Starší záznamy mu říkají Operátor; není to role User v Organizaci. |
 | **Kolega** | Uživatel v Organizaci zapojený do práce podle svých firemních rolí a oprávnění. |
-| **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
+| **Prostředí Henry** | Pracovní Prostředí Organizace, které pracuje samo přes boty Lazurio MausBotu pod účtem své persony; odpovídá za něj jmenovaný uživatel. Není to další člověk ani seat. |
 | **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého uživatele řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho uživatele. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
@@ -63,7 +63,7 @@ používá následující pojmy s jejich přesným významem.
 | **Organizace** | Jedna firma, její GitHub organizace a samostatná hranice repozitářů, dat a přístupů. |
 | **Personalspace** | Soukromý prostor jednoho uživatele a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
 | **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
-| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného uživatele. |
+| **Pull request a Publikace** | Pull request je vratný a editovatelný výsledek práce agenta. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného uživatele. |
 
 Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
 [pravidla pro Agenty](AGENTS.md#model-spolupráce-uživatel-a-agenti) a cílové
@@ -82,10 +82,10 @@ Lazurio nad tím staví malý počet pevných pravidel:
   systém oprávnění;
 - **každá Organizace je samostatná hranice** a samostatný Git repozitář;
 - **Personalspace je privátní** a nikdy se automaticky nesdílí s Organizací;
-- **Agent pracuje pro svého uživatele** a odevzdává editovatelný Draft;
+- **Agent pracuje pro svého uživatele** a odevzdává editovatelný pull request;
 - **publikace zůstává vědomým rozhodnutím oprávněného uživatele**.
 
-Výsledkem má být pracovní prostředí, ve kterém uživatelé i AI Kolegové používají
+Výsledkem má být pracovní prostředí, ve kterém uživatelé i agenti používají
 stejnou organizační strukturu, stejné zdroje pravdy a stejné kontrolovatelné
 procesy.
 
@@ -133,12 +133,12 @@ Launchpad ho nenahrazuje.
 | --- | --- |
 | **Lazurio CLI/Core** | Headless kontrakt pro kontext, diagnostiku, synchronizaci, instalaci a reportování. Současné CLI v0 je interní a nestabilní. |
 | **Launchpad** | Builder-first grafický povrch nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
-| **Guide** | Netechnický průvodce spoluprací uživatelů, AI Kolegů a digitálních kanceláří. |
+| **Guide** | Netechnický průvodce spoluprací uživatelů, agentů a digitálních kanceláří. |
 | **Personalspace** | Privátní prostor právě jednoho vlastníka a jeho případného Buddyho; neleží uvnitř firemní Organizace. |
 | **Organizace** | Jedna firma, jedna GitHub Organization, jeden samostatný super-repozitář a jedna access hranice. |
 | **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
 | **Productionspace** | Org-level repozitáře s vlastním release a provozním modelem, které Launchpad standardně ukazuje read-only. |
-| **Resident** | Dlouhodobá instalace Lazuria na Mašině, například profil Buddyho nebo AI Kolegy. |
+| **Resident** | Dlouhodobá instalace Lazuria na Mašině, například na Prostředí na serveru. |
 | **Task Agent** | Dočasná relace AI nástroje pro konkrétní úkol; sama nevlastní žádná oprávnění. |
 
 Podrobný cílový model vysvětluje [ARCHITECTURE.md](ARCHITECTURE.md) a fyzické

@@ -6,7 +6,7 @@ Tento adresář je immutable Lazurio runtime artefakt. Není to pracovní Git
 checkout a nesmí se v něm vytvářet branche, commity, stashe ani lokální
 hotfixy. Jeho exact source commit a digest dokazuje `lazurio.resident.json`.
 
-Pracovní prostor Kolegy nebo AI Kolegy žije v odděleném mutable Lazurio Rootu.
+Pracovní prostor Kolegy žije v odděleném mutable Lazurio Rootu.
 Lokálně i hosted používá stejný model a stejné mechanismy; lišit se smí pouze
 transport, custody, aktivní Team projekce a provozní nasazení runtime.
 

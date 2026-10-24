@@ -38,7 +38,7 @@ organizations/<org>/
 - Modul patří právě do jednoho Workspace; chybějící deklarace = default Workspace se slugem `workspace`. Hosted vzor `<modul>.<workspace>.<doména>` se generuje z deklarace.
 - `productionspace/` drží org-level repozitáře, které nejsou workspace moduly (např. firmware, connect, monorepo). Každé takové repo si definuje vlastní pravidla (branch model, release proces); doctor u nich vynucuje jen bezpečné minimum, na rozdíl od jednotného kontraktu workspace modulů (decision 0041 body 6–7 v `../manual/decision-register.md`).
 
-`personalspace/` je záměrně vedle `organizations/`, protože patří na osobní GitHub účet uživatele nebo AI kolegy, ne do firemní GitHub organizace.
+`personalspace/` je záměrně vedle `organizations/`, protože patří na osobní GitHub účet uživatele, ne do firemní GitHub organizace.
 
 ## Generační mount naming
 
