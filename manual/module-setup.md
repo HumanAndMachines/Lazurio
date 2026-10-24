@@ -170,7 +170,19 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 
 - `status` je `pass`, `fail`, nebo `warn`. `warn` znamená fakt, který kontrola
   nerozhodne (Modul není Git checkout, tsconfig rozšiřuje nenainstalovaný
-  preset, Python App). `current` vyžaduje u všech třinácti `pass`.
+  preset, Python App, vydání verze Bunu nejde ověřit), nebo vědomou volbu,
+  na kterou upozorňuje (`MS-02`: verze Bunu novější než výchozí nebo pod
+  minimem). `current` vyžaduje u všech třinácti `pass`.
+- `MS-02` měří `packageManager` každé Bun App proti `lazurio/toolchain.json`.
+  Chybějící `packageManager` doplní `--apply` výchozí verzí
+  (`tools.bun.default`); hodnota, která není `bun@x.y.z` (`bun@1.4`, rozsah,
+  `+sha512…`, jiný package manager), je `fail`. Výchozí verze projde bez sítě.
+  Jinou přesnou verzi kontrola najde v mezipaměti runtime Lazuria, nebo se
+  jedním dotazem zeptá registru npm na balíček Bunu pro tento systém (nejvýš
+  5 s): verze, kterou registr nezná, je `fail`; novější než výchozí nebo pod
+  minimem `tools.bun.minimum` je `warn`; registr, který neodpoví, je `warn`
+  „vydání nejde ověřit (offline)“. Čerstvost `bun.lock` zůstává statické
+  porovnání s `package.json`.
 - Bun App klíč `lazurio.preparation.runtime` vynechává (chybí = bun): čtečka
   LazurioPlatform dnes neznámá pole odmítá, dokud vydání Platformy klíč
   nečte (DEV-6634 W0-5). Explicitní `runtime: bun` je proto `fail` `MS-04`.
@@ -206,8 +218,10 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   `--apply`.
 - Kontroly jsou read-only a levné: čtou soubory, JSON a zdrojáky App (bez
   `node_modules`, `dist` a testů), jednou volají `git ls-files` kvůli
-  commitnutému lockfilu. Nikdy nespouštějí skripty Modulu ani síť; `bun run
-  check` a `bun test` spouští CI Modulu.
+  commitnutému lockfilu. Nikdy nespouštějí skripty Modulu; síť použijí jen
+  u `MS-02` pro verzi Bunu, která není výchozí a není v mezipaměti runtime
+  (jeden dotaz do registru npm). `bun run check` a `bun test` spouští CI
+  Modulu.
 - `MS-09` posuzuje importy i relativní cesty zapsané ve zdrojích
   (`import.meta.glob`, `resolve(import.meta.dirname, "…")`,
   `new URL("…", import.meta.url)`) vůči adresáři souboru; cesty jen
@@ -235,7 +249,7 @@ dělá Agent). Nic existujícího nepřepisuje ani nepřesouvá:
 
 | Kontrola | Oprava | Kdy se neprovede |
 | --- | --- | --- |
-| `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
+| `MS-02` | doplní chybějící `packageManager` na výchozí Bun z `lazurio/toolchain.json` (`tools.bun.default`) | jiná existující hodnota (jen nález) |
 | `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun) | existující deklarace se nikdy nepřepisuje: explicitně zapsané `runtime: bun` je jen nález; App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/`; `prepare_script`/`check_script` s npm lifecycle jménem (`prepare`, `preprepare`, `postprepare`, `install`, `preinstall`, `postinstall`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`, `dependencies`) je jen nález, protože je `bun install` spouští sám; stejně jméno mimo gramatiku čtečky Platformy `^[A-Za-z][A-Za-z0-9:_-]*$` (pravidla čte ze schématu); přejmenuj je na `prepare:app` / `check:prepared` |
 
 Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani

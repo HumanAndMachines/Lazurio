@@ -35,11 +35,24 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 | Soubor | Požadavek |
 | --- | --- |
 | `lazurio.module.json` | `schema_version: lazurio.module.v1`; `id` = slug slotu v `modules.manifest.json`; `company` = slug Organizace; `port_leases[]` s `id`, `host: 127.0.0.1`, `port` **uvnitř `module_port_pool` Organizace** (přesun existujícího leasu do poolu je součást převodu, viz níže); `apps[]` + `default_app`. Modul bez App má `tcp_port_policy: none` a `apps: []`. Osobní Modul v Personalspace: kap. 13. |
-| `app/v<N>/package.json` každé App | App žije vždy v podadresáři `app/v<N>/` (nikdy v kořeni Modulu). `name`, `private: true`, `packageManager: "bun@<přesná verze z lazurio/package.json>"`, `lazurio.runtime` (kap. 4), `lazurio.preparation` (kap. 3), skripty `dev`, `check`, `test`. Python App: `app/v<N>/pyproject.toml` (kap. 7). |
+| `app/v<N>/package.json` každé App | App žije vždy v podadresáři `app/v<N>/` (nikdy v kořeni Modulu). `name`, `private: true`, `packageManager: "bun@<přesná vydaná verze>"` (výchozí `tools.bun.default` z `lazurio/toolchain.json`, viz Bun App níže), `lazurio.runtime` (kap. 4), `lazurio.preparation` (kap. 3), skripty `dev`, `check`, `test`. Python App: `app/v<N>/pyproject.toml` (kap. 7). |
 | `app/v<N>/bun.lock` | commitnutý, aktuální; `bun install --frozen-lockfile` projde. Python App: `uv.lock`. |
 | `app/v<N>/tsconfig.json` | `strict: true` (nebo `extends` strict preset frameworku); žádné `allowJs` na zdrojích App. |
 | `biome.json` (v App nebo Modulu) | lint + format; `bun run check` = typecheck + biome. |
 | `README.md`, `AGENTS.md` Modulu | co App dělá, jak ji vyvíjet; pravidla scope. |
+
+**Bun App.** Verze v `packageManager` je runtime App (decision 0171, dodatek
+z 2026-10-24): každá cesta, která spouští kód App Bunem, ji použije přesně, a
+když ji uživatel nemá, Lazurio si ji ověřeně doplní do mezipaměti runtime.
+Musí to být přesná a vydaná verze Bunu (`bun@x.y.z`). Výchozí a minimální
+verzi drží `lazurio/toolchain.json` (`tools.bun.default`,
+`tools.bun.minimum`); nový Modul dostane výchozí. Pin na jinou vydanou verzi
+mění autor Modulu vědomě běžným PR Modulu: novější než výchozí si každé Prostředí
+stáhne při prvním startu, a proto ji `MS-02` hlásí jako `warn`, stejně jako
+verzi pod minimem. Dokud resolver neběží v Prostředích na serveru (dodatek
+bod 6), zůstává pin na výchozí verzi. V Organizaci s Prostředím Henry piny
+sbližuje Henry, nejvýš k výchozí verzi (dodatek 0171 o sbližování pinů);
+hromadný přepis bez review se nedělá (0173).
 
 **Přesun leasu do poolu.** Dosavadní pravidlo `lazurio module setup`
 („existující platný lease se automaticky nemění", `--adopt-port` jako vědomé
@@ -534,7 +547,8 @@ nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s 
 `lazurio module setup <module-root> --root <lazurio-root>` (viz
 [module-setup.md](module-setup.md)) rozšiřuje read-only kontrolu o standard.
 Každá kontrola má stabilní ID a stav `pass | fail | warn`; `actionable` plán
-jen doplní, co chybí a jde zapsat jednoznačně (`packageManager`, skeleton
+jen doplní, co chybí a jde zapsat jednoznačně (`packageManager` s výchozí
+verzí Bunu z `lazurio/toolchain.json`, skeleton
 `lazurio.preparation`); `check`/`test` skripty nedoplňuje a existující
 deklaraci nepřepisuje. Lease nikdy nepřesouvá; u leasu mimo pool navrhne
 volný port a přesun je ruční úprava manifestu v PR Modulu.
@@ -542,7 +556,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | ID | Kontrola |
 | --- | --- |
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
-| `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
+| `MS-02` | každá App: `packageManager` je přesná a vydaná verze Bunu, lockfile commitnutý a čerstvý; `warn` u verze novější než výchozí, u verze pod minimem (obojí `lazurio/toolchain.json`) a když vydání nejde ověřit (offline) |
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; povinná `secrets` je v tomto Launchpadu bez čtečky trezoru `warn`, `optional_secrets` dovoluje nedostupnou capability (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |

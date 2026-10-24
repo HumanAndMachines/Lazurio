@@ -161,8 +161,9 @@ generátor nevzniká.
   Modulů, které volající vidí, volitelně `teams[]` roster), `slug`,
   `display_name`, `stack`, `teams[]`, volitelný `port`, `templates`
   (`loadModuleTemplates()` nebo stejná data z vydané verze Core) a
-  `versions` (`bun` z `lazurio/package.json`, `module_kit`, `uv`;
-  výchozí `DEFAULT_SCAFFOLD_VERSIONS`).
+  `versions` (`bun` = `tools.bun.default` z `lazurio/toolchain.json`,
+  `module_kit`, `uv`; výchozí `DEFAULT_SCAFFOLD_VERSIONS`, jehož `uv` je
+  `tools.uv.default` téhož manifestu).
 - **Výstup:** `files[]` (`path`, `content`, volitelně `mode`), přesný `slot`
   pro `modules.manifest.json`, `lease` (nebo `null` u `none`),
   `generated_by_install` (lockfile, který čistá funkce vyrobit neumí),

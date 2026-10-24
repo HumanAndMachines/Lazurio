@@ -32,8 +32,8 @@ dogfoodovat tutéž fasádu. Source Root nemigruje a jiná cesta se tiše
 neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
 `package.json#packageManager`, podporovaný Node.js rozsah z
-`package.json#engines.node`, ověřenou identitu příkazů Bun, Git, GitHub CLI a
-Node.js a Codex CLI v `PATH`, přihlášení ke github.com
+`toolchain.json` (`tools.node.minimum`), ověřenou identitu příkazů Bun,
+Git, GitHub CLI a Node.js a Codex CLI v `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.

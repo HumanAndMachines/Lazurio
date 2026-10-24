@@ -300,8 +300,9 @@ Organization. The Agent first runs `lazurio install --json` and, when
 troubleshooting, also `lazurio doctor --tool-updates --json`. Install Core
 distinguishes a missing tool from the `*_not_on_path` state; the exact
 supported Bun version continues to be owned by `package.json#packageManager`.
-The supported Node range is owned solely by
-`lazurio/package.json#engines.node`; currently it is `>=22.12.0`. For a new
+The supported Node range is owned solely by `tools.node.minimum` in
+`lazurio/toolchain.json` (`engines.node` in `lazurio/package.json` is the
+same value for npm); currently it is `>=22.12.0`. For a new
 Machine, after explicit consent, use the current
 [official Node.js LTS](https://nodejs.org/en/download), not a custom latest
 resolver or an unknown registry package. Both Install Core and Doctor run
@@ -388,9 +389,9 @@ installation when the selected command fails. The absolute path is diagnostic,
 not proof of package provenance or safety.
 
 Git requires at least 2.31.0 (absolute rev-parse paths) and GitHub CLI 2.57.0
-(active-account checks). Their canonical contract lives in
-`lazurio/core/toolchain-lib.mjs`. The Node minimum belongs to
-`lazurio/package.json#engines.node`; Bun remains exactly pinned through
+(active-account checks). Their minimums live in `lazurio/toolchain.json`
+(`tools.git`, `tools.gh`), read by `lazurio/core/toolchain-lib.mjs`. The Node
+minimum lives there too (`tools.node.minimum`); Bun remains exactly pinned through
 `lazurio/package.json#packageManager`. Codex must report a recognizable stable
 CLI version; Lazurio currently consumes no feature requiring a newer numeric
 minimum. A newer upstream release is a separate advisory in

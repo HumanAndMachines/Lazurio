@@ -274,7 +274,9 @@ nejdřív spustí `lazurio install --json` a při troubleshootingu také
 `lazurio doctor --tool-updates --json`. Install Core odlišuje chybějící nástroj
 od stavu `*_not_on_path`; přesnou podporovanou Bun verzi dál vlastní
 `package.json#packageManager`. Podporovaný Node rozsah vlastní jedině
-`lazurio/package.json#engines.node`; aktuálně je to `>=22.12.0`. Pro novou
+`tools.node.minimum` v `lazurio/toolchain.json` (`engines.node`
+v `lazurio/package.json` je tatáž hodnota pro npm); aktuálně je to
+`>=22.12.0`. Pro novou
 Mašinu použij po výslovném souhlasu aktuální
 [oficiální Node.js LTS](https://nodejs.org/en/download), nikoli vlastní
 latest resolver nebo neznámý registry package. Install Core i Doctor spouštějí
@@ -353,9 +355,9 @@ nevyberou potichu jinou instalaci. Absolutní cesta je diagnostika, nikoli
 potvrzení původu nebo bezpečnosti balíčku.
 
 Git potřebuje alespoň 2.31.0 (absolutní cesty z rev-parse), GitHub CLI 2.57.0
-(ověření aktivního účtu). Jejich kanonický kontrakt drží
-`lazurio/core/toolchain-lib.mjs`. Node minimum vlastní
-`lazurio/package.json#engines.node`; Bun zůstává přesně pinovaný přes
+(ověření aktivního účtu). Jejich minima drží `lazurio/toolchain.json`
+(`tools.git`, `tools.gh`) a čte je `lazurio/core/toolchain-lib.mjs`. Node
+minimum je tamtéž (`tools.node.minimum`); Bun zůstává přesně pinovaný přes
 `lazurio/package.json#packageManager`. Codex musí vrátit rozpoznatelnou
 stabilní verzi svého CLI; Lazurio dnes nepoužívá funkci vyžadující novější
 číselné minimum. Novější upstream release je samostatné doporučení v
