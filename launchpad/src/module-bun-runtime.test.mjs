@@ -365,6 +365,17 @@ posixTest("a pin that moves while its Bun is fetched refuses that Start and that
     expect(await w.npm.calls("1.4.94")).toEqual([]);
     expect((await w.runtime.health(w.appId("starting"))).status).toBe("stopped");
     expect(await w.report("starting")).toBeNull();
+    // A package.json that is half-written when the fetch ends refuses the
+    // same typed way, never with a bare parse error and never with that Bun.
+    const releaseBroken = hold("1.4.93");
+    const broken = w.runtime.start(w.appId("starting")).catch((error) => error);
+    await until(() => w.npm.entered.has("1.4.93"), Boolean, 10_000);
+    const startingManifest = await readFile(join(w.appRoot("starting"), "package.json"), "utf8");
+    await writeFile(join(w.appRoot("starting"), "package.json"), "{ \"name\": ", "utf8");
+    releaseBroken();
+    expect(await broken).toMatchObject(changed("starting"));
+    expect(await w.npm.calls("1.4.93")).toEqual([]);
+    await writeFile(join(w.appRoot("starting"), "package.json"), startingManifest, "utf8");
     // The next Start runs the new pin.
     await w.runtime.start(w.appId("starting"));
     expect((await until(() => w.report("starting"), (value) => value !== null)).bun).toBe("1.4.93");
@@ -378,6 +389,14 @@ posixTest("a pin that moves while its Bun is fetched refuses that Start and that
     expect(await installing).toMatchObject(changed("installing"));
     expect(w.installs.filter((entry) => entry.executable.includes("1.4.92"))).toEqual([]);
     expect(existsSync(join(w.appRoot("installing"), "node_modules", "fixture", "installed-by.txt"))).toBe(false);
+    // Install with a half-written package.json at the end of the fetch.
+    const releaseBrokenInstall = hold("1.4.91");
+    const brokenInstall = w.runtime.install(w.appId("installing")).catch((error) => error);
+    await until(() => w.npm.entered.has("1.4.91"), Boolean, 10_000);
+    await writeFile(join(w.appRoot("installing"), "package.json"), "{ \"name\": ", "utf8");
+    releaseBrokenInstall();
+    expect(await brokenInstall).toMatchObject(changed("installing"));
+    expect(w.installs.filter((entry) => entry.executable.includes("1.4.91"))).toEqual([]);
   } finally {
     await w.close();
   }

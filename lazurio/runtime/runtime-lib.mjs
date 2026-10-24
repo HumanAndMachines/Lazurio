@@ -599,8 +599,14 @@ export function createRuntimeManager({
     // meanwhile refuses this start or install rather than run the App's code
     // with the Bun of an earlier pin. The Platform keeps the same final
     // assertion (its decision F25). A next start resolves the new pin.
-    const current = await readFile(join(owner, "package.json"), "utf8")
-      .then((text) => exactBunPin(JSON.parse(text)?.packageManager), () => undefined);
+    // A package.json that cannot be read or parsed now (half-written, say)
+    // refuses the same typed way: never a bare parse error, never the old Bun.
+    let current;
+    try {
+      current = exactBunPin(JSON.parse(await readFile(join(owner, "package.json"), "utf8"))?.packageManager);
+    } catch {
+      current = undefined;
+    }
     if (current !== pinned) {
       const packagePath = app.package_path ?? null;
       throw new RuntimeActionError(
