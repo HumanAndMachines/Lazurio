@@ -36,6 +36,12 @@ export async function runIsolatedLazurioUpdate({
       force: false,
       errorOnExist: true,
     });
+    // Core reads lazurio/toolchain.json as it loads (decision 0171, addendum
+    // of 2026-10-24, point 5); the bundle finds it at the same relative place.
+    await cp(join(import.meta.dirname, "..", "toolchain.json"), join(directory, "lazurio", "toolchain.json"), {
+      force: false,
+      errorOnExist: true,
+    });
     const runtimePath = join(runtimeSourceRoot, "lazurio-update-runtime.mjs");
     await Bun.write(runtimePath, build.outputs[0]);
     const runtimeArgs = [process.execPath, runtimePath, "--root", rootPath, "--runtime-root", directory];
