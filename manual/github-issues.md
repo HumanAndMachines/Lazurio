@@ -17,7 +17,7 @@ decision recordu a znalost do Knowledgebase.
 | Organization root kontrakt nebo org-wide proces | privátní root repo dané Organizace |
 | Jedna aplikace nebo Modul | přesný repo Modulu |
 | Plán, priorita, assignee nebo stav realizace | Mission Control, ne Issue tracker |
-| Personalspace, secrets nebo neveřejný obsah bez bezpečného owning repa | nepublikovat; předat sanitizovaný draft uživateli |
+| Personalspace, secrets nebo neveřejný obsah bez bezpečného owning repa | nepublikovat; předat sanitizovaný návrh uživateli |
 
 Nikdy neposílej Organization-specific obsah do veřejného Lazurio repa jen
 proto, že se problém projevil během instalace. Do upstream issue patří pouze
@@ -44,7 +44,7 @@ gh issue list --repo HumanAndMachines/Lazurio --state all \
   --search "<stable reason code nebo stručný symptom>" --limit 50
 gh issue create --repo HumanAndMachines/Lazurio \
   --title "<stručný reprodukovatelný problém>" \
-  --body-file "<absolutní cesta k sanitizovanému dočasnému draftu>"
+  --body-file "<absolutní cesta k sanitizovanému dočasnému návrhu>"
 ```
 
 Issue body má obsahovat problém, prostředí bez osobních údajů, přesnou
@@ -74,7 +74,7 @@ fakt; otevřenou otázku zapiš jako otázku a uveď, co je ověřené a co ne.
 
 Když Issues nejsou povolené, GitHub účet nemá potřebné právo, síť je
 nedostupná nebo public-safety není jistá, Agent nic neobchází a nezapisuje
-fallback do jiné Organizace. Vrátí uživateli hotový sanitizovaný body draft,
+fallback do jiné Organizace. Vrátí uživateli hotový sanitizovaný návrh issue,
 exact cílový repo a důvod, proč jej nezveřejnil.
 
 ## Migrace starých JSON ledgerů

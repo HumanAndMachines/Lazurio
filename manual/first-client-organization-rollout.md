@@ -28,7 +28,7 @@ Vyplň před tím, než vytvoříš nebo mountneš klientský checkout:
 | GitHub access baseline | `Lazurio for GitHub` na `All repositories`; base repository permission `none`; právě jeden GitHub Team `builders` pro obecnou Builder roli |
 | Počáteční Builders | Přesné GitHub loginy schválených uživatelů; každý musí být aktivní Organization member i člen Teamu `builders`, ne jen čekající pozvánka |
 | Default Team | právě jeden default Team se slugem `workspace`; Team je logická deklarace, ne adresář |
-| Role hranice | Admin Organizace, Builder Organizace, User Organizace; Steward Organizace (AI Kolega ve Steward seatu) na Workspace Hostu; kdo drží secrets a kdo smí měnit source |
+| Role hranice | Admin Organizace, Builder Organizace, User Organizace a Steward Organizace; případné Prostředí Henry (preset Steward Lazurio MausBotu, vlastní GitHub účet persony, odpovědný Owner nebo Admin); kdo drží secrets a kdo smí měnit source |
 | Počáteční baseline | Mission Control app + data, Knowledgebase, Design System a Infra; ostatní workspace moduly až podle business potřeby, ne big-bang rollout |
 | Design System scope | `active`, pokud je vytvoření objednané; jinak manifestový `planned_slot` bez repa a bez vymyšlených brandových dat |
 | Template baseline | Organization z `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`; Mission Control, Knowledgebase a Design System z vlastních `TemplatesRozjedeme-ai/*Template` upstreamů |
@@ -510,7 +510,7 @@ Team moduly.
 
 Fork z template zdědí `AGENTS.md`, které mluví jako šablona. Pokud ho Agent
 nepřepíše, v nested checkoutu zakáže klientský obsah nebo přeskočí otázku
-na Publikaci Draftu. Tohle je stejná chyba, která se stala u prvních
+na Publikaci změn. Tohle je stejná chyba, která se stala u prvních
 klientských Organizací.
 
 Jakmile je `organization_kind: organization`, proveď rewrite v reviewovatelném
@@ -600,7 +600,7 @@ git -C organizations/<ClientOrg>_GEN3 status --short --branch
 test -d organizations/<ClientOrg>_GEN3/.git || test -f organizations/<ClientOrg>_GEN3/.git
 ```
 
-V tomhle stavu dnes žádný `origin` nepřidávej. Lokální commity zůstávají Draft v klientském checkoutu; `template` slouží jen pro fetch/sync review a nikdy není publish target.
+V tomhle stavu dnes žádný `origin` nepřidávej. Lokální commity zůstávají nepublikované v klientském checkoutu; `template` slouží jen pro fetch/sync review a nikdy není publish target.
 
 #### Pozdější aktivace klientského `origin`
 
@@ -892,7 +892,7 @@ Pokud na to root Guide nebo Organization README neodpovídá, doplň navigační
 Secrets nikdy nepatří do Gitu ani do chatu.
 
 - Secrets rootu a uživatele: `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>`.
-- Organization/AI-colleague secrets: `organizations/<ClientOrg>_GEN3/company/colleagues/<os-user>/private/secrets/...`.
+- Secrets Organizace a jejích Prostředí Henry: `organizations/<ClientOrg>_GEN3/company/colleagues/<os-user>/private/secrets/...`.
 - Tool runtime cesty typu `~/.config/...` jsou cache/adaptér, ne custody source of truth.
 
 Closeout smí reportovat metadata-only ověření, například „soubor existuje, mode 0600, runtime smoke prošel“, ale nikdy obsah tokenu, OAuth URL/kód, heslo ani JSON credential.
@@ -951,7 +951,7 @@ GEN3 je ready pro prvního klienta, když:
   `none`, zamýšlení Builders jsou aktivní členové Teamu `builders`, Team má
   WRITE na canonical rootu a všech aktivních běžných repech a žádný non-admin
   Builder nemá grant na `infra` ani jiný restricted slot; Organization-owner
-  přístup se eviduje odděleně jako `owner_role_exception`; čistě `local-first` Draft
+  přístup se eviduje odděleně jako `owner_role_exception`; čistě `local-first` checkout
   bez `origin` reportuje `not configured` a nevydává se za install-ready
   klientskou Mašinu;
 - první klientský pilot modul má validní manifest, nekolidující port a vysvětlitelný dependency/runtime stav;

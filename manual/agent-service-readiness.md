@@ -21,7 +21,7 @@ publikační ani recovery mandát.
 
 Standard nezavádí univerzální klíč, společný účet všech agentů, nový trezor,
 centrální registr klientů ani další autorizační službu. Personalspace
-a jednotlivé Organizace zůstávají oddělené. Servis Buddyho a AI Kolegy
+a jednotlivé Organizace zůstávají oddělené. Servis Buddyho a Prostředí Henry
 zachovává jejich vlastní privacy a recovery kontrakty.
 
 ## Jeden vlastník každé pravdy

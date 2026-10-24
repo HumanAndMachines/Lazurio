@@ -127,8 +127,8 @@ executor call executor coreTools connections create '{"owner":"org","name":"defa
   `executor resume --execution-id <id> --action accept --content '{}'`.
   Čtecí nástroje v pilotu běžely bez schvalování.
 - Schválení v Executoru není souhlas s Publikací. Pro zápisy navenek platí
-  sekce Draft a Publikace ve
-  [standardu](../external-app-integrations.md#draft-a-publikace-ve-write-operacích).
+  sekce Příprava a Publikace ve
+  [standardu](../external-app-integrations.md#příprava-a-publikace-ve-write-operacích).
 
 ## Volání nástrojů
 

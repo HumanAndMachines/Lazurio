@@ -2,7 +2,7 @@
 
 Tento runbook převádí existující Workspace GEN2 super-repo na samostatnou
 Organizaci GEN3 pod jedním Lazurio rootem. Je
-určený pro reálnou firmu s historií, nested repozitáři, uživateli, AI kolegy a
+určený pro reálnou firmu s historií, nested repozitáři, uživateli a
 rozpracovaným provozem. Greenfield Organizace bez GEN2 historie vzniká z
 `OrganizationTemplate_GEN3` podle `manual/first-client-organization-rollout.md`;
 tento postup pro ni není potřeba.
@@ -625,7 +625,7 @@ se nenahrazuje firemním overlayem.
 
 Přepiš všechny živé resolvery, Doctor person lookup, Guide odkazy, skilly,
 CI a `.gitignore`. `company/team/` smaž až při nule nevyřešených consumers a
-potvrzené mapě všech uživatelů i AI kolegů v migrované cohortě. Neznámé OS username
+potvrzené mapě všech uživatelů i automatizovaných účtů v migrované cohortě. Neznámé OS username
 neodhaduj; ponech compatibility stav a otevřenou issue.
 
 ## Fáze 5 — kanonický tracked Organization layout
@@ -1113,7 +1113,7 @@ automatizace smí pokračovat jen s čerstvou zálohou a jednoznačnou shodou.
 
 Týmový cutover smí Organization Admin schválit až když:
 
-1. všichni uživatelé a AI kolegové v scope mají GEN3 access a ověřený daily flow;
+1. všichni uživatelé a automatizované účty v scope mají GEN3 access a ověřený daily flow;
 2. GEN2 maintenance commits po `SOURCE_SHA` jsou všechny ported/skipped/deferred
    s evidencí;
 3. MC code/data a DEV remap gates jsou uzavřené;

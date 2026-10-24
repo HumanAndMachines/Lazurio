@@ -1,6 +1,6 @@
 # Local secret custody in GEN3
 
-GEN3 musí mít jedno standardní místo, kam patří lokální secret soubory pro uživatele nebo AI kolegu, aby se neopakovalo ad-hoc hledání v `Downloads`, `Desktop`, tool cache složkách nebo chatových handoffech.
+GEN3 musí mít jedno standardní místo, kam patří lokální secret soubory uživatele i Organizace, aby se neopakovalo ad-hoc hledání v `Downloads`, `Desktop`, tool cache složkách nebo chatových handoffech.
 
 ## Pravidlo
 
@@ -28,9 +28,9 @@ personalspace/<owner>_GEN3/secrets/google-oauth/<domain>/client-desktop.json
 
 `personalspace/<owner>_GEN3/secrets/` je gitignored v nested personalspace repu; tracked zůstávají jen manifesty/README. Secret adresáře mají mít mód `0700`, secret soubory `0600`.
 
-## Organization / AI colleague secrets
+## Secrets Organizace a jejích Prostředí Henry
 
-Pro secrets, které patří konkrétnímu kolegovi uvnitř konkrétní Organizace, používej organization-local private overlay:
+Pro secrets, které patří konkrétnímu kolegovi nebo Prostředí Henry uvnitř konkrétní Organizace, používej organization-local private overlay:
 
 ```text
 organizations/<org>/company/colleagues/<os-user>/private/secrets/<provider>/<scope>/<purpose>

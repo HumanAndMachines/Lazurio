@@ -36,7 +36,7 @@ plnohodnotná compliant integrace neexistuje.
 
 1. Organizace založí LinkedIn Developer app, projde review pro
    `w_member_social`; client credentials do custody.
-2. Publikační workflow (kdo schvaluje drafty příspěvků) zapsat do
+2. Publikační workflow (kdo schvaluje koncepty příspěvků) zapsat do
    `INTEGRATIONS.md` — publikace na LinkedIn je Publikace ve smyslu root
    pravidel: dělá ji uživatel, nebo agent jen na explicitní pokyn.
 
@@ -53,7 +53,7 @@ dokončuje uživatel.
 výhradně do browser fallbacku.
 Jednorázové zjištění member URN při OAuth consentu (userinfo) je aktivační
 krok napojení, ne čtecí workflow; URN se uloží do custody a dál se
-nedotazuje. Smoke je metadata-only: ověř, že token platí, a připrav draft
+nedotazuje. Smoke je metadata-only: ověř, že token platí, a připrav
 payload příspěvku **bez odeslání**. Skutečná publikace jen na explicitní
 pokyn uživatele v daném threadu, poprvé na testovacím obsahu.
 

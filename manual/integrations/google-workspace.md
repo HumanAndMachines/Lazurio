@@ -44,7 +44,7 @@ agregátory (broker drží tokeny — zakázáno standardem).
    permission-management a destructive scopes.
    Udělený OAuth grant je schopnost mašiny, ne souhlas s konkrétní write
    operací; per-action ochranu drží approval mode harnessu a kontrakt
-   Draft → Publikace.
+   Příprava → Publikace.
 
 ## Per-machine aktivace
 
@@ -141,10 +141,10 @@ revokaci, admin policy a počet živých refresh tokenů stejného OAuth klienta
 
 Smoke začni čtením (výpis Gmail labelů, `search_drive_files` na známý
 soubor, čtení známé Sheet range) a pokračuj zápisem **jen v k tomu určené
-scratch složce Drive a draftu adresovaném sobě** — nikdy v ostrém dokumentu
-a bez odeslání. Do `INTEGRATIONS.md` zapiš oba použité cíle: přesnou Drive
-scratch cestu i jmenovitý Gmail draft cíl (org účet a roli příjemce). Draft i
-testovací soubor smíš po ověření odstranit jen když uživatel výslovně
+scratch složce Drive a konceptu e-mailu adresovaném sobě** — nikdy v ostrém
+dokumentu a bez odeslání. Do `INTEGRATIONS.md` zapiš oba použité cíle: přesnou
+Drive scratch cestu i jmenovitý cíl Gmail konceptu (org účet a roli příjemce).
+Koncept i testovací soubor smíš po ověření odstranit jen když uživatel výslovně
 schválil každý použitý jmenovitý smoke cíl zapsaný v `INTEGRATIONS.md` a
 každý artefakt vytvořil tento konkrétní smoke. Jinak artefakt ponech a
 vyžádej si samostatný explicitní pokyn uživatele.

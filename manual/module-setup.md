@@ -9,18 +9,18 @@ nebo migrační algoritmus.
 ## Bezpečný pracovní cyklus
 
 Pracuj v task worktree daného Module repozitáře. Primární `main` checkout
-nepoužívej pro Draft. Package-managed i development-linked CLI mají stejný
-příkaz:
+nepoužívej pro rozpracovanou práci. Package-managed i development-linked CLI
+mají stejný příkaz:
 
 ```sh
 lazurio module setup <module-root> --root <lazurio-root>
 ```
 
 `<module-root>` smí být přesný kanonický slot pro read-only kontrolu nebo
-task worktree téhož lokálního Git repozitáře pro Draft a `--apply`. Lazurio
-worktree přijme jen podle shodného Git common-dir s checkoutem deklarovaným
-v Organization slotu. Shodný název nebo remote URL nestačí a cizí kopie se
-nikdy nevydá za Modul.
+task worktree téhož lokálního Git repozitáře pro rozpracované změny
+a `--apply`. Lazurio worktree přijme jen podle shodného Git common-dir
+s checkoutem deklarovaným v Organization slotu. Shodný název nebo remote URL
+nestačí a cizí kopie se nikdy nevydá za Modul.
 
 První běh je vždy read-only. Výsledek je právě jeden ze čtyř stavů:
 
@@ -270,6 +270,7 @@ Automatizace rozhoduje podle `status`, `reason` a `issues[].code` v `--json`,
 nikoli podle lokalizované věty. Na macOS, Linuxu i Windows se používá stejný
 argumentový kontrakt; PowerShell nevyžaduje separátní migrátor.
 
-Paralelní Drafty nejsou port registry. Lock serializuje okamžik alokace na
-jedné Mašině, ale nepředstírá, že vidí nepublikované worktrees jiných Agentů.
-Kolizi proto musí před merge znovu zachytit Organization Doctor a review.
+Paralelní rozpracované pull requesty nejsou port registry. Lock serializuje
+okamžik alokace na jedné Mašině, ale nepředstírá, že vidí nepublikované
+worktrees jiných Agentů. Kolizi proto musí před merge znovu zachytit
+Organization Doctor a review.

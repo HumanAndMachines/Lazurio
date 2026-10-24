@@ -765,7 +765,7 @@ Reprodukovaný obecný problém Lazurio instalátoru reportuj podle
 `HumanAndMachines/Lazurio`; Organization-specific problém patří do privátního
 owning repa. Instalační Agent smí issue vytvořit nebo doplnit jen tehdy, když
 prompt obsahuje explicitní publikační mandát pro tento repo. Jinak vrátí
-sanitizovaný issue draft a exact cílový repo v handoffu.
+sanitizovaný návrh issue a exact cílový repo v handoffu.
 
 ## Logo Organizace
 

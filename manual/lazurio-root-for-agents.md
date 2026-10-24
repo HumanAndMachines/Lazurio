@@ -66,7 +66,7 @@ Dnešní JSON uvádí `root_kind: "source"`, přesnou cestu, exact source commit
 clean/dirty stav. Před source prací Agent postupuje podle Root `AGENTS.md`: synchronizuje
 primární checkout přes `lazurio update`, ověří `bun run doctor:task` a všechny
 trackované změny připraví v task worktree. Primární Source Root zůstává na
-`main`; není místem pro Draft.
+`main`; není místem pro rozpracovanou práci.
 
 Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby uživatele jej nesmí migrovat ani označit za závadu jen
@@ -177,7 +177,7 @@ chatu. Vybere přesný owning repo a postupuje podle
 [`manual/github-issues.md`](github-issues.md). Zapsat issue je trvalý mandát
 Agenta (decision 0163): ověří reprodukci, najde duplicity, sanitizuje evidence
 a issue vytvoří nebo doplní, aniž se předem ptá, a pokračuje na práci, která
-na něm nestojí. Sanitizovaný draft s cílovým repem a důvodem vrátí jen tehdy,
+na něm nestojí. Sanitizovaný návrh s cílovým repem a důvodem vrátí jen tehdy,
 když zápis není možný nebo public-safety není jistá. Tento mandát nepovoluje
 issue zavřít, přiřadit ani prioritizovat.
 
@@ -203,8 +203,8 @@ uživateli jen předej přesný report.
 - nelinkuje permanentní `lazurio` na task worktree;
 - nekopíruje CLI nebo Launchpad do Rootu jako druhou runtime autoritu;
 - nemění strojové cesty podle jazyka;
-- nepoužívá `git stash --all`, nemaže worktrees a nepushuje lokální Drafty jako
-  součást migrace;
+- nepoužívá `git stash --all`, nemaže worktrees a nepushuje lokální
+  rozpracované změny jako součást migrace;
 - neposílá diagnostiku bez samostatného opt-in consentu.
 
 Pro hlubší diagnostiku použij [`lazurio/README.md`](../lazurio/README.md), pro

@@ -24,9 +24,9 @@ credentials.
 | Uživatel | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Uživatelem je vždy člověk (decision 0175 s dodatkem z 2026-10-21; starší záznamy mu říkají Operátor). Není to role User v Organizaci. |
 | Kolega | Uživatel v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
 | Buddy | Osobní zástupce jednoho uživatele. Běží v jeho Osobním Prostředí (decision 0210) a jedná jen v mezích jeho práv a mandátů. Resident profil nemá. |
-| AI Kolega | AI s vlastní identitou, Mašinou, Personalspace a pracovními právy jako člověk; pojem je deprecated (decisions 0156/0169). Není Buddy. |
+| Prostředí Henry | Pracovní Prostředí Organizace s nastavenými automatizacemi: práci v něm dělají boti Lazurio MausBotu pod vlastním GitHub účtem persony a odpovídá za něj Owner nebo Admin Organizace (decisions 0169 a 0170 s dodatkem z 2026-10-19). Vlastní Resident profil nemá a není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
-| Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
+| Steward | Organizační role Kolegy; stejně se jmenuje preset Lazurio MausBotu v Prostředí Henry. Název role ani presetu nic neautorizuje; rozhodují živá GitHub práva. |
 | Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
 | Personalspace | Privátní prostor právě jednoho uživatele a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
@@ -68,7 +68,7 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 ## Profil Workspace
 
 Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v hostovaném pracovním
-prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
+prostoru Kolegy. Není druhým datovým modelem hosted prostředí:
 lokální i vzdálený pracovní prostor používají stejný Lazurio Root kontrakt,
 Organization Rooty, org-level repa a Workspace Moduly. Liší se jen transportem, custody,
 aktivní Team projekcí a způsobem provozního nasazení runtime.
@@ -79,11 +79,12 @@ kanonické rozhraní `LAZURIO_RUNTIME_ROOT=/opt/lazurio-runtime` a
 druhou dostává přes `--root`. Runtime nemá self-update. Exact build, startup
 gate a rollout pořadí drží `manual/lazurio-runtime-install-interface.md`.
 
-## AI Kolega
+## Automatizovaná práce Organizace
 
-Profil `ai-colleague` se nestaví. AI Kolega je deprecated (decisions
-0156/0169): automatizovanou práci Organizace nese Pracovní Prostředí
-s automatizacemi (Henry) a Lazurio MausBotem a Hermes zůstává jen Buddymu.
+Pro automatizovanou práci Organizace se žádný další Resident profil nestaví.
+Nese ji Prostředí Henry: obyčejné Pracovní Prostředí Organizace s nastavenými
+automatizacemi, ve kterém práci dělají boti Lazurio MausBotu (decisions 0169
+a 0170 s dodatkem z 2026-10-19). Hermes zůstává jen Buddymu.
 
 ## Instalace, aktualizace a rollback
 

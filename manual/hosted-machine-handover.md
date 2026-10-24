@@ -145,5 +145,5 @@ Před odstraněním současných workspace resident rolí musí jedna kvalifika�
 VM prokázat Platform instalaci, prázdný start, přihlášení uživatele,
 materializaci vybraných Organizací, modulovou izolaci, aktualizaci a recovery
 při zachování identity a dat. Team Workspace dostane samostatný důkaz identity
-brokeru a týmového scope. Role sdílené s Buddy a AI Kolegy se touto migrací
+brokeru a týmového scope. Role sdílené s Buddym se touto migrací
 neodstraňují. Konkrétní rollout pořadí patří do Mission Controlu, ne sem.

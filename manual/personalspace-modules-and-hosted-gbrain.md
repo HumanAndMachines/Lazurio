@@ -9,14 +9,14 @@ Status: seed operating concept from the founder's 2026-07-04 product correction;
 ## Product implications
 
 1. **Personalspace has private modules.**
-   - A personalspace module is a private module owned by one user, Buddy, or AI colleague.
+   - A personalspace module is a private module owned by one user or Buddy.
    - It can expose one or more applications, just like workspace modules do.
    - Those applications are per-user/per-colleague by default, not shared Organization apps.
    - Personalspace modules must never be auto-merged into Organization discovery or company source-of-truth.
 
 2. **Lazurio Dashboard is not only admin configuration.**
    - It is also the user-facing entrypoint into production workspace applications.
-   - It owns Admin Organizace (Organization Admin) flows: Organization configuration, colleagues, AI colleagues, access, plans, billing, and policy.
+   - It owns Admin Organizace (Organization Admin) flows: Organization configuration, colleagues, access, plans, billing, and policy.
    - It also needs deployment/server configuration flows: admins configure deploy targets for workspace applications; personalspace application deploys/settings may be controlled by the relevant admin, builder, or user depending on ownership and tier.
 
 3. **Launchpad remains builder-first.**
