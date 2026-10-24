@@ -691,7 +691,13 @@ export function createRuntimeManager({
       organizationRoot: app?.[APP_RUNTIME_OWNER_ROOT] ?? null,
       cacheRoot: buildCacheRootPath(),
       bunExecutable: bunExecutableForApp(app),
-      env: runtimeProcessEnv(app, {}),
+      // The App's identity, as `lazurio update` builds it; nothing of where
+      // it is served (the build library removes the listeners).
+      env: runtimeProcessEnv(app, {
+        COMPANIES_WORKSPACE_ROOT: filesystemRootForApp(app),
+        COMPANYASCODE_APP_ID: app.id,
+        COMPANYASCODE_RUNTIME_SOURCE: "main",
+      }),
       retryFailed,
       instanceId,
       spawnProcess,
