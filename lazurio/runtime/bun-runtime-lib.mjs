@@ -133,6 +133,15 @@ export class BunRuntimeRefused extends Error {
   }
 }
 
+/** A refusal that may pass by itself: the registry did not answer, or the
+ * disk was full. Unattended work (the hosted maintenance) tries it again; a
+ * download that did not verify, an unknown version and an unsupported system
+ * wait for a person's start instead, so nothing downloads again and again
+ * (LazurioPlatform decision F62 point 7). */
+export function runtimeRefusalMayPass(reason) {
+  return reason === "runtime-unavailable" || reason === "runtime-disk-full";
+}
+
 /** The environment of an App's process for its Bun: that Bun's directory
  * first on PATH (once), everything else as it is; the user's Bun changes
  * nothing. On Windows the existing `Path` key and `;` stay. */

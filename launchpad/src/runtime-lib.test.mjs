@@ -30,6 +30,7 @@ import {
   windowsTaskkillCommand,
 } from "../../lazurio/runtime/runtime-lib.mjs";
 import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import { BunRuntimeRefused } from "../../lazurio/runtime/bun-runtime-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
@@ -4994,6 +4995,51 @@ test("selected Organization-section default uses the existing hosted open/start/
     await runtime.shutdown();
   }
 }, platformTestTimeout(15_000));
+
+test("hosted maintenance leaves a pinned Bun that cannot pass by itself to a person's start and retries one that may come back", async () => {
+  // Decision 0171, addendum of 2026-10-24: unattended work never downloads
+  // the same runtime again and again (LazurioPlatform F62 point 7). A person
+  // opens the App; it exits; the maintenance restarts it, and its pinned Bun
+  // now refuses.
+  for (const [reason, retried] of [["runtime-integrity-failed", false], ["runtime-unavailable", true]]) {
+    const port = await findFreePort();
+    const root = await createCompaniesWorkspaceFixture({ port, serverSource: controlledExitServerSource() });
+    const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+    const exitMarker = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", ".launchpad-exit-now");
+    let refusing = false;
+    let refusals = 0;
+    const runtime = createRuntimeManager({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      instanceId: `hosted-runtime-refusal-${reason}`,
+      lifecycleProfile: "hosted",
+      hostedWorkspace: hostedWorkspaceFixture,
+      discover: discoveryWithApp(app),
+      maintenanceIntervalMs: 10,
+      maintenanceRetryDelaysMs: [10],
+      resolveModuleBunFn: async () => {
+        if (!refusing) return { executable: process.execPath, binDir: null, source: "user" };
+        refusals += 1;
+        throw new BunRuntimeRefused(reason, { path: join(root, "package.json"), version: "1.4.99" });
+      },
+    });
+    try {
+      runtime.maintainApps([app]);
+      await runtime.ensureHostedApp(app.id);
+      await waitForStatus(() => runtime.health(app.id), "healthy");
+      refusing = true;
+      await writeFile(exitMarker, "exit managed child\n", "utf8");
+      for (let wait = 0; wait < 300 && refusals === 0; wait += 1) await sleep(10);
+      await sleep(400);
+      const [entry] = runtime.maintenanceSummary().apps;
+      expect(entry).toMatchObject({ status: "degraded", failure_kind: "app_runtime_refused" });
+      if (retried) expect(refusals).toBeGreaterThan(2);
+      else expect(refusals).toBe(1);
+    } finally {
+      await runtime.shutdown();
+    }
+  }
+}, platformTestTimeout(20_000));
 
 test("hosted inventory projects the worktree selected for the current Launchpad session", async () => {
   const port = await findFreePort();

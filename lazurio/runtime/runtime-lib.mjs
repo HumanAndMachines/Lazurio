@@ -40,6 +40,7 @@ import {
   bunRuntimeRefusalMessage,
   createModuleBunResolver,
   exactBunPin,
+  runtimeRefusalMayPass,
   withModuleBun,
 } from "./bun-runtime-lib.mjs";
 
@@ -1447,6 +1448,7 @@ export function createRuntimeManager({
         entry.next_attempt_at_ms = 0;
         entry.failure_kind = null;
         entry.last_error = null;
+        entry.waits_for_person = false;
         maintenanceRevision += 1;
       }
       return result;
@@ -2620,6 +2622,7 @@ export function createRuntimeManager({
         failure_kind: null,
         last_error: null,
         next_attempt_at_ms: 0,
+        waits_for_person: false,
       });
       changed = true;
     }
@@ -2708,6 +2711,7 @@ export function createRuntimeManager({
     entry.failure_kind = null;
     entry.last_error = null;
     entry.next_attempt_at_ms = 0;
+    entry.waits_for_person = false;
     maintenanceRevision += 1;
     wakeHostedMaintenance();
     return maintenanceSnapshot(entry);
@@ -2719,7 +2723,9 @@ export function createRuntimeManager({
       const retired = retiredMaintainedApps.splice(0);
       await mapWithConcurrency(retired, maintenanceConcurrency, stopRetiredMaintainedApp);
       const now = clock.now();
-      const due = [...maintainedApps.values()].filter((entry) => entry.status !== "stopped" && entry.next_attempt_at_ms <= now);
+      const due = [...maintainedApps.values()].filter((entry) =>
+        entry.status !== "stopped" && entry.waits_for_person !== true && entry.next_attempt_at_ms <= now
+      );
       await mapWithConcurrency(due, maintenanceConcurrency, ensureMaintainedApp);
       if (stopping) break;
       if (observedRevision !== maintenanceRevision || maintenanceWakePending) {
@@ -2771,6 +2777,7 @@ export function createRuntimeManager({
         entry.attempts = outcome.status === "healthy" ? 0 : entry.attempts + 1;
         entry.failure_kind = null;
         entry.last_error = null;
+        entry.waits_for_person = false;
         if (outcome.status === "healthy") {
           entry.next_attempt_at_ms = clock.now() + maintenanceIntervalMs;
         } else {
@@ -2784,6 +2791,11 @@ export function createRuntimeManager({
       entry.attempts += 1;
       entry.failure_kind = error?.code ?? error?.metadata?.failure_kind ?? "hosted_maintenance_failed";
       entry.last_error = error?.message ?? String(error);
+      // The App's pinned Bun refused with a reason that does not pass by
+      // itself: it waits for a person's start, as the Platform's background
+      // builds do, so the maintenance never downloads it again every 30 s.
+      entry.waits_for_person = error?.code === "app_runtime_refused"
+        && !runtimeRefusalMayPass(error?.metadata?.failure_kind);
       const retryIndex = Math.min(entry.attempts - 1, maintenanceRetrySchedule.length - 1);
       entry.next_attempt_at_ms = clock.now() + maintenanceRetrySchedule[Math.max(0, retryIndex)];
     }
@@ -3514,6 +3526,7 @@ export function createRuntimeManager({
       maintenanceEntry.attempts = 0;
       maintenanceEntry.failure_kind = null;
       maintenanceEntry.last_error = null;
+      maintenanceEntry.waits_for_person = false;
       maintenanceEntry.next_attempt_at_ms = clock.now() + maintenanceIntervalMs;
       maintenance = maintenanceSnapshot(maintenanceEntry);
     }
