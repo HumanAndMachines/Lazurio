@@ -156,7 +156,7 @@ Organizace projde stejnou branou se dvěma Prostředími toho serveru:
 
 Zápis není pokračováním read-only rolloutu, ale nový schvalovaný scope.
 Vyžaduje jmenovanou Web API proceduru, provider-side oprávnění, přesný preview
-Draftu, idempotency key, konflikt/verzi cíle, atomickou odpověď, ESO9-native
+připraveného zápisu, idempotency key, konflikt/verzi cíle, atomickou odpověď, ESO9-native
 audit, rollback nebo kompenzaci a explicitní pokyn uživatele k Publikaci.
 Obecné `execute`, volný `vltyp`, DMS upload, ceny, sklad, fakturace, účetnictví,
 mazání a změny přístupů se nesmějí schválit jako jeden společný balík.

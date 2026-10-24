@@ -17,9 +17,9 @@ metadata:
 Admin PR Sweep je práce **Organization Admina** napříč všemi GitHub
 Organizacemi, kde jeho účet drží admin práva. Cíl: každý otevřený PR od jiného
 autora dostat do koncového stavu — merged, closed jako nahrazený, nebo
-předaný jmenovanému ownerovi s konkrétní next action. Task Agent tvoří Drafty
-a provádí Publikaci (merge/close) jen na explicitní pokyn uživatele platný
-v aktuálním threadu.
+předaný jmenovanému ownerovi s konkrétní next action. Task Agent opravuje
+a připravuje pull requesty a Publikaci (merge/close) provádí jen na explicitní
+pokyn uživatele platný v aktuálním threadu.
 
 Liší se od nočního Steward sweepu, který běží pro právě jednu Organizaci
 pod Steward seatem a Steward autoritou. Admin sweep je interaktivní,
@@ -30,7 +30,7 @@ tam, kde ho ruleset dovolí a kde je to zdůvodněné.
 
 - Uživatel (Admin) chce přehled cizích PR napříč Organizacemi a jejich
   dotažení „na main“.
-- Fronta obsahuje PR od Kolegů, AI Kolegů, botů i klientských Organizací.
+- Fronta obsahuje PR od Kolegů, botů i klientských Organizací.
 
 Nepoužívej pro vlastní PR uživatele (ty si řeší sám), pro Release, ani jako
 náhradu review v jedné Organizaci se Steward seatem.
@@ -43,8 +43,8 @@ náhradu review v jedné Organizaci se Steward seatem.
 - Explicitní mandát uživatele k Publikaci pro celý sweep (merge, close,
   force-push s lease do cizích PR branchí, komentáře a assignee).
 - Uživatel před startem rozhodl sporné skupiny: legacy repa (např. staré
-  dependabot fronty), cizí Drafty, productionspace repa s vlastním branch
-  modelem, Windows testovací Mašina.
+  dependabot fronty), cizí GitHub Draft PR, productionspace repa s vlastním
+  branch modelem, Windows testovací Mašina.
 - Chybí-li mandát nebo některé z těchto rozhodnutí, polož je před startem
   nástrojem na otázky (decision 0211).
 
@@ -100,7 +100,7 @@ konfliktní; závislosti z popisů PR (owner PR před root PR) respektuj.
 | Nahrazeno novější prací na main nebo jiným PR | close s odkazem na náhradu |
 | Repo archivované/deprecated | unarchive → close s komentářem → re-archive |
 | Fork Organizace mění sdílenou implementaci | upstream-first: nechat otevřené, next action = PR do template |
-| Rescue/WIP Draft s citlivými firemními daty | nechat otevřené, komentář + assignee owner |
+| Rescue/WIP Draft PR s citlivými firemními daty | nechat otevřené, komentář + assignee owner |
 | Blokované externí závislostí (nepublikovaný producer, chybějící tooling) | nechat otevřené, jmenovat ownera a přesnou next action |
 
 Nesouladné s hodnotami Lazuria (druhý ACL, paralelní mechanismus, duplicitní

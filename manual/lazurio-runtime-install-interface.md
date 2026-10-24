@@ -184,9 +184,9 @@ lokálního `main` a cached `origin/main`. Právě jeden root `origin` musí
 odpovídat canonical repository a `company.gen3.json` i
 `modules.manifest.json` musí být běžné trackované bloby stejného `HEAD`;
 stejný published-blob důkaz platí pro Module `lazurio.module.json`. Lokální
-Draft, ignored/untracked autoritativní JSON, stale root nebo konfliktní či
-malformed repository/branch aliasy zůstanou fail-closed před target fetchem,
-změnou `origin` i filesystem relokací. Root autorita zahrnuje i
+nepublikovaná změna, ignored/untracked autoritativní JSON, stale root nebo
+konfliktní či malformed repository/branch aliasy zůstanou fail-closed před
+target fetchem, změnou `origin` i filesystem relokací. Root autorita zahrnuje i
 `forge_binding` a `governance.default_branch`; immutable binding, legacy
 lokátory, GitHub owner a main se nesmějí rozcházet. Aktivní `governance` musí
 být objekt a explicitní `governance.access_authority` musí být přesně

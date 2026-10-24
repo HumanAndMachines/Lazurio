@@ -72,8 +72,8 @@ Environment ovládá, a tím ovládá i Agenty, které v něm spouští. Agenti 
 za něj a v jeho živých právech; uživatel dává pokyn k Publikaci a má poslední
 slovo. Uživatelem je vždy člověk: na osobním Environmentu jeho Owner, na
 pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na týmovém
-Remote Environmentu právě připojený člen Teamu a na Automatizovaném
-Environmentu odpovědný Owner nebo Admin Organizace (decision 0175 s dodatkem
+Remote Environmentu právě připojený člen Teamu a na Environmentu Henry
+odpovědný Owner nebo Admin Organizace (decision 0175 s dodatkem
 z 2026-10-21; starší záznamy mu říkají Operátor). Není to role User
 v Organizaci. Ve sdíleném Hosted Team Workspace je Ownerem Organizace a
 jednotliví uživatelé ho používají s oprávněním; používáním Mašiny její
@@ -173,29 +173,38 @@ Plný Resident musí po dočasném odpojení Lazuria dál komunikovat se svým
 Ownerem, používat lokální paměť a nástroje a pracovat s již udělenými
 přístupy u poskytovatelů.
 
-## Buddy a AI Kolega
+## Buddy a Prostředí Henry
 
 Hard pravidlo Lazuria: jeden uživatel má právě jednu vlastní hostovanou osobní Mašinu, své Osobní Prostředí. Buddy běží přímo v ní a funguje v jejím rámci (decision 0210); žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného uživatele; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
-Buddy a AI Kolega se liší vlastníkem, mandátem a správou dat. Buddy je od
-decision 0210 Hermes Agent v Osobním Prostředí svého uživatele. AI Kolega je
-deprecated (decisions 0156/0169): automatizovanou práci Organizace nese
-Pracovní Prostředí s automatizacemi (Henry) a Lazurio MausBotem.
+Buddy a Prostředí Henry se liší vlastníkem, mandátem a správou dat. Buddy je od
+decision 0210 Hermes Agent v Osobním Prostředí svého uživatele. Automatizovanou
+práci Organizace nese Prostředí Henry: obyčejné Pracovní Prostředí Organizace
+s nastavenými automatizacemi, ve kterém práci dělají boti Lazurio MausBotu pod
+vlastním GitHub účtem persony a ve kterém může pracovat i uživatel (decisions
+0169 a 0170 s dodatkem z 2026-10-19).
 
-| Vlastnost | Buddy | AI Kolega |
+| Vlastnost | Buddy | Prostředí Henry |
 | --- | --- | --- |
 | Owner | jeden uživatel | Organizace |
+| Odpovědný uživatel | Owner Osobního Prostředí | Owner nebo Admin Organizace, který automatizace nastavuje |
 | Mandát | osobní | pracovní a organizační |
-| Paměť | osobní GBrain | organizačně svěřený GBrain |
+| Paměť | osobní GBrain | paměť Lazurio MausBotu, oddělená pro každou Organizaci |
 | Síťová bezpečnostní hranice | Ownerova | organizační |
-| Přístupy | delegace Ownera | granty Organizace |
-| Technický základ | Hermes Agent v Osobním Prostředí | Pracovní Prostředí Organizace s Lazurio MausBotem |
+| Přístupy | delegace Ownera | granty Organizace pro vlastní GitHub účet persony |
+| Technický základ | Hermes Agent v Osobním Prostředí | Pracovní Prostředí Organizace s týmem botů Lazurio MausBotu |
 
 Buddyho oslovuje jen jeho uživatel, Owner Osobního Prostředí, a jen on mu zadává
 tahy (decision 0210 body 4 a 12). Owner Mašinu vlastní a může ji měnit. Buddy
 pracuje bez sandboxu s plnými právy Osobního Prostředí jako ostatní agenti
 (decisions 0172 a 0210); hranici drží Osobní Prostředí, mandáty a to, že tahy
 zadává jen jeho uživatel.
+
+S personou Prostředí Henry se běžně spolupracuje přes GitHub: pull requesty,
+review a přiřazení. SSH do něj má jen jeho odpovědný uživatel pro servisní
+zákroky a vlastní pull requesty persony schvaluje člověk: Owner, Admin nebo
+Steward (decision 0169 body 1 a 5). Persona je jméno a charakter agentů
+v Prostředí, ne uživatel ani pravomoc.
 
 Pravidla pro práci s Buddym, jeho profilem a pamětí drží
 [manuál Buddyho](manual/buddy.md). Immutable runtime Lazuria a jeho profil
@@ -513,7 +522,7 @@ paměti Residenta.
 ## Generace nejsou produkty
 
 GEN2 je ověřovací kohorta a GEN3 první veřejně opakovatelná distribuce.
-Dlouhodobé názvy produktu jsou Lazurio, Buddy a AI Kolega. Generační označení
+Dlouhodobé názvy produktu jsou Lazurio a Buddy. Generační označení
 může zůstat v historii a migračních formátech, ale není samostatnou vrstvou
 architektury.
 

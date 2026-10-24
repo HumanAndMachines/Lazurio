@@ -91,8 +91,8 @@ nepřidávají.
 | Teams kanály (fáze 2) | `Channel.ReadBasic.All`, `ChannelMessage.Read.All` | | `ChannelMessage.Send` |
 
 Co agent přečte, odchází jako součást práce k poskytovateli AI modelu, se
-kterým Environment pracuje. Zápisy a mazání drží procesní pravidlo Draft a
-Publikace ([standard](../external-app-integrations.md#draft-a-publikace-ve-write-operacích))
+kterým Environment pracuje. Zápisy a mazání drží procesní pravidlo Příprava a
+Publikace ([standard](../external-app-integrations.md#příprava-a-publikace-ve-write-operacích))
 a schválení v Executoru, ne rozsah oprávnění. Specifikace se nezužují.
 
 Nikdy nežádej aplikační oprávnění, adresářová ani správcovská oprávnění,
@@ -367,7 +367,7 @@ console.log(JSON.stringify({ paths: Object.keys(spec.paths).length,
 
 Executor zápisy pozastaví ke schválení (`waiting_for_interaction`); výslovný
 pokyn uživatele k připojení je schválením připojení, zápisy navenek schvaluje
-jen pro schválený Draft nebo Publikaci.
+jen pro dovolenou přípravu v aplikaci (třeba koncept e-mailu) nebo pro Publikaci.
 
 **Práce agentů.** Agenti operace hledají `executor tools search` a volají
 přes Executor. Specifikace nemají adresování cestou (`root:/cesta:`), proto

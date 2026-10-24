@@ -45,7 +45,7 @@ existujícího historického názvu do migrace:
 ├── MAP.md
 ├── AGENTS.md
 ├── manual/
-├── .agents/skills/             # základní postupy pro Buddy a AI kolegy
+├── .agents/skills/             # základní postupy pro agenty a Buddyho
 ├── lazurio/                    # Lazurio CLI v0: context, Doctor, update, install a scoped search
 ├── launchpad/
 ├── Launchpad.command
@@ -90,7 +90,7 @@ pracovní Root.
   productionspace. Dlaždice Guide odkazuje na lokalizovanou část veřejné
   dokumentace na `documentation.lazurio.ai`; Launchpad její obsah neduplikuje.
   Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
-- `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
+- `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI agenty; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Organization Users do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
 - `manual/module-standard.md` — Lazurio Module Standard (decision 0171): jak Modul vypadá, startuje, na čem stojí a jak vzniká; konformance `lazurio module setup`, skill `.agents/skills/lazurio-module-standard/`
@@ -106,7 +106,7 @@ pracovní Root.
   locale projekce Root-owned dlouhých dokumentů, evaly a deterministický build
   non-Git Lazurio Rootu; sdílený produkt se sem nekopíruje do druhého `common/`
   stromu.
-- `.agents/skills/` — základní opakovatelné postupy pro Buddy a AI kolegy
+- `.agents/skills/` — základní opakovatelné postupy pro agenty a Buddyho
 - `organizations/README.md` — vysvětlení mountpointu; jediný trackovaný soubor uvnitř `organizations/` v root repu
 - `organizations/<org>/` — lokální gitignored Organization GEN3 checkout, ideálně podle GitHub organizace
 - Legacy top-level Organization template mount s markerem `company.gen3.json` `organization_kind: "template"` zůstává discovery-kompatibilní, ale nový se nezakládá. Current pracovní checkout podle decision 0127 žije v `organizations/<AdminOrganization>/productionspace/OrganizationTemplate_GEN3`; template nástroje dostávají explicitní cestu a ověřují Git provenienci.
@@ -128,10 +128,10 @@ pracovní Root.
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní
 - **Buddy** — běží v Osobním Prostředí svého uživatele (decision 0210); v `personalspace/<owner>_GEN3/` drží mount `buddy/` jeho secret-free profil a `gbrain/` jeho paměť. Dosavadní hostované instalace na dedikované VPS se do své migrace řídí vygenerovanými instrukcemi aktivního Resident rootu na hostu a privátním profilem Ownera, ne pravidly source checkoutu. Hranici a postup zjištění drží `manual/buddy.md`
 - `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>` — lokální gitignored
-  custody cesta pro secrets rootu, Buddyho a uživatele; organization/AI-colleague
-  secrets patří do organization-local `private/secrets/...`
+  custody cesta pro secrets rootu, Buddyho a uživatele; secrets Organizace
+  a jejích Prostředí Henry patří do organization-local `private/secrets/...`
 - `templates/` — šablony
-- `drafts/` — lokální netrackované návrhy bez dlouhodobé autority; sdílený draft patří do příslušné Organizace, plan-owned worktree nebo PR
+- `drafts/` — lokální netrackované návrhy bez dlouhodobé autority; sdílený návrh patří do příslušné Organizace, plan-owned worktree nebo PR
 - **V jakém světě jsi (koexistence Human↔Machine):** začni sekcí
   `AGENTS.md → Model spolupráce → Koexistence Human and Machine`. Vysvětluje
   hierarchii, hranice a procesy, ve kterých tenhle root a všechny Organizace

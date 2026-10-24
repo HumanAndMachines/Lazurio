@@ -37,8 +37,8 @@ s plánem a důkaz testování uveď v PR; Mission Control může nést odkaz.
 Je to výchozí review pravidlo, nikoli plošná technická brána. Čistá dokumentace,
 kosmetická změna nebo ohraničený průzkumný spike může mít v PR stručně
 zdůvodněnou výjimku. Počet testů, coverage kvóta ani samostatný červený PR
-nejsou požadavek. Červená kostra může být Draft pro koordinaci; produkční
-větev musí projít svými kontrolami.
+nejsou požadavek. Červená kostra může být rozpracovaný pull request pro
+koordinaci; produkční větev musí projít svými kontrolami.
 
 ## Změna směru a kvalita testů
 

@@ -1,6 +1,6 @@
 # Workspace module application version lifecycle
 
-Tento dokument je kanonický kontrakt pro verzování standardních Workspace modulů a jejich aplikací. Říká, co znamená `v0`, `v1`, `v2` a `v3`, kdy modul smí migrovat mezi verzemi, jak vypadá writer/draft/publish pipeline a jak se ověřený pattern promuje přes `TemplatesRozjedeme-ai` do dalších Organizací a klientských Workspaců.
+Tento dokument je kanonický kontrakt pro verzování standardních Workspace modulů a jejich aplikací. Říká, co znamená `v0`, `v1`, `v2` a `v3`, kdy modul smí migrovat mezi verzemi, jak vypadá pipeline od zápisu přes nepublikované změny k Publikaci a jak se ověřený pattern promuje přes `TemplatesRozjedeme-ai` do dalších Organizací a klientských Workspaců.
 
 ## Proč vzniká
 
@@ -180,12 +180,12 @@ vstupující do v3 musí mít app/data boundary dost jasnou pro vyjmutí dat do
 samostatného repa, import v2→v3, parity report, schema contract, writer
 contract, generated policy a rollback/archive plán.
 
-### `v3` — repository-db data repo + explicit draft/publish
+### `v3` — repository-db data repo + nepublikované změny a explicitní publish
 
 `v3` je současný cílový standard pro standardní record-native Workspace
 business aplikace.
 
-**Univerzální koncept:** app code je přenosný template pattern, data patří konkrétní Organizaci/klientovi ve vlastním data repu. Změny jsou lokální drafty, publish je explicitní auditovaný Git commit.
+**Univerzální koncept:** app code je přenosný template pattern, data patří konkrétní Organizaci/klientovi ve vlastním data repu. Změny zůstávají lokálně nepublikované, publish je explicitní auditovaný Git commit.
 
 Minimální layout v code/module repu:
 
@@ -219,7 +219,7 @@ Povinné vlastnosti:
 - major data generation je Git branch (`v3`, později `v4` jako orphan branch s migrací z v3 worktree);
 - `repository-db.yaml` deklaruje `app`, `data_repo.remote`, `data_repo.branch`, `layout`, `schema`, `generated_manifest` a `validate`;
 - app používá repository-db engine (nebo kompatibilní);
-- user edit vytváří lokální draft v data repo working tree;
+- user edit vytváří lokální nepublikovanou změnu v data repo working tree;
 - `Publikovat změny` provede validate → materialize generated → remote integration/pull guard → jeden commit s `Repository-Db-*` trailery → push;
 - konflikt je explicitní stav, ne tichý přepis;
 - host/server je vlastník freshness/syncu; browser nemá opakovaně spouštět vlastní Git pull;
@@ -232,20 +232,20 @@ Příklady:
 - Deals v3: `<Org>/deals-data@v3`, mount `modules/deals/db`, schema `deals-data@3.0.0-alpha.0`, destructive-sync guard, explicit publish.
 - Warehouse v3: `<Org>/warehouse-data@v3`, mount `modules/warehouse/db`, schema `warehouse-data@3.0.0-alpha.0`, writer pro items/movements/suppliers/purchase orders, hosted Steward smoke.
 
-#### Závazný v3 UI kontrakt: draft popup + Publikovat + pull
+#### Závazný v3 UI kontrakt: indikátor nepublikovaných změn + Publikovat + pull
 
 Každá v3 aplikace nad repository-db data repem **musí** mít tyhle dvě
-uživatelské vrstvy. Nejsou volitelné — bez nich nefunguje koordinace mezi
-AI Kolegy nad sdíleným data repem. **Mission Control v3 je referenční
-implementace** (`MissionControlTemplate/app/v3`).
+uživatelské vrstvy. Nejsou volitelné — bez nich nefunguje koordinace více
+writerů (uživatelů i agentů) nad sdíleným data repem. **Mission Control v3 je
+referenční implementace** (`MissionControlTemplate/app/v3`).
 
-1. **Globální draft indikátor s tlačítkem Publikovat.** Na **každé** stránce
-   aplikace je viditelný stav draftu data repa: nepublikovaný draft (dirty
-   working tree), changeset čekající na publikaci, nebo konflikt. Bez draftu
-   a bez novějších dat je indikátor **tichý** (nic neruší). Tlačítko
-   **Publikovat** provede publish flow podle role uživatele přes stejný
-   backend jako detailní Publish/Repository stránka; publish sémantika
-   zůstává create → approve → publish (decision 0035
+1. **Globální indikátor nepublikovaných změn s tlačítkem Publikovat.** Na
+   **každé** stránce aplikace je viditelný stav data repa: nepublikované
+   změny (dirty working tree), changeset čekající na publikaci, nebo konflikt.
+   Bez nepublikovaných změn a bez novějších dat je indikátor **tichý** (nic
+   neruší). Tlačítko **Publikovat** provede publish flow podle role uživatele
+   přes stejný backend jako detailní Publish/Repository stránka; publish
+   sémantika zůstává create → approve → publish (decision 0035
    v manual/decision-register.md), žádný auto-publish. Indikátor odkazuje
    na detailní stránku.
 2. **Pull / freshness mechanismus.** Host/server detekuje remote změny data
@@ -253,12 +253,12 @@ implementace** (`MissionControlTemplate/app/v3`).
    endpoint, timeout, neinteraktivní git prostředí — browser nespouští vlastní
    opakovaný Git pull). UI ukazuje stav „novější data k dispozici" a nabízí
    **bezpečný pull**. Pull je **fail-closed**: na dirty working tree ani na
-   konfliktu/divergenci se nespustí, aby nikdy nepřepsal lokální draft — žádný
-   auto-pull a žádný tichý `reset --hard`. Konflikt je viditelný stav
+   konfliktu/divergenci se nespustí, aby nikdy nepřepsal lokální nepublikované
+   změny — žádný auto-pull a žádný tichý `reset --hard`. Konflikt je viditelný stav
    s handoffem, ne tichý přepis. Koordinace více writerů se ověřuje
    automatizovaným concurrent-writer smoke testem.
 
-**Gate do template-ready:** nestačí, že appka buildí lokálně. Musí projít source/data gates, app gates, API smoke, browser route smoke, hosted edge smoke a template extraction/data-isolation review. Součástí app gate je i tenhle v3 UI kontrakt (draft popup + Publikovat + fail-closed pull).
+**Gate do template-ready:** nestačí, že appka buildí lokálně. Musí projít source/data gates, app gates, API smoke, browser route smoke, hosted edge smoke a template extraction/data-isolation review. Součástí app gate je i tenhle v3 UI kontrakt (indikátor nepublikovaných změn + Publikovat + fail-closed pull).
 
 ## Upgrade pipeline mezi verzemi
 
@@ -321,7 +321,7 @@ ani jejich uspořádání takovou potřebu nevytváří.
 6. Napiš `migrations/v3/importV2ToRepositoryDb` nebo ekvivalent.
 7. Napiš parity gate mezi `data/v2` a `db/data`.
 8. Přidej writer/read endpoints v3 nad repository-db, nejdřív read-only, potom write parity.
-9. Přidej draft/publish/conflict/sync UI state.
+9. Přidej UI stavy pro nepublikované změny, publish, konflikt a sync.
 10. Přidej destructive-sync guard: žádná v2→v3 bulk synchronizace nesmí smazat novější published v3 záznam bez explicitního konflikt reportu.
 11. Spusť hosted smoke na Workspace Hostu.
 12. Teprve potom přepni výchozí route a authoring instrukce na v3.
@@ -336,7 +336,7 @@ tyto vrstvy:
 |---|---|
 | Boundary guard | Git operace běží v `db/` repo rootu, remote a branch sedí na `repository-db.yaml`; operace z parent code repa selže. |
 | Data schema | Doménové schema žije v owner modulu nebo package; generic repository-db nesmí obsahovat business logiku modulu. |
-| Draft writes | UI edit zapisuje do working tree jako draft, ne commit na keypress. |
+| Unpublished writes | UI edit zapisuje do working tree jako nepublikovanou změnu, ne commit na keypress. |
 | Base revision | Writer chrání stale edit přes content hash nebo ekvivalent `baseRevision`. |
 | Publish | Explicitní uživatelská akce, jeden auditovaný batch commit, `Repository-Db-*` trailery, push na `v3`. |
 | Generated policy | Každý commitovaný generated výstup je deklarovaný a byte-deterministický. |
@@ -344,7 +344,7 @@ tyto vrstvy:
 | Conflict | Konflikt je viditelný lane/status s handoffem; žádný tichý reset nebo přepis. |
 | Credentials | Publish používá approved credential provider; tokeny a secrets nejsou v code ani data repu. |
 | Review Surface | Normal user vidí lidské resource labely a route targets, ne jen YAML paths. |
-| Draft UI + pull | Globální draft indikátor s tlačítkem Publikovat na každé stránce a fail-closed pull mechanismus (viz „Závazný v3 UI kontrakt" výše); Mission Control v3 je referenční implementace. |
+| Unpublished changes UI + pull | Globální indikátor nepublikovaných změn s tlačítkem Publikovat na každé stránce a fail-closed pull mechanismus (viz „Závazný v3 UI kontrakt" výše); Mission Control v3 je referenční implementace. |
 
 ## Template pipeline přes TemplatesRozjedeme-ai
 
@@ -395,16 +395,16 @@ Minimální v3 parity:
 - počet entries, categories, labor-rates sedí proti v2 nebo je rozdíl vysvětlený;
 - product refs jsou buď validní, nebo explicitně optional/unknown podle Organizace;
 - generated product summaries jsou deterministické;
-- change proposals se převedou buď do v3 draft/review surface, nebo zůstanou v2-only archive podle explicitního rozhodnutí;
+- change proposals se převedou buď do v3 review surface nepublikovaných změn, nebo zůstanou v2-only archive podle explicitního rozhodnutí;
 - publish commit nese `Repository-Db-App: pricebook`, `Repository-Db-Data-Repo`, `Repository-Db-Branch: v3`, `Repository-Db-Schema-Version` a actor/source trailery.
 
 ### První writer slice
 
 1. Read-only snapshot z `db/data`.
-2. Edit existing entry metadata/price jako draft.
-3. Create entry jako draft.
+2. Edit existing entry metadata/price jako nepublikovaná změna.
+3. Create entry jako nepublikovaná změna.
 4. Generated summaries materializer.
-5. Sync status bar / floating draft review surface.
+5. Sync status bar / plovoucí review surface nepublikovaných změn.
 6. `Publikovat změny` s repository-db publish.
 7. Hosted smoke a rollback na v2.
 

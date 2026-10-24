@@ -26,7 +26,7 @@ Maintenance agent před zásahem ověřuje:
 - `AGENTS.md` — rozhodovací pravidla pro agenty před vstupem do organizace.
 - `MAP.md` — lidský rozcestník.
 - `launchpad/` — sdílený builder-first Lazurio Launchpad (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Organization Users do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
-- `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI kolegy; mechanismy rootu a Organizací drží `manual/` a MAP.md, dokud nevznikne plánovaná cesta „mapa systému“.
+- `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI agenty; mechanismy rootu a Organizací drží `manual/` a MAP.md, dokud nevznikne plánovaná cesta „mapa systému“.
 - `organizations/README.md` — jediné trackované vysvětlení lokálního Organization mountpointu; konkrétní `organizations/*` jsou gitignored nested repos.
 - `personalspace/` — privátní osobní repo mimo GitHub organizace.
 - `templates/` — doplňkové šablony.
@@ -62,7 +62,7 @@ Maintenance agent před zásahem ověřuje:
 - `manual/lazurio-manifest-family.md` — přijatý Organization kontrakt pro
   `lazurio.organization.json` a navazující reader-first rollout; pojmenování
   Personalspace zůstává samostatný proposal a tento krok nic nemigruje.
-- `manual/desktop-execution-agent-collaboration.md` — baseline spolupráce Buddy a workspace-local AI kolegů s Claude/Codex Desktop App agenty: Desktop agent dělá maximum práce, Buddy drží QA gate a reviewer routing.
+- `manual/desktop-execution-agent-collaboration.md` — baseline spolupráce Buddyho a delegujících Kolegů s Claude/Codex Desktop App agenty: Desktop agent dělá maximum práce a QA gate s reviewer routingem drží ten, kdo práci delegoval.
 - `manual/worktree-management.md` — cílový CAC-0065 kontrakt pro standardizované
   Lazurio a Organization worktree environments, manifestovou dependency
   hydrataci, Launchpad read model a PR-aware bezpečný cleanup; do implementace
@@ -114,7 +114,7 @@ Při migraci z Workspace GEN2 rozděl Organizace repozitáře mezi `workspace/` 
 
 ## Personalspace pravidlo
 
-`personalspace/` je vedle `organizations/`, protože patří do osobního GitHub účtu vlastníka počítače nebo AI kolegy. Není to repo v žádné klientské ani provozní GitHub organizaci. Cílově nemá být jen privátní složka: má mít privátní moduly analogické workspace modulům, per-user/per-colleague aplikace a GBrain rozhraní pro nahlížení do osobní/Buddy paměti. Viz `manual/personalspace-modules-and-hosted-gbrain.md`.
+`personalspace/` je vedle `organizations/`, protože patří do osobního GitHub účtu vlastníka počítače. Není to repo v žádné klientské ani provozní GitHub organizaci. Cílově nemá být jen privátní složka: má mít privátní moduly analogické workspace modulům, per-user/per-colleague aplikace a GBrain rozhraní pro nahlížení do osobní/Buddy paměti. Viz `manual/personalspace-modules-and-hosted-gbrain.md`.
 
 Secrets rootu, Buddyho a uživatele, které nepatří do konkrétní Organizace, patří do
 gitignored `personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>` s adresáři
@@ -180,7 +180,7 @@ runtime/cache cesty, ne custody source of truth.
   proof pro instalaci, restart, rollback a Windows-only bugy bez hardcodování
   privátního notebooku do veřejného Lazuria.
 - [GEN2 → GEN3 migration manual](gen2-to-gen3-migration.md) — převod GEN2 workspace do Organization modelu včetně pravidla, že obecný Organization-local `guide/` se maže a nahrazuje shared `Lazurio/guide`.
-- [Workspace module version lifecycle](workspace-module-version-lifecycle.md) — standard `v0`/`v1`/`v2`/`v3` pro standardní workspace moduly, repository-db v3 writer/draft/publish pipeline, template propagation a Pricebook v3 dogfood.
+- [Workspace module version lifecycle](workspace-module-version-lifecycle.md) — standard `v0`/`v1`/`v2`/`v3` pro standardní workspace moduly, repository-db v3 pipeline od zápisu přes nepublikované změny k Publikaci, template propagation a Pricebook v3 dogfood.
 - [Doctor worktree management](worktree-management.md) — shaping manuál a
   implementační řezy CAC-0065 pro jeden Organization environment se skutečnými
   nested Git worktrees, dependencies a bezpečným uvolněním disku po PR.
@@ -194,7 +194,7 @@ runtime/cache cesty, ne custody source of truth.
 
 ## Spolupráce s Desktop agenty
 
-- [Desktop execution agent collaboration](desktop-execution-agent-collaboration.md) — baseline pro spolupráci Buddy a AI kolegů s Claude/Codex Desktop App agenty.
+- [Desktop execution agent collaboration](desktop-execution-agent-collaboration.md) — baseline pro spolupráci Buddyho a delegujících Kolegů s Claude/Codex Desktop App agenty.
 
 ## Aktivní maintenance plány
 

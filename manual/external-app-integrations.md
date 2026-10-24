@@ -202,10 +202,10 @@ Definice z katalogu se na mašině stává funkční až lokální aktivací:
    Organizace potřebuje. Read-only start je volitelné zpřísnění pro
    mimořádně citlivé zdroje, ne default; LinkedIn zůstává post-only výjimka
    dle svého runbooku. Primární ochranu drží stejný kontrakt jako u kódu:
-   **write agenta je Draft, ne Publikace**. Mechanické gaty se liší podle
-   harnessu a formy integrace — konkrétní nastavení a jejich meze drží
-   sekce „Draft a Publikace ve write operacích" níže; nastav je při
-   aktivaci a ověř je ve smoke testu.
+   **write agenta zůstává připravený a neodeslaný v aplikaci, není to
+   Publikace**. Mechanické gaty se liší podle harnessu a formy integrace —
+   konkrétní nastavení a jejich meze drží sekce „Příprava a Publikace ve
+   write operacích" níže; nastav je při aktivaci a ověř je ve smoke testu.
 4. Token cache zůstává lokální a persistentní: u HTTP OAuth ji drží
    credential store harnessu (preferovaně systémový keyring), u STDIO
    integrace vlastní credentials directory serveru v custody. Tool-runtime
@@ -279,31 +279,31 @@ pravidla `mcp__…` nezachytí. Gate má tři úrovně a všechny platí:
 1. **Shell permission pravidla harnessu** — write podpříkazy nikdy
    neallowlistuj plošně (`gog *`, `acli *`, `gh *`). Allowlistuj jen
    konkrétní čtecí příkazy; ostatní ať procházejí potvrzením.
-2. **Draft forma výstupu** — CLI volej tak, aby výsledek byl vratný
-   (draft místo odeslání, nový soubor místo přepisu, testovací cíl).
+2. **Vratná forma výstupu** — CLI volej tak, aby výsledek byl vratný
+   (koncept místo odeslání, nový soubor místo přepisu, testovací cíl).
 3. **Explicitní pokyn uživatele** pro každou nevratnou operaci; u CLI je
    tohle procesní pravidlo hlavní gate, ne pojistka.
 
-## Draft a Publikace ve write operacích
+## Příprava a Publikace ve write operacích
 
 Write přístup není povolení publikovat. Platí stejný kontrakt jako u kódu
 (root `AGENTS.md`, decisions 0090 a 0103): **co agent v externí aplikaci
-vytvoří, je Draft — revertovatelný a editovatelný uživatelem. Publikaci
-dělá uživatel, nebo agent, ale jen na jeho explicitní pokyn v daném
-threadu.** Právě proto je write scope defaultní: proces, ne zúžený scope,
-drží hranici.
+vytvoří, zůstává v ní připravené a neodeslané (třeba e-mail uložený jako
+koncept) — vratné a editovatelné uživatelem. Publikaci dělá uživatel, nebo
+agent, ale jen na jeho explicitní pokyn v daném threadu.** Právě proto je
+write scope defaultní: proces, ne zúžený scope, drží hranici.
 
 Prakticky to znamená volit vratnou formu výstupu a nechat nevratný krok
 uživateli:
 
-| Služba | Draft (agent smí sám) | Publikace (jen na explicitní pokyn) |
+| Služba | Příprava (agent smí sám) | Publikace (jen na explicitní pokyn) |
 | --- | --- | --- |
-| Gmail / Outlook | vytvořit draft zprávy, štítky, uspořádání | odeslat, smazat, hromadné operace |
+| Gmail / Outlook | vytvořit koncept zprávy, štítky, uspořádání | odeslat, smazat, hromadné operace |
 | Slack | připravit znění, zapsat do testovacího kanálu | poslat do ostrého kanálu, DM, oznámení |
-| Jira / Confluence | draft issue nebo stránky, komentář k review | přechod stavu, publikace stránky, mazání |
+| Jira / Confluence | koncept issue nebo stránky, komentář k review | přechod stavu, publikace stránky, mazání |
 | Drive / Docs / Sheets | nový soubor nebo kopie k revizi, návrh úprav | přepis ostrého dokumentu, sdílení ven, mazání |
 | Canva | nový design, export do drafts cesty | sdílení/zveřejnění, přepis týmového assetu |
-| LinkedIn | draft příspěvku | publikace příspěvku |
+| LinkedIn | koncept příspěvku | publikace příspěvku |
 
 Nevratné operace (odeslání, zveřejnění, mazání, přepis ostrého obsahu,
 změna oprávnění) potvrzuje uživatel per akci.
@@ -329,7 +329,7 @@ skript, jiný harness. Approval mode proto **není bezpečnostní hranice vůči
 ostatním procesům na mašině**; je to gate uvnitř jednoho harnessu. Skutečné
 hranice udělených scopes jsou: rozsah samotného grantu, custody souborů
 (`0600`/`0700`), rychlá revokace u poskytovatele a procesní pravidlo
-Draft → Publikace, kterým se řídí každý agent i Buddy (Buddy navíc v rámci
+Příprava → Publikace, kterým se řídí každý agent i Buddy (Buddy navíc v rámci
 svých mandátů). U scopes, jejichž zneužití by bylo nevratné a drahé
 (mazání, správa oprávnění, admin operace), scope neuděluj vůbec — to je
 jediná spolehlivá ochrana.
@@ -338,7 +338,7 @@ jediná spolehlivá ochrana.
 
 Write smoke nedělej na ostrém obsahu. Použij k tomu určený jednorázový cíl
 — testovací kanál, scratch složku nebo drafts cestu, sandbox projekt/space,
-vlastní draft. U integrace sdílené Organizací zapiš cíl použitý pro smoke
+vlastní koncept. U integrace sdílené Organizací zapiš cíl použitý pro smoke
 do `INTEGRATIONS.md`, ať ho další mašina používá taky a nevzniká nepořádek
 ani zbytečné notifikace v produkčních prostorech Organizace. U napojení,
 které je jen na Environmentu uživatele, se do katalogu Organizace nic
@@ -347,7 +347,7 @@ ho uvede v evidenci svého úkolu.
 
 **Výjimka pro úklid určeného smoke artefaktu:** když uživatel výslovně
 schválil tento jmenovitý smoke cíl, patří do téže schválené operace i úklid
-artefaktu, který agent v tomto konkrétním smoke sám vytvořil (draft, testovací
+artefaktu, který agent v tomto konkrétním smoke sám vytvořil (koncept, testovací
 zpráva nebo testovací záznam). Agent jej smí po ověření odstranit; nejde o
 samostatnou Publikaci ani o obecné oprávnění mazat. Výjimka se nikdy netýká
 existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě určený v
@@ -419,7 +419,7 @@ denně neověřuje. Proto pro každého agenta platí:
    s citlivým obsahem.
 3. Neznáš-li řešení, připrav issue podle `manual/github-issues.md` do přesného
    owning repa a po kontrole duplicit a sanitizaci ho sám zapiš (decision
-   0163); sanitizovaný draft vrať jen tehdy, když zápis není možný nebo
+   0163); sanitizovaný návrh vrať jen tehdy, když zápis není možný nebo
    public-safety není jistá. Veřejné
    `HumanAndMachines/Lazurio` smí dostat jen obecný, anonymizovaný problém
    frameworku.
