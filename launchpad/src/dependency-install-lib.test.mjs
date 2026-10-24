@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { delimiter, join, relative } from "node:path";
 
+import { BunRuntimeRefused } from "../../lazurio/runtime/bun-runtime-lib.mjs";
 import {
   frozenBunInstallCommand,
   inspectRequiredDependencies,
@@ -14,6 +15,9 @@ import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.m
 
 const cleanup = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
+// The pinned-Bun cases spawn with a minimal environment; Windows keeps its
+// `Path` key and separator, covered in bun-runtime-lib.test.mjs.
+const posixTest = test.skipIf(process.platform === "win32");
 
 function fixtureDependencyInstallScript(extra = "") {
   return [
@@ -1219,6 +1223,79 @@ test("incomplete clean install without a previous tree removes the partial resul
     runtime_tree_usable: false,
   });
   expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
+});
+
+// Decision 0171, addendum of 2026-10-24: without an explicit command (the
+// post-update refresh of `lazurio update`), the package's own pinned Bun
+// installs it, read from the same package.json bytes that authorize the
+// install; a package that pins none keeps the Bun Lazurio runs on.
+posixTest("without an explicit command the Bun the package pins installs it, its directory first on PATH, and a refusal changes nothing", async () => {
+  const root = await packageFixture({ packageManager: "bun@1.4.99" });
+  const packageRoot = join(root, "app");
+  const pinned = { executable: join(root, "runtime", "bun"), binDir: join(root, "runtime"), source: "cache" };
+  const asked = [];
+  const spawned = [];
+  const result = await runFrozenBunInstall({
+    cwd: packageRoot,
+    boundaryRoot: root,
+    env: { PATH: ["/usr/bin", "/bin"].join(delimiter), KEEP: "kept" },
+    resolveBun: async (input) => {
+      asked.push(input);
+      return pinned;
+    },
+    spawnProcess(command, options) {
+      spawned.push({ command, env: options.env });
+      return Bun.spawn([process.execPath, "-e", fixtureDependencyInstallScript()], options);
+    },
+  });
+  expect(result).toMatchObject({ ok: true, mode: "ensure" });
+  expect(asked).toEqual([{ packageManager: "bun@1.4.99", owner: await realpath(packageRoot) }]);
+  expect(spawned).toEqual([{
+    command: frozenBunInstallCommand(pinned.executable),
+    env: { PATH: [pinned.binDir, "/usr/bin", "/bin"].join(delimiter), KEEP: "kept" },
+  }]);
+
+  // A pinned Bun that cannot be had: a typed result named by the package, and
+  // even a clean repair keeps the tree it would have replaced.
+  const refused = await runFrozenBunInstall({
+    cwd: packageRoot,
+    boundaryRoot: root,
+    mode: "clean",
+    resolveBun: async ({ owner }) => {
+      throw new BunRuntimeRefused("runtime-unavailable", { path: join(owner, "package.json"), version: "1.4.99" });
+    },
+    spawnProcess() {
+      throw new Error("A refused runtime must not spawn anything");
+    },
+  });
+  expect(refused).toMatchObject({
+    ok: false,
+    reason: "runtime-unavailable",
+    mode: "clean",
+    removed_node_modules: false,
+  });
+  expect(refused.detail).toContain("package.json");
+  expect(refused.detail).toContain("1.4.99");
+  expect(existsSync(join(packageRoot, "node_modules", "fixture", "package.json"))).toBe(true);
+});
+
+posixTest("a package that pins no exact Bun is installed by the Bun Lazurio runs on, with its environment exactly as given", async () => {
+  for (const packageManager of [undefined, "bun@1.4"]) {
+    const root = await packageFixture({ packageManager });
+    const spawned = [];
+    const env = { PATH: ["/usr/bin", "/bin"].join(delimiter), KEEP: "kept" };
+    const result = await runFrozenBunInstall({
+      cwd: join(root, "app"),
+      boundaryRoot: root,
+      env,
+      spawnProcess(command, options) {
+        spawned.push({ command, env: options.env });
+        return Bun.spawn([process.execPath, "-e", fixtureDependencyInstallScript()], options);
+      },
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(spawned).toEqual([{ command: frozenBunInstallCommand(process.execPath), env }]);
+  }
 });
 
 async function packageFixture({
