@@ -97,12 +97,25 @@ autoritu.
    zopakuj validace a gate; přepsanou branch pushni pouze příkazem s exact
    `--force-with-lease`, který gate vypíše. Po pushi ověř na GitHubu PR base
    `main`, exact head, mergeability a checks.
+   Při rebase i merge drž tři pravidla:
+   - Konflikt řeš po jednotlivých úsecích. Na konfliktní soubor nikdy
+     nepoužij `git checkout --ours/--theirs <soubor>`: tiše zahodí i čisté
+     změny druhé strany v tomto souboru. Konflikt obnovíš
+     `git checkout -m <soubor>` a upravíš jen sporné úseky.
+   - Než branch přepíšeš, ověř každý commit, který z ní zmizí
+     (`git log <nový-head>..<starý-head>`): rozhoduje historie, ne jen
+     výsledný strom.
+   - Text pro `gh` (popis PR, komentář, review, issue) předávej souborem
+     (`--body-file`, `-F`), nikdy v uvozovkách na příkazové řádce: backticky
+     v textu shell spustí jako příkazy.
 9. Commituj a pushuj do PR branche průběžně — po každém uzavřeném pracovním
    kroku, nejpozději před každou odpovědí uživateli, která ohlašuje stav
    práce. Po prvním pushi branch hned otevři PR proti správné base branchi
-   jako GitHub Draft PR. Pokud uživatel výslovně zakázal PR otevřít,
+   jako GitHub Draft PR. Kde plán repozitáře Draft PR neumí (soukromé
+   repozitáře na GitHub Free), otevři běžný PR a do popisu napiš, že je
+   rozpracovaný. Pokud uživatel výslovně zakázal PR otevřít,
    nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
-   koncem práce si nástrojem na otázky vyžádej rozhodnutí: Draft zahodit,
+   koncem práce si nástrojem na otázky vyžádej rozhodnutí: práci zahodit,
    nebo PR povolit —
    samotná remote branch bez PR není přípustná náhrada.
    Jakmile je práce hotová a ověřená, přepni PR na Ready for review
@@ -136,10 +149,17 @@ autoritu.
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
    `gh repo view <owner>/<repo> --json
    rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed`,
-   `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
+   `gh pr view <číslo> --json headRefOid,mergeable,mergeStateStatus,reviewDecision`.
+   `reviewDecision` sám schválení aktuálního obsahu nedokazuje: GitHub
+   ponechá staré schválení i po novém commitu, pokud repozitář stará
+   schválení nezahazuje. Požadované schválení musí patřit přesnému headu,
+   tedy `commit_id` review z
+   `gh api repos/<owner>/<repo>/pulls/<číslo>/reviews` se rovná
+   `headRefOid`.
    Když uživatel v threadu zvolí Publikaci (v nástroji na otázky nebo
    explicitním „Publikuj"), PR mergni metodou, kterou repozitář
-   povoluje (při více povolených je default rebase, pokud Organizace ve svém
+   povoluje, a to přes `gh pr merge <číslo> --<metoda> --match-head-commit
+   <headRefOid>`, aby se mergnul právě ověřený head (při více povolených je default rebase, pokud Organizace ve svém
    `AGENTS.md` nedeklaruje jinak; synchronizaci šablony slučuj merge commitem
    až po ověření `git merge-base --is-ancestor <commit šablony> <head>` a
    povoleného merge commitu, jinak nesluč a nahlas to — decision 0174), v primárním checkoutu spusť
@@ -171,7 +191,9 @@ autoritu.
    local-only commit, exact HEAD je na remote, PR je merged nebo explicitně
    abandoned se snapshotem, runtime ho nepoužívá a neexistuje aktivní writer.
    Pak použij owner repo `git worktree remove <path>` a `git worktree prune`;
-   sidecar smaž až potom.
+   sidecar smaž až potom. Než smažeš remote branch mergnutého PR, přesuň
+   pull requesty, které na ní stojí, na `main`
+   (`gh pr edit <číslo> --base main`); smazání branche je jinak zavře.
 14. Plošné `rm -rf`, `--force`, `git branch -D` a automatické mazání podle stáří
    nejsou běžný cleanup. Nesplněný guard se předává konkrétně.
 
