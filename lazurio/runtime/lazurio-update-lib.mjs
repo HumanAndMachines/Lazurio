@@ -9,6 +9,7 @@ import {
   organizationContainedRelativePath,
 } from "./discovery-lib.mjs";
 import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
+import { buildCacheRoot as defaultBuildCacheRoot, builtAppMode, ensureAppBuild } from "./built-app-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { createHostedWorkspaceConfiguration, hostedTeamSelectsModule } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
@@ -342,6 +343,21 @@ export async function runLazurioUpdate({
     });
     if (dependencyPhase.blocked) results.push(dependencyPhase.blocked);
     applyDependencyOutcomes(results, dependencyPhase.outcomes, repoDescriptors);
+
+    // The tools a Module declares (its own Bun, DEV-6682) are made ready here,
+    // after its packages and before any build of it runs.
+
+    // Builds of the moved built Apps, on a computer only: a Remote Environment
+    // runs the Platform's Launchpad, which builds by itself (decision 0212).
+    if (hostedWorkspace.profile !== "hosted") {
+      await buildUpdatedApps({
+        rootPath: absoluteRoot,
+        results,
+        changedApps: dependencyPhase.changedApps ?? [],
+        warnings,
+        deps,
+      });
+    }
 
     return updateReport({
       rootPath: absoluteRoot,
@@ -1385,7 +1401,7 @@ async function reconcileUpdatedDependencies({
       .filter((result) => result.state === "updated" && sourceCheckoutChanged(result.actions))
       .map((result) => result.repo_key),
   );
-  if (changedRepoKeys.size === 0) return { outcomes: new Map(), blocked: null };
+  if (changedRepoKeys.size === 0) return { outcomes: new Map(), blocked: null, changedApps: [] };
 
   const canonicalRepos = await Promise.all(repos.map(async (repo) => ({
     repo,
@@ -1393,6 +1409,8 @@ async function reconcileUpdatedDependencies({
   })));
   const targetsByPath = new Map();
   const inventoryOutcomes = new Map();
+  // The Apps of the moved checkouts, built after the dependencies below.
+  const changedApps = [];
 
   // Zachovej podporu package rootu samotného repozitáře (Lazurio root,
   // Organization root nebo Modul). Manifestem deklarovaná App ve stejné cestě
@@ -1430,6 +1448,7 @@ async function reconcileUpdatedDependencies({
       const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
       const owner = owningManagedRepo(canonicalRepos, cwd);
       if (!owner) continue;
+      if (changedRepoKeys.has(owner.repo.key)) changedApps.push({ app, repo: owner.repo, repoRoot: owner.root, cwd });
       const target = await dependencyTarget({ rootPath, repo: owner.repo, repoRoot: owner.root, cwd, app });
       if (
         !changedRepoKeys.has(owner.repo.key)
@@ -1500,7 +1519,76 @@ async function reconcileUpdatedDependencies({
     }
   }
 
-  return { outcomes, blocked: null };
+  return { outcomes, blocked: null, changedApps };
+}
+
+// Decision 0212 point 9: on a computer, `lazurio update` builds the new key of
+// every built App of a moved checkout once its packages are ready, so that
+// the next Open from main starts it at once. It never restarts a running App
+// (the next Open does) and reports each App on its repository's result. A
+// failed build is a finding, not a blocked update: the previous build stays.
+async function buildUpdatedApps({ rootPath, results, changedApps, warnings, deps }) {
+  const ensureBuild = deps?.ensureAppBuild ?? ensureAppBuild;
+  const cacheRoot = deps?.buildCacheRoot ?? defaultBuildCacheRoot();
+  // The Bun that runs an App's scripts, from one place per App (DEV-6682 swaps
+  // in the Bun the Module declares).
+  const bunExecutableForApp = deps?.bunExecutableForApp ?? (() => process.execPath);
+  for (const { app, repo, repoRoot, cwd } of changedApps) {
+    if (builtAppMode(app) === null) continue;
+    const index = results.findIndex((result) => result.repo_key === repo.key);
+    const result = results[index];
+    // Packages that could not be prepared would only fail the build too.
+    if (!result || result.state === "blocked") continue;
+    let outcome;
+    try {
+      const organizationPath = typeof app.organization_path === "string" ? app.organization_path.trim() : "";
+      const built = await ensureBuild({
+        app,
+        cwd,
+        checkoutRoot: repoRoot,
+        organizationRoot: app.organization_kind === "organization" && organizationPath
+          ? await canonicalPath(resolve(rootPath, organizationPath))
+          : null,
+        cacheRoot,
+        bunExecutable: bunExecutableForApp(app),
+        env: dependencyInstallEnvironment({ target: { app, cwd }, rootPath }),
+      });
+      if (built.ok && built.output === null && !built.finding) continue;
+      outcome = built.ok && !built.finding
+        ? { app_id: app.id, title: app.title ?? app.id, state: built.built ? "built" : "current", key: built.key }
+        : {
+            app_id: app.id,
+            title: app.title ?? app.id,
+            state: "failed",
+            reason: built.finding.reason,
+            key: built.finding.key,
+            log_path: built.finding.log_path,
+            previous_key: built.ok ? built.key : null,
+            message: built.finding.message,
+          };
+    } catch (error) {
+      outcome = {
+        app_id: app.id,
+        title: app.title ?? app.id,
+        state: "failed",
+        reason: "build-failed",
+        key: null,
+        log_path: null,
+        previous_key: null,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+    results[index] = {
+      ...result,
+      actions: outcome.state === "built" && !result.actions?.includes("apps_built")
+        ? [...(result.actions ?? []), "apps_built"]
+        : result.actions ?? [],
+      builds: [...(result.builds ?? []), outcome],
+    };
+    if (outcome.state === "failed") {
+      warnings.push(`${outcome.title}: ${outcome.message} (${outcome.reason}${outcome.log_path ? `, log: ${outcome.log_path}` : ""})`);
+    }
+  }
 }
 
 function sourceCheckoutChanged(actions = []) {

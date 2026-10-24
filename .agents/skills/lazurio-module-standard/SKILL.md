@@ -60,6 +60,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 | `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |
 | Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
 | Platform Launchpad: `start_script` (kap. 4.6) a uspávání nepoužívané App | od LazurioPlatform v0.1.11 (Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573, z předběžných vydání od v0.1.11-rc.3); starší vydání neznámý klíč `lazurio.runtime` odmítá | `start_script` deklaruj až tehdy, když všechna Prostředí Organizace Modulu běží na v0.1.11 nebo novější (předběžné vydání od v0.1.11-rc.3 se počítá); kterékoli z nich Modul objeví a z `main` spustí (referenční Organizace napřed, 0204). |
+| Launchpad tohoto repa: sestavená verze z `main` na počítači uživatele (kap. 4.7) | od commitu s kapitolou 4.7 (rozhodnutí 0212 bod 9) | Převod Modulu ověř na počítači i přes `lazurio module open` z `main`: App běží sestavená, neúspěšné sestavení je nález s předchozí verzí, nikdy pád do `dev`. |
 
 ## Kdy použít
 
@@ -208,7 +209,7 @@ ani pro productionspace repa (decision 0041).
       bez proměnné. Převod mergni až tehdy, když všechna Prostředí Organizace
       Modulu běží na LazurioPlatform v0.1.11 nebo novější (předběžné vydání od
       v0.1.11-rc.3 se počítá; tabulka výše);
-      Launchpad tohoto repa klíč přijme, ale App dál spouští přes `dev`.
+      Launchpad tohoto repa ji na počítači uživatele spouští podle kap. 4.7.
       Nepoužívaná App z `main` po 20 minutách usne a další otevření ji
       spustí znovu: stav, který má přežít, nedrž jen v paměti; souseda, kterého
       App volá, deklaruj v `required_module_slots`, jinak usne i on.
