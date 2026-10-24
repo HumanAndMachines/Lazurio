@@ -802,6 +802,8 @@ export function createRuntimeManager({
         build: { mode: build.mode, finding: build.finding },
       });
     }
+    // A build can take minutes; a shutdown meanwhile starts nothing.
+    if (build) assertRuntimeManagerAcceptingStarts();
     const startedAtMs = clock.now();
     const startedAt = new Date(startedAtMs).toISOString();
     await appendLog(logPath, `\n[launchpad] ${startedAt} start ${app.id} source=${runtimeSource.type} key=${runtimeKey}${build ? ` build=${build.mode}:${build.key}` : ""}\n`);
