@@ -66,7 +66,7 @@ používá následující pojmy s jejich přesným významem.
 | **Pull request a Publikace** | Pull request je vratný a editovatelný výsledek práce agenta. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného uživatele. |
 
 Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
-[pravidla pro Agenty](AGENTS.md#model-spolupráce-uživatel-a-agenti) a cílové
+[pravidla pro Agenty](AGENTS.md#jak-se-tu-pracuje) a cílové
 vztahy mezi rolemi, prostory a runtime popisuje [architektura](ARCHITECTURE.md).
 
 ## Proč Lazurio vzniká
@@ -271,7 +271,7 @@ Folder spravovaný LazurioPlatform. Aktuální build rezidentních artefaktů po
   Hostu zůstává vyšší doménou kompromitace a obnovy.
 
 Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#1-jedna-mašina-je-jedna-bezpečnostní-hranice),
-[pravidlech pro Agenty](AGENTS.md#model-spolupráce-uživatel-a-agenti) a
+[pravidlech pro Agenty](AGENTS.md#hranice) a
 [standardu lokálního držení secrets](manual/security/local-secret-custody.md).
 Bezpečnostní problém nepublikuj do veřejného issue spolu s citlivými daty;
 nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
