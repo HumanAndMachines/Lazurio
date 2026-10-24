@@ -941,6 +941,9 @@ odmítne dřív, než cokoli zastaví, uvolní nebo spustí, a nikdy nepoužije
 jinou verzi: `runtime-unavailable` (registr
 neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
 `runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
+U App z `main`, která běží sestavená, je pin nového commitu, který nejde mít,
+neúspěšné sestavení nového klíče: běžící App i předchozí statické sestavení
+běží dál s nálezem (rozhodnutí 0212 bod 6, Module Standard kap. 4.7).
 Doctor tyto piny jen ukazuje v kontrole `launchpad.module_runtimes`: každou
 přesnou verzi, kterou namountované App připínají, s počtem App, zda ji
 mezipaměť pro tento systém drží, a velikost mezipaměti. Kontrola je vždy

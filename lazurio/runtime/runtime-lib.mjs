@@ -44,6 +44,7 @@ import {
   withModuleBun,
 } from "./bun-runtime-lib.mjs";
 import {
+  BUILD_FINDING_MESSAGES,
   buildCacheRoot as defaultBuildCacheRoot,
   builtAppMode,
   ensureAppBuild,
@@ -629,6 +630,13 @@ export function createRuntimeManager({
     return bun;
   }
 
+  // One of bunForApp's two refusals: the pinned Bun cannot be had, or the pin
+  // changed while it was being had.
+  function isBunRefusal(error) {
+    return error instanceof RuntimeActionError
+      && (error.code === "app_runtime_refused" || error.code === "app_runtime_changed");
+  }
+
   async function portOwnerIdentity(pid) {
     if (!requireTakeoverIdentity) return "injected-signaler";
     if (platform === "win32") return processIdentityResolver(pid);
@@ -757,29 +765,59 @@ export function createRuntimeManager({
     return buildCacheRoot ?? defaultBuildCacheRoot({ env: systemEnvironment });
   }
 
-  // The build runs with the Bun the App pins, `bun` from bunForApp, resolved
-  // by the caller before anything is stopped; the process that serves the
-  // build then runs with the same Bun (decision 0171, addendum of 2026-10-24).
-  async function buildForApp(app, bun, { retryFailed = true } = {}) {
-    return ensureAppBuild({
+  // The build runs with the Bun the App pins (decision 0171, addendum of
+  // 2026-10-24): `bun` when the caller resolved it already, otherwise
+  // bunForApp, asked only when a build is about to run. A Bun that cannot be
+  // had is that key's failed build (decision 0212 point 6): the previous build
+  // with the finding, or nothing to run. The result carries the Bun it
+  // resolved (`bun`), so the process that serves the build runs the same one,
+  // and the refusal it met (`refusal`).
+  async function buildForApp(app, { bun = null, retryFailed = true } = {}) {
+    let resolved = bun;
+    let refusal = null;
+    // The App's identity, as `lazurio update` builds it; nothing of where it
+    // is served (the build library removes the listeners).
+    const env = runtimeProcessEnv(app, {
+      COMPANIES_WORKSPACE_ROOT: filesystemRootForApp(app),
+      COMPANYASCODE_APP_ID: app.id,
+      COMPANYASCODE_RUNTIME_SOURCE: "main",
+    });
+    const result = await ensureAppBuild({
       app,
       cwd: runtimeCwdForApp(app),
       checkoutRoot: checkoutRootForApp(app),
       organizationRoot: app?.[APP_RUNTIME_OWNER_ROOT] ?? null,
       cacheRoot: buildCacheRootPath(),
-      bunExecutable: bun.executable,
-      // The App's identity, as `lazurio update` builds it; nothing of where
-      // it is served (the build library removes the listeners).
-      env: withModuleBun(runtimeProcessEnv(app, {
-        COMPANIES_WORKSPACE_ROOT: filesystemRootForApp(app),
-        COMPANYASCODE_APP_ID: app.id,
-        COMPANYASCODE_RUNTIME_SOURCE: "main",
-      }), bun, { platform }),
+      resolveBun: async () => {
+        if (resolved === null) {
+          try {
+            resolved = await bunForApp(app);
+          } catch (error) {
+            if (!isBunRefusal(error)) throw error;
+            refusal = error;
+            return { ok: false, reason: error.metadata?.failure_kind ?? error.code };
+          }
+        }
+        return { ok: true, executable: resolved.executable, env: withModuleBun(env, resolved, { platform }) };
+      },
       retryFailed,
       instanceId,
       spawnProcess,
       platform,
     });
+    return { ...result, bun: resolved, refusal };
+  }
+
+  // A running App keeps serving its build when the Bun its new commit pins
+  // cannot be had for the restart: the new key failed, as a build fails.
+  function bunRefusalFinding(refusal, build) {
+    return {
+      reason: refusal.metadata?.failure_kind ?? refusal.code,
+      key: build.key ?? null,
+      commit: build.commit ?? null,
+      log_path: null,
+      message: BUILD_FINDING_MESSAGES.previous,
+    };
   }
 
   function buildSummary(build) {
@@ -848,17 +886,25 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
-    // Before any listener is reclaimed: a refusal changes nothing, and a
-    // shutdown during a fetch starts nothing. An Open that rebuilt the App
-    // resolved its Bun before it stopped the old build, and built with it.
-    const bun = plannedBun ?? await bunForApp(app);
+    const builtRun = builtRunApplies(app);
+    // The dev script and a start_script run the checkout's code at its pin, so
+    // they need that Bun before any listener is reclaimed: a refusal changes
+    // nothing, and a shutdown during a fetch starts nothing. The root's static
+    // server runs none of the App's code: a static App asks for its Bun only
+    // when its build runs, and one that cannot be had is that key's failed
+    // build (decision 0212 point 6). An Open that rebuilt the App resolved its
+    // Bun before it stopped the old build, and built with it.
+    const bun = plannedBun ?? (builtRun && builtAppMode(app) === "static" ? null : await bunForApp(app));
     assertRuntimeManagerAcceptingStarts();
 
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
     // From main, a built App starts as its build or not at all: never as its
     // dev script (decision 0212 point 6).
-    const build = builtRunApplies(app) ? plannedBuild ?? await buildForApp(app, bun) : null;
+    const build = builtRun ? plannedBuild ?? await buildForApp(app, { bun }) : null;
+    // Nothing to run because the App's Bun cannot be had: that refusal, as
+    // a start refuses it everywhere else.
+    if (build && !build.ok && build.refusal) throw build.refusal;
     if (build && !build.ok) {
       const message = `${app.title}: Aplikaci se nepodařilo sestavit. Na vašem počítači zatím není žádná předchozí sestavená verze, a tak se aplikace nespustí. Vývojový server z hlavní větve Lazurio nespouští; opravu udělá agent ve worktree.`;
       await appendLog(logPath, `\n[launchpad] ${new Date().toISOString()} build ${app.id} failed reason=${build.finding.reason}${build.finding.log_path ? ` log=${build.finding.log_path}` : ""}\n`);
@@ -1459,19 +1505,32 @@ export function createRuntimeManager({
     //    current key is restarted onto the new build: built first while the
     //    old one serves, then stopped and started. It is the only swap, with
     //    no watcher (decision 0212 point 9). A key that failed before is not
-    //    built again here; the App keeps running with the finding. The Bun
-    //    the checkout pins is resolved first: a refusal stops nothing and the
-    //    old build keeps serving.
+    //    built again here; the App keeps running with the finding. A Bun the
+    //    new commit pins that cannot be had is the new key's failed build
+    //    (decision 0212 point 6): nothing stops, the old build keeps serving
+    //    and the Open answers with the finding.
     let plannedBuild = null;
     let plannedBun = null;
     let buildFinding = null;
     const running = managedProcesses.get(runtimeKey);
     if (running && !running.stopping && builtRunApplies(app)) {
       const current = appWithRuntimeAuthority(app, dependencies);
-      const bun = await bunForApp(current);
-      const next = await buildForApp(current, bun, { retryFailed: false });
-      buildFinding = next.finding ?? null;
-      if (next.ok && next.key !== running.build?.key) {
+      const next = await buildForApp(current, { retryFailed: false });
+      let bun = next.bun;
+      let refusal = next.refusal;
+      const newer = next.ok && next.key !== running.build?.key;
+      // A start_script runs the checkout's code at its pin: that Bun before
+      // anything stops. The root's static server needs none of the App's.
+      if (newer && next.mode === "server" && bun === null && refusal === null) {
+        try {
+          bun = await bunForApp(current);
+        } catch (error) {
+          if (!isBunRefusal(error)) throw error;
+          refusal = error;
+        }
+      }
+      buildFinding = next.finding ?? (refusal ? bunRefusalFinding(refusal, next) : null);
+      if (newer && (next.mode === "static" || bun !== null)) {
         await stopRuntimeAppUnlocked(running.runtimeApp ?? app);
         steps.push({ step: "rebuilt", key: next.key });
         plannedBuild = next;

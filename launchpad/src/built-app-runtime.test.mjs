@@ -171,6 +171,8 @@ async function pinnedBuns(root) {
   const home = join(root, "home");
   await mkdir(home, { recursive: true });
   const offline = new Set();
+  // Every fetch the resolver asked for, also the ones that could not be had.
+  const requests = [];
   const rootBun = join(root, "root-bun", "bun");
   await loggingBun(rootBun, join(root, "root-bun.log"));
   const path = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
@@ -182,6 +184,7 @@ async function pinnedBuns(root) {
     bin: (version) => join(moduleBunRoot(home), version, "node_modules", "@oven", "bun-linux-aarch64", "bin"),
     rootCalls: () => calls(join(root, "root-bun.log")),
     calls: (version) => calls(join(root, `bun-${version}.log`)),
+    requested: (version) => requests.filter((requested) => requested === version).length,
     resolve: createModuleBunResolver({
       home,
       userBun: rootBun,
@@ -189,6 +192,7 @@ async function pinnedBuns(root) {
       system: async () => linuxArm,
       freeBytes: async () => 10 * 1024 ** 3,
       install: async (input) => {
+        requests.push(input.version);
         if (offline.has(input.version)) return { kind: "refused", reason: "runtime-unavailable" };
         await loggingBun(
           join(input.directory, "node_modules", input.packageName, "bin", "bun"),
@@ -447,7 +451,7 @@ posixTest("a static App from main builds with the Bun it pins, first on its PATH
   }
 }, TEST_TIMEOUT_MS);
 
-posixTest("an App with its own server builds and runs its start_script with the Bun it pins; a pin it cannot have refuses the Open and the Start before anything is built, stopped or started", async () => {
+posixTest("an App with its own server builds and runs its start_script with the Bun it pins; a new pin it cannot have keeps the running App with the finding, and the stopped App does not start", async () => {
   const fixture = await createBuiltModuleFixture({ kind: "server", pin: "bun@1.4.97" });
   const buns = await pinnedBuns(fixture.root);
   const runtime = fixture.runtime({ bunExecutable: buns.rootBun, resolveModuleBunFn: buns.resolve });
@@ -465,23 +469,34 @@ posixTest("an App with its own server builds and runs its start_script with the 
     expect(await buns.calls("1.4.97")).toEqual(expect.arrayContaining(["--no-env-file run build", "--no-env-file run start"]));
     expect(await buns.rootCalls()).toEqual([]);
 
-    // main moves to a pin that cannot be had: the Open that would rebuild and
-    // restart the App refuses before it builds or stops anything, and the
-    // running App keeps serving.
+    // main moves to a pin that cannot be had: the new key failed, as a build
+    // fails (decision 0212 point 6). The Open stops nothing, the running App
+    // keeps serving and the Open answers with the finding.
     buns.offline.add("1.4.96");
-    await fixture.commitPin("bun@1.4.96");
+    const moved = await fixture.commitPin("bun@1.4.96");
+    const kept = await runtime.open(appId);
+    expect(kept.steps.map((step) => step.step)).toEqual(["reuse"]);
+    expect(kept.runtime.pid).toBe(first.runtime.pid);
+    expect(kept.build).toMatchObject({
+      key: first.build.key,
+      finding: {
+        reason: "runtime-unavailable",
+        key: moved,
+        log_path: null,
+        message: "Nejnovější verzi se nepodařilo sestavit. Dál běží předchozí verze.",
+      },
+    });
+    expect(await fixture.builds()).toEqual(["v1"]);
+    expect((await answer())?.bun).toBe("1.4.97");
+
+    // Stopped, it does not start: its start_script would run the new commit's
+    // code, which pins the Bun that cannot be had, and Lazurio never runs it
+    // with another one. The refusal comes before a build or the listener.
     const refusal = {
       status: 409,
       code: "app_runtime_refused",
       metadata: { failure_kind: "runtime-unavailable", package_path: packagePath },
     };
-    await expect(runtime.open(appId)).rejects.toMatchObject(refusal);
-    expect(await fixture.builds()).toEqual(["v1"]);
-    expect(await runtime.health(appId)).toMatchObject({ status: "healthy", pid: first.runtime.pid });
-    expect((await answer())?.bun).toBe("1.4.97");
-
-    // Stopped, its Start refuses the same way before it builds or takes the
-    // listener.
     await runtime.stop(appId);
     await expect(runtime.start(appId)).rejects.toMatchObject(refusal);
     expect(await fixture.builds()).toEqual(["v1"]);
@@ -497,6 +512,69 @@ posixTest("an App with its own server builds and runs its start_script with the 
     expect((await fixture.buildEnvs()).map((entry) => entry.bun)).toEqual(["1.4.97", "1.4.96"]);
   } finally {
     await runtime.shutdown();
+  }
+}, TEST_TIMEOUT_MS);
+
+posixTest("a static App whose new commit pins a Bun that cannot be had keeps its previous build: the Open of the running App and the Start of the stopped one serve it with the finding, and with no build at all the Start refuses", async () => {
+  const kept = {
+    reason: "runtime-unavailable",
+    log_path: null,
+    message: "Nejnovější verzi se nepodařilo sestavit. Dál běží předchozí verze.",
+  };
+  const fixture = await createBuiltModuleFixture({ pin: "bun@1.4.93" });
+  const buns = await pinnedBuns(fixture.root);
+  const runtime = fixture.runtime({ bunExecutable: buns.rootBun, resolveModuleBunFn: buns.resolve });
+  try {
+    const first = await runtime.open(appId);
+    const v1 = first.build.key;
+    buns.offline.add("1.4.92");
+    const moved = await fixture.commitPin("bun@1.4.92");
+
+    // The Open of the running App stops nothing: the previous build keeps
+    // serving and the Open answers with the finding (decision 0212 point 6).
+    const reopened = await runtime.open(appId);
+    expect(reopened.steps.map((step) => step.step)).toEqual(["reuse"]);
+    expect(reopened.runtime.pid).toBe(first.runtime.pid);
+    expect(reopened.build).toMatchObject({ key: v1, finding: { ...kept, key: moved } });
+    expect(await body(`${fixture.url}/`)).toBe("<h1>v1</h1>");
+    // Recorded like a failed build: another Open of the running App does not
+    // ask for that Bun again.
+    const asked = buns.requested("1.4.92");
+    expect(asked).toBeGreaterThan(0);
+    expect((await runtime.open(appId)).build).toMatchObject({ key: v1, finding: { ...kept, key: moved } });
+    expect(buns.requested("1.4.92")).toBe(asked);
+
+    // Stopped, the Start tries that Bun again and, still without it, serves
+    // the previous build with the finding through the root's static server.
+    await runtime.stop(appId);
+    const started = await runtime.start(appId);
+    expect(buns.requested("1.4.92")).toBeGreaterThan(asked);
+    expect(started.build).toMatchObject({ key: v1, finding: { ...kept, key: moved } });
+    expect(await body(`${fixture.url}/`)).toBe("<h1>v1</h1>");
+    expect(await fixture.builds()).toEqual(["v1"]);
+    expect(fixture.devRan()).toBe(false);
+  } finally {
+    await runtime.shutdown();
+  }
+
+  // With no build at all nothing can run: the Start refuses with the Bun's
+  // refusal and takes no listener.
+  const empty = await createBuiltModuleFixture({ pin: "bun@1.4.91" });
+  const emptyBuns = await pinnedBuns(empty.root);
+  emptyBuns.offline.add("1.4.91");
+  const emptyRuntime = empty.runtime({ bunExecutable: emptyBuns.rootBun, resolveModuleBunFn: emptyBuns.resolve });
+  try {
+    await expect(emptyRuntime.start(appId)).rejects.toMatchObject({
+      status: 409,
+      code: "app_runtime_refused",
+      metadata: { failure_kind: "runtime-unavailable" },
+    });
+    expect((await emptyRuntime.health(appId)).status).toBe("stopped");
+    expect(await fetch(`${empty.url}/`).then(() => "answered", () => "refused")).toBe("refused");
+    expect(await empty.builds()).toEqual([]);
+    expect(empty.devRan()).toBe(false);
+  } finally {
+    await emptyRuntime.shutdown();
   }
 }, TEST_TIMEOUT_MS);
 

@@ -471,9 +471,15 @@ na Launchpad Platformy zanikne.
   `NODE_ENV=production` a s klientem v `LAZURIO_RUNTIME_BUILD_OUTPUT`.
 - **Bun.** Sestavení i `start_script` spouští přesně Bun, který App připíná
   v `packageManager`, s jeho adresářem první v PATH, stejně jako ostatní kód
-  App (dodatek 0171 z 2026-10-24). Statický server je kód Lazuria a běží na
-  Bunu, na kterém běží Launchpad. Pin, který nejde mít, start i otevření
-  odmítne dřív, než se cokoli sestaví nebo zastaví.
+  App (dodatek 0171 z 2026-10-24). Statický server je kód Lazuria, běží na
+  Bunu, na kterém běží Launchpad, a Bun App nepotřebuje; statická App si
+  o svůj Bun řekne, až když se má sestavovat. Pin nového commitu, který nejde
+  mít, je neúspěšné sestavení nového klíče (rozhodnutí 0212 bod 6) s důvodem
+  `runtime-*`: běžící App dál běží s nálezem a otevření nic nezastaví,
+  zastavená statická App se spustí z předchozího sestavení s nálezem a bez
+  sestavení se nespustí. App s vlastním serverem spouští `start_script`
+  z checkoutu, tedy kód nového commitu, a ten Lazurio jiným Bunem než
+  připnutým nespustí; zastavená se proto nespustí a Launchpad řekne proč.
 - **Sestavení** běží jako `bun --no-env-file run <build_script>` v adresáři
   balíčku App s `NODE_ENV=production` a bez listenerů, adres a tajemství, po
   stejné kontrole balíčků, kterou start dělá i dnes. Výstup v balíčku App

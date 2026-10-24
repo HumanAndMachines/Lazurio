@@ -14,6 +14,7 @@
 //     <key>/          the output of one build
 //     logs/<key>.log  the output of the build of that key
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { cp, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, posix, relative, sep, win32 } from "node:path";
@@ -122,8 +123,13 @@ export async function ensureAppBuild({
   checkoutRoot,
   organizationRoot = null,
   cacheRoot,
-  bunExecutable,
+  bunExecutable = null,
   env = process.env,
+  // The Bun a build runs with, asked for only when a build is about to run:
+  // `{ ok: true, executable, env }`, or `{ ok: false, reason }` when the Bun
+  // the App pins cannot be had. That is this key's failed build, recorded and
+  // answered like any other, with no log (decision 0212 point 6).
+  resolveBun = async () => ({ ok: true, executable: bunExecutable, env }),
   retryFailed = true,
   instanceId = "lazurio-build",
   spawnProcess = Bun.spawn,
@@ -152,9 +158,9 @@ export async function ensureAppBuild({
     applicationDirectory: cwd,
   });
   const state = await readState(directory);
-  const fallback = async (reason, key, commit) => {
+  const fallback = async (reason, key, commit, { logged = true } = {}) => {
     const previous = state?.current ? await outputOf(directory, state.current.key) : null;
-    const log = key ? logPathOf(directory, key) : null;
+    const log = key && logged ? logPathOf(directory, key) : null;
     return previous
       ? {
           ok: true, mode, key: state.current.key, commit: state.current.commit, output: previous,
@@ -166,7 +172,10 @@ export async function ensureAppBuild({
   const ready = await outputOf(directory, context.key);
   if (ready) return built(mode, context, ready, directory, false);
   if (!retryFailed && state?.failure?.key === context.key) {
-    return fallback(state.failure.reason, context.key, context.commit);
+    // A key whose Bun could not be had never wrote a build log.
+    return fallback(state.failure.reason, context.key, context.commit, {
+      logged: existsSync(logPathOf(directory, context.key)),
+    });
   }
 
   await mkdir(join(directory, "logs"), { recursive: true });
@@ -182,10 +191,18 @@ export async function ensureAppBuild({
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await outputOf(directory, context.key);
       if (existing) return built(mode, context, existing, directory, false);
+      const runner = await resolveBun();
+      if (!runner.ok) {
+        await writeState(directory, {
+          ...stateBase(app, cwd, checkoutRoot, await readState(directory)),
+          failure: { key: context.key, commit: context.commit, at: now().toISOString(), reason: runner.reason },
+        });
+        return fallback(runner.reason, context.key, context.commit, { logged: false });
+      }
       const startedAt = now();
       const result = await runBuild({
         app, mode, cwd, checkoutRoot, logPath: logPathOf(directory, context.key),
-        bunExecutable, env, spawnProcess, timeoutMs, platform,
+        bunExecutable: runner.executable, env: runner.env, spawnProcess, timeoutMs, platform,
       });
       const latest = await readState(directory);
       if (!result.ok) {
