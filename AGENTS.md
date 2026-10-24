@@ -1,949 +1,497 @@
 # Lazurio root — pravidla pro agenty
 
-## Co je tenhle root
-
-Lazurio root je **obal nad `organizations/` a `personalspace/`** na jedné
-mašině: jedno místo, odkud se načítá osobní kontext uživatele a víc
-GitHub-like Organizací. Není to firma ani klientské workspace repo — je to
-sdílený framework (Launchpad, Guide, šablony, manuály, mountpointy). Každá
-Organizace zůstává oddělená access hranice a samostatný git repozitář; root
-sedí nad nimi a nikdy nemíchá jejich data.
-
-Scope jde odshora dolů: **root** (víc Organizací) → **Organizace** (jedna
-firma = jedna GitHub organizace = jedna access hranice) → **workspace modul**
-(aplikace uvnitř Organizace) a **productionspace** (org-level repa mimo
-workspace moduly). Datový model je níž v „Organization GEN3 model“.
-
-**Conglomerate není další access hranice.** Conglomerate je jedna hranice
-důvěry svého zakladatele či zakladatelů pro sdílený tailnet jeho Conglomerate
-Hostu (decision 0184, dodatek z 2026-10-23): do tohoto tailnetu se smí
-přihlásit člen kterékoli Organizace, kterou host obsluhuje, i bez členství
-v Organizaci, která host vlastní. Jde jen o transport a přihlášení do sítě.
-Organizace se tím neslučují: jejich data, členství, schválení zařízení ani
-granty se mezi nimi nepřenášejí, každá Organizace zůstává vlastní access
-hranicí a vstup do jejích Environmentů dál drží její členství a konkrétní
-grant (0192).
-
-Launchpad je **auto-discovery first**: dostupné Organizace objevuje skenem
-`organizations/*/company.gen3.json`. `launchpad.gen3.json` drží jen sdílená
-root metadata — není to allowlist; `planned` sloty a personalspace owner jsou
-per-machine v gitignored `launchpad.gen3.local.json`. Cílové flow je „GitHub přístup
-→ Synchronizovat → Organizace/modul se objeví v Launchpadu“; bezpečnostní
-kontroly jsou pro auto-discovered mounty stejně přísné jako pro registrované
-(decision 0042 v manual/decision-register.md). Legacy top-level mount s markerem
-`company.gen3.json` `organization_kind: "template"` discovery dál bezpečně
-rozpozná a vyřadí z runtime, business přehledů i org počtů. Nový checkout ale
-na founderově mašině nevytváří druhou top-level Organizaci: podle decision 0127
-žije jako nested repo v `productionspace/` zastřešující Admin Organizace a
-konkrétní template nástroj dostává jeho explicitní cestu.
-
-**Kam se podívat.** Lidská mapa repa („co je co a kde to leží“) je `MAP.md`.
-Když nevíš, jestli změna patří do rootu, do Organizace nebo do modulu, začni
-tam a tímhle souborem; když pořád není jasno, zeptej se uživatele nástrojem
-na otázky místo hádání.
-
-## Názvosloví
-
-**Lazurio** je aktuální uživatelský název systému. Dřívější názvy
-„HumanAndMachine“ a „Conglomerate“ jako **názvy produktu nebo systému** jsou
-deprecated a v nové komunikaci směrem k uživateli se nepoužívají (decision
-0128 v manual/decision-register.md). Odborný pojem **Conglomerate** ve smyslu
-pohledu na graf všech Mašin jednoho uživatele napříč Organizacemi a
-**Conglomerate Host** jako Mašina s Headscale a Vaultwardenem zůstávají
-platné (decision 0144, `ARCHITECTURE.md` Základní pojmy).
-Historická GitHub organization zůstává záměrně `HumanAndMachines` a canonical
-repo rootu `HumanAndMachines/Lazurio`; interní identity se rebrandem
-nepřepisují.
-
-**Směrem k uživatelům říkej česky „Prostředí“, anglicky „Environment“**
-(decision 0170 s dodatkem z 2026-10-15 v manual/decision-register.md). Když
-Agent mluví nebo píše k uživateli (chat, handoff, popis PR, texty
-v aplikaci), místo, ve kterém uživatel pracuje, česky pojmenuje
-**Prostředí**: s velkým P, ve středním rodě („toto Prostředí“, „v tomto
-Prostředí“). Uživatelům se ukazují jen tři druhy: **Osobní**, **Pracovní** a
-**Týmové Prostředí**; o konkrétním Prostředí piš vždy s druhem podle
-kontextu („toto Pracovní Prostředí“), holé „Prostředí“ jen obecně.
-Prostředí s nastavenými automatizacemi je obyčejné Pracovní Prostředí, ve
-kterém může pracovat i uživatel; pojem Automatizované Prostředí nepoužívej.
-Potřebuje-li takové Prostředí jméno, jmenuje se **Henry** (třeba `henry-01`;
-decision 0170 s dodatkem z 2026-10-19). Vlastní počítač uživatele druh nemá,
-je to „váš počítač“. Produkt a postavička
-osobního zástupce se jmenují **Buddy** a obsah Osobního Prostředí je
-**Osobní Workspace** (decision 0207 s dodatkem z 2026-10-18). Hostované Prostředí česky vlastní jméno nemá; kde je
-potřeba ho odlišit, je to „Prostředí na serveru“, nikdy „Remote Environment“
-ani „Vzdálené Prostředí“. Anglicky je to **Environment** a hostované **Remote
-Environment**. Prostředí nepojmenovávej slovy „Mašina“, „VM“ ani „server“;
-„Prostředí na serveru“ je povolený popis umístění, ne název, a přesné výrazy
-jako MCP server nebo vývojový server aplikace tím dotčené nejsou.
-V textech pro uživatele dále platí: produkt je **Lazurio** (Launchpad a Dashboard
-jsou interní názvy částí, cíl rozliší „Apps“, „Přehled Organizace“ nebo
-„Nastavení“; názvy příkazů zůstávají přesné), Organizaci se říká
-**Organizace**, ne „firma“, a píše se **tento/tato/toto**, ne
-tenhle/tahle/tohle. Podrobnosti drží stránka Hlas v design systému Lazuria
-(`HumanAndMachine-ai/design-system-lazurio`).
-**Machine / Mašina** zůstává přesný technický a architektonický pojem níže
-(hranice, na které Environment běží) a zůstává v identifikátorech, příkazech,
-schématech, custody záznamech, decision records a v `ARCHITECTURE.md`; tam ho
-nepřepisuj. Agentní pravidla smějí dál používat odborný pojem Environment.
-
-**Uživatelům vykej** (decision 0199 v manual/decision-register.md). Když
-Agent mluví nebo píše k uživateli (chat, handoff, popis PR, texty
-v aplikaci), vyká mu: malé vy/váš/vám, rozkazovací způsob v množném čísle
-(„zkontrolujte“) a o uživateli žádný minulý čas, který by vynucoval rod.
-Angličtina se nemění. Pravidla psaná pro agenty (tento soubor, skilly) a
-prompty, které uživatel posílá agentovi svými slovy, zůstávají v tykání. Zdroj:
-Hlas a tón v design systému Lazuria, plán DEV-6658.
-
-## Model spolupráce: uživatel a Agenti
-
-<!-- Kanonický blok Modelu spolupráce pro veřejný Lazurio source drží tento
-soubor. Měň ho reviewovaným PR v source Lazuria a do generovaných rezidentních
-rootů ho propaguj pouze verzovaným profile buildem. Organization-specific
-plánování a know-how patří do Mission Controlu a Knowledgebase dané Organizace,
-ne do skryté externí autority tohoto veřejného repa. -->
-
-Tohle je nejdůležitější věc, kterou potřebuješ pochopit, než tu začneš
-pracovat. Není to seznam příkazů — je to vysvětlení, jak tahle firma funguje,
-jaké má hodnoty a co se od tebe očekává. Hranice a hodnoty jsou pevné; detaily
-provedení jsou na tvém úsudku (decision 0112).
-
-### Koexistence Human and Machine
-
-Nadřazený princip, ve kterém všechno ostatní stojí: uživatelé a stroje pracují
-v jednom světě, který nedrží ad-hoc důvěra, ale **hierarchie**, **přesně
-ohraničené hranice** a **definované procesy**.
-
-- **GitHub je autorita zdrojových oprávnění a Publikace.** Repo granty,
-  schopnosti Teamů a branch rules určují operace nad zdroji. Cílový vstup
-  uživatele do individuálního i týmového Environmentu určuje Lazurio účet,
-  aktivní členství a konkrétní grant Auth; síť navíc vyžaduje zařízení
-  schválené Adminem v Headscale, pokud si Organizace nezvolila veřejné DNS
-  (decision 0213): tam lidé vstupují bez tailnetu jen branami Environmentů a
-  trezor zůstává v tailnetu. GitHub je volitelná propojená identita,
-  ne podmínka každého vstupu. Uživateli neříkej Builder, jako by šlo o jiný
-  druh člověka. Přesný schválený model, delegaci uvnitř Organizace a migrační
-  hranice drží [decision 0192](manual/environment-access-model.md).
-  Je to cílový kontrakt, ne tvrzení o již nasazené podpoře; aktuální provider
-  práva se neobcházejí a druhý paralelní ACL nevzniká.
-- **Mašina je hranice, ne typ hardwaru.** Je to fyzické zařízení, virtuální
-  server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří
-  jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Lokální
-  workstation, Buddy VPS a celý Hosted Team Workspace mohou být Mašiny;
-  proces, Modul, worktree, Unixový účet ani libovolný kontejner jí samy nejsou.
-  Hosted Team Workspace je Mašina Teamu na tenantní vrstvě, zatímco root nebo
-  srovnatelná autorita Organization Hostu zůstává vyšší doménou kompromitace a
-  obnovy. Ownerem sdíleného Workspace je Organizace, ne právě přihlášený
-  uživatel. Mašina není IAM, role ani položka centrálního registru. Při práci
-  vždy pojmenuj konkrétní Mašinu, jejího Ownera a případnou vyšší
-  provider/operator hranici; úplný model drží `ARCHITECTURE.md`.
-- **Vlastní mašina, vlastní Personalspace.** Každý Kolega má vlastní mašinu
-  s plnými lokálními právy a vlastní **privátní Personalspace**: intimní
-  prostor právě jednoho uživatele a jeho Buddyho, který nikdo
-  cizí — Steward, Admin ani provozovatel hostingu — nečte a který se nikdy
-  nesdílí. Buddy žije uvnitř Personalspace uživatele, kterého zastupuje;
-  vlastní tím nezískává. Sdílená Organization-owned Mašina může být další
-  pracovní prostředí uživatele, ale jeho Personalspace nepřebírá ani
-  nemountuje.
-- **Jedna osobní hostovaná Mašina.** Uživatel má v personalspace právě jednu
-  hostovanou Mašinu, své Osobní Prostředí. Buddy, nabrífovaný Hermes Agent,
-  běží přímo v něm jako jeho součást, ne jako druhý host (decision 0210);
-  Buddy je jen pro člověka. Kdo Osobní Prostředí nemá, Buddyho nemá; dosavadní
-  pilotní Osobní Prostředí bez Buddyho ho dostanou samostatným rolloutem. Vlastní
-  hardware uživatele stojí mimo pool a jméno nepotřebuje — je to klient.
-  Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
-  Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
-  Mašina proto patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu
-  řeš uvnitř své Mašiny — snapshotem nebo kontejnerovou či procesní izolací,
-  které Mašinou samy nejsou; každý další virtuální server Mašina je, i bez
-  jména v `lazurio.io`, a druhý domov se z něj nedělá
-  (decision 0153 v manual/decision-register.md). **Buddy z Produktu 1 nemá
-  tailnet ani SSH**: vstupuje se do něj jen přihlášením Lazurio účtem z webu a
-  počítač a telefon se připojují přes vlastní účet AI uživatele (decision 0207);
-  Headscale mu nezakládej. Pravidlo níže platí pro osobní Mašiny, které už
-  v tailnetu jsou (pilotní osobní Prostředí a Produkt 2): do sítě se
-  připojují **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
-  osobním Headscale userem svého uživatele — stejně jako jeho laptop a telefon, na
-  kterých tak stačí jediný klient Tailscale. Samostatný VPN pro ni nezakládej:
-  žádný WireGuard tunel, veřejný port ani DNAT; WireGuard pilot z 2026-09-20 je
-  zrušený a platí jen jako historie v decision 0154.
-- **Buddy je osobní.** Intimní kontrakt uživatel ↔ Buddy; Dashboard řídí jen
-  životní cyklus hostu, ne každodenní agenturu Buddyho.
-- **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
-  Opatrovníka pro recovery a jmenovitý auditovaný servisní vstup — jiná osa
-  než organizační role.
-- **Proces místo mechanismu.** Když technický mechanismus hranici vynutit
-  neumí, hranice tím nezaniká: drží ji proces a morální kontrakt — Agent ji
-  dodrží, nejistotu přizná a bez potřebné autority nepokračuje. A obráceně:
-  co mechanismus zajistit umí — skript, skill, doctor gate — nemá držet jen
-  text; próza na mechanismus jen ukazuje.
-
-Tenhle text je úplný sám o sobě — řiď se jím i bez dalších odkazů. Shrnutí
-navazujících rozhodnutí (mj. `0089`–`0094` a `0112`) drží lokální registr
-`manual/decision-register.md`; plné decision records žijí u maintainerů
-frameworku a k práci v Lazuriu nejsou potřeba.
-
-### Slovník person: čtyři pojmy
-
-- **Uživatel** (anglicky user) — vztah, ne pozice: člověk, pro kterého a se
-  kterým Agenti pracují. Kdo Environment ovládá, ovládá i Agenty, které v něm
-  spouští; Agenti jednají za něj a v jeho živých právech, uživatel dává pokyn
-  k Publikaci a má vždy poslední slovo. Uživatelem je vždy člověk: na osobním
-  Environmentu jeho Owner, na pracovním Remote Environmentu ten, komu ho
-  Organizace přiřadila, na týmovém Remote Environmentu ten, kdo je právě
-  připojený a má oprávnění (cílově podle vstupního grantu, i bez GitHubu; do
-  nasazení grantů Authu člen GitHub Teamu Environmentu), a na Environmentu
-  Henry odpovědný Owner nebo Admin Organizace (decisions 0175/0192). Starší
-  záznamy mu říkají Operátor, ještě dřív Principál (dodatek 0175
-  z 2026-10-21). Není to role User v Organizaci. Provozovatel hostingu, který
-  Remote Environment dodává, je jiná role.
-- **Kolega** — uživatel v Organizaci. Pravomoce má podle svých rolí
-  (Organization Admin / Steward / Builder / User) a Teamů, jichž je členem.
-- **Task Agent** — to jsi ty: nástrojová pracovní relace (execution
-  session — Claude Code, Codex, Cursor…), která pro svého uživatele tvoří
-  Drafty. Nemá žádné vlastní pravomoce a žádné nezíská promptem; „Agent" je
-  přípustná hovorová zkratka.
-- **Buddy** — osobní zástupce uživatele: zastupuje ho jeho právy a Buddyho
-  má vždy jen člověk. Není to AI Kolega ani zvláštní pozice: je-li Kolega
-  manažer, Buddy ho zastoupí i v manažerské roli. V mezích trvalých, scoped
-  a odvolatelných mandátů (decision 0089) rozhoduje sám; transakčně
-  specifické kroky — billing/ownership, recovery, secrets, destruktivní
-  operace, změny přístupů, merge/publish/release mimo výslovný mandát —
-  vždy vyžadují souhlas zastupovaného uživatele vázaný na přesnou operaci a
-  účinný mandát si Buddy nikdy nevydává, nerozšiřuje ani neobnovuje sám.
-
-Pojem **AI Kolega** (AI s vlastním seatem a pravomocemi jako člověk) je
-deprecated (decisions 0156/0169): automatizovanou práci pro Organizaci nese
-Environment Henry s personou a odpovědným uživatelem, ne další seat.
-Persona není uživatel, identita ani pravomoc. Existující seaty a GitHub účty
-fungují beze změny; nové texty pojem AI Kolega nezavádějí.
-
-### Co se od tebe očekává
-
-**Pracuješ jménem svého uživatele** — na Mašině aktuální relace, pod jeho
-přihlášeními a v rámci jeho pravomocí. Vlastnictví sdílené Mašiny ani org-wide
-práva z toho neodvozuj. Mezi Kolegy je hierarchie jako v reálné firmě: co je
-mimo pravomoce tvého uživatele, neobcházíš — řekneš mu to a uživatel
-deleguje na Kolegu, který pravomoc drží. **Výjimkou je týmový Environment**
-(Hosted Team Workspace): tam na GitHubu jednáš pod brokerovanou identitou
-Organizace (Lazurio for GitHub přes broker Organizace), nikdy pod přihlášením
-připojeného uživatele, a nic jiného nepředstíráš; jeho živá práva jsou granty
-Teamu a branch rules a publikuje z něj vždy jmenovaný uživatel (decision 0148,
-dodatky z 2026-10-02 a 2026-10-05).
-
-**Důvěrné plné sdílení pracovního individuálního Environmentu (0192).**
-Přidělený uživatel smí po srozumitelném vysvětlení předat důvěryhodnému
-aktivnímu členovi stejné Organizace všechny dostupné schopnosti
-Environmentu, včetně osobních pracovních přihlášení a vzdálených přístupů.
-Riziko přijímá sdílející; nevynucuj preventivní odhlašování, výmaz,
-převod na týmový broker nebo další Admin souhlas. Členství a v Organizaci
-s tailnetem i konkrétní zařízení schválené Adminem zůstávají povinné
-(0213). Izolaci uložených identit
-ani automatické zneplatnění zkopírovaných údajů po odebrání vstupu
-neslibuj. Konkrétní publikace dál vyžaduje pokyn odpovědného uživatele;
-uvnitř tohoto runtime hranici drží proces. Nejde o sdílení Personalspace.
-Úplný kontrakt a komunikační text drží
-[`manual/environment-access-model.md`](manual/environment-access-model.md).
-
-**Neseš architektonickou odpovědnost za způsob provedení.** Uživatel určuje
-chtěný výsledek, priority a omezení; ty odpovídáš za elegantní a čisté řešení
-v návrhu a Draftu.
-Odděl záměr od navrženého mechanismu, chraň jednu pravdu a přirozeného ownera,
-preferuj standardní capability před vlastní mašinérií a nech systém konvergovat
-místo přidávání paralelních cest. Konkrétní rozpor otevřeně pojmenuj; odborný
-úsudek ale nepoužívej k převzetí business, access ani publikační pravomoci
-uživatele.
-
-Před každou tvorbou nebo změnou source návrh architektonicky vytvaruj. Malá
-změna dostane rychlou kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
-hranice, rozhraní, závislost nebo migrace vyžaduje plný shaping, srovnání
-variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řešení
-vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
-uživateli; neimplementuj ji potichu jako technický detail.
-
-**Plán a testy drží záměr.** Mission Control obsahuje obrys výsledku, milníky,
-pevné hranice a prostor pro změnu či odložení detailů. Před implementací změny
-chování, rozhraní nebo architektury připrav v owning code repu testovatelný
-kontrakt na skutečném consumerovi, včetně důležitých selhání. Změní-li se
-chtěný směr, změň nejdřív záměr a kontrakt; interní refaktor jimi nesvazuj.
-Jde o výchozí review pravidlo se zdůvodněnými výjimkami pro dokumentaci,
-kosmetiku a ohraničený průzkum, ne o povinný samostatný červený PR nebo počet
-testů. Podrobnosti a migrační hranice drží
-[`manual/intent-first-planning.md`](manual/intent-first-planning.md).
-
-**Co uživatel uvidí nebo použije, ověříš v prohlížeči** (decision 0178). U
-změny, se kterou se uživatel potká (UI, přihlašovací stránka, sign-in, nasazená
-aplikace), Agent, který PR připravuje, před přepnutím na Ready a Agent, který
-ho Publikuje, po nasazení sám otevře výsledek v prohlížeči: stránka se
-skutečně vykreslí a hlavní cesta funguje. Přihlášení projde smoke testem:
-testovacím účtem, který pro to uživatel nebo Organizace určili (Task Agent
-vlastní účet nemá a nezakládá), jinak Agent požádá uživatele o jedno
-přihlášení. Výsledek, nebo že ověření chybí, uvede
-v handoffu pod „Ověřeno“. Pro vzhled stránky se místo toho nestaví vlastní
-automatický test vykreslení; testy dál drží kontrakt chování.
-
-**Tvoje práce je Draft.** Draft je revertovatelný a hlavně editovatelný kus
-práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publikace**
-je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,
-odeslání emailu, nasazení; v datových aplikacích (repository-db) je Publikací
-dat už commit + push tlačítkem „Publikovat změny". Publikace patří
-uživateli: provedeš ji jen na jeho explicitní pokyn, který platí
-v aktuálním threadu a nepřenáší se do dalších konverzací. Výslovným scoped
-pokynem k dotažení PR včetně dovoleného merge je také ověřené předání přes
-GitHub assignee podle [kontraktu předání PR](manual/pull-request-handoff.md).
-Způsobilost
-Publikaci schválit určují živá práva uživatele k přesné operaci. **Release** —
-vydání označené verze ven přes GitHub Release — není Publikace; smí ho
-spustit jen ten, komu to GitHub práva dovolují (typicky Steward nebo Admin),
-a pro tebe u něj platí stejný explicitní pokyn uživatele jako u Publikace.
-
-**Bez ptaní smíš** tvořit worktrees, průběžně commitovat a pushovat do PR
-branche a otevírat pull requesty. Rozdělaná práce nikdy nezůstává jen
-lokálně: od prvního pushe je viditelná jako GitHub Draft PR, a jakmile je
-hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publikace,
-říká jen „připraveno ke kontrole"; hotová práce nezůstává viset jako Draft.
-
-**Uživatele se ptáš nástrojem na otázky** (decision 0211). Potřebuješ-li od
-uživatele rozhodnutí nebo odpověď, polož otázku nástrojem svého harnessu na
-otázky (Claude Code `AskUserQuestion`, Codex `request_user_input`, Hermes
-`clarify`), ne jen textem ve zprávě: otázka v textu zapadne a vlákno vypadá,
-že pracuje, a přitom stojí. Stejně polož i žádost, aby uživatel něco udělal:
-zadal ověřovací kód, přihlásil se, něco potvrdil nebo zkontroloval. Do
-otázky napiš, co přesně má udělat, s odkazem, kódem a do kdy platí, a volbami
-se nech říct, jak to dopadlo („Hotovo“, „Nejde to“). Otázka v T3 Code
-i v Codex Desktopu vyskočí jako upozornění, text ve zprávě ne (dodatek 0211
-z 2026-10-24). Nabídni 2–4 volby, doporučenou dej první
-s označením „(Doporučeno)“ a kontext napiš do zprávy nad otázku. Nejdřív
-udělej všechno, co na odpovědi nezávisí. Ptej se, jen když bez odpovědi
-nejde bezpečně pokračovat nebo když rozhodnutí patří uživateli; na nic, co
-zjistíš sám, se neptej. Nemá-li harness nástroj na otázky nebo ho
-v aktuálním režimu nenabízí, zeptej se textem s očíslovanými volbami a
-výslovně napiš, že čekáš na odpověď a co do té doby stojí. Subagent, bot
-MausBotu ani automatický reviewer uživatele v relaci nemá: nástroj
-nepoužije a otázku předá ve svém výstupu tomu, kdo mu práci zadal
-(nadřazenému agentovi nebo Buddymu). Zapnutí nástroje v Codexu popisuje
-kapitola „Codex: nástroj na otázky“ v
-[`manual/organization-install.md`](manual/organization-install.md).
-
-**Handoff je průvodcovský.** Uživatel nemusí rozumět Gitu ani GitHubu — ty jsi
-jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
-Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
-ověření, odkaz na aplikaci běžící z worktree. Handoff zůstává textem zprávy;
-pod ním položíš nástrojem na otázky standardizovanou dvojotázku
-„Mám změny Publikovat vaším jménem?
-Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
-vždy nabídneš,
-nikdy ji nedomýšlíš za uživatele. **Na týmovém Environmentu** dvojotázku
-nahrazuje otázka „Komu mám říct, aby tyhle změny publikoval?", položená
-stejně nástrojem, a „Publikuj" tam vede k předání jmenovanému uživateli,
-nikdy k merge agentem (viz níže).
-Před otázkou zjistíš živá GitHub práva
-svého uživatele a řídíš se jimi: smí-li merge a zvolí-li v threadu
-Publikaci (v nástroji na otázky nebo slovy „Publikuj"), PR mergneš metodou,
-kterou repozitář povoluje, aktualizuješ
-`main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného
-oprávněného Kolegy, PR mu zároveň přiřadíš jako assignee a @zmínkou mu
-výslovně předáš odpovědnost za dotažení. Reviewer request znamená žádost
-o kontrolu, assignee je owner další práce: Task Agent operující pod tímto
-přiřazeným GitHub účtem upravuje PR branch přímo, řeší připomínky a CI,
-bezpečně rebasuje a po preflightu smí použít exact `--force-with-lease`; práci
-nevrací pouhým komentářem autorovi PR. Platné přiřazení od oprávněného
-předávajícího (živé Write/Maintain/Admin a právo předat Publikaci podle
-pravidel repozitáře; Triage nestačí) nese odpovědnost a mandát k dotažení včetně merge v rozsahu PR;
-další publikační komentář ani opakovaný souhlas se nevyžaduje. Assignee
-PR dokončí, nebo předá dalšímu oprávněnému assignee s konkrétním stavem a
-dalším krokem. Assignment nevytváří GitHub práva, neobchází review ani
-branch rules a neautorizuje samostatný Release, infra apply či změnu přístupů.
-Samotný reviewer request je pouze kontrola. Ověření původu a platnosti
-předání drží [kontrakt předání PR](manual/pull-request-handoff.md).
-Uživateli řekneš, kdo teď dotažení vlastní.
-Když GitHub merge uživateli nedovoluje, řekneš to rovnou
-v handoffu — merge neobcházíš, GitHub ho fyzicky blokuje. Bez zelené PR
-zůstává otevřený a nic se neděje (decision 0103). **Z týmového Environmentu
-publikuje vždy jmenovaný uživatel** (decision 0148, dodatek z 2026-10-05):
-identita Teamu (Lazurio for GitHub) nepatří žádnému uživateli, otevírá pull
-requesty a na placeném plánu GitHubu je sama schválit nesmí. Agent tam proto
-sám nikdy nemerguje, ani na pokyn z chatu. Když je práce hotová, zeptá se
-uživatele nástrojem na otázky: „Komu mám říct, aby tyhle změny
-publikoval?“ Tomu uživateli vyžádá
-review, přiřadí mu PR, @zmínkou mu předá odpovědnost za Publikaci a
-uživateli řekne, kdo ji teď drží. Kdo změny z týmového Environmentu schválí
-a publikuje, za ně odpovídá.
-
-Publikační shrnutí musí být srozumitelné i bez otevření PR: pojmenuje hlavní
-směr a praktický dopad na uživatele nebo systém, co se záměrně nemění, a podstatný
-rollout či migrační dopad, rizika a otevřené otázky. Není to seznam souborů,
-commitů ani testů; je to podklad pro informované rozhodnutí uživatele.
-Technické detaily a důkazy zůstávají v PR.
-
-**Po každé Publikaci si Agent položí otázku:** „Co je další postup a co
-dalšího můžeme dotáhnout?“ Odpověď stručně předloží uživateli jako
-doporučené navazující kroky; čeká-li na jeho volbu, položí ji nástrojem na
-otázky.
-
-**Review bereš vážně, ale ne bez výhrad** (decision 0163). Skutečnou vadu,
-kterou review najde, opravíš hned: špatné chování, rozpor mezi texty, tvrzení
-bez důkazu, únik citlivého obsahu. Nález, který je drobnost bez dopadu,
-spekulace o budoucí změně nebo rozšiřuje záběr PR o nový mechanismus,
-nepřijímáš mlčky dalším kolem oprav. Odpovíš věcnou námitkou přímo v PR: co
-je účelem PR, proč nález nechrání před skutečnou škodou a co už je doložené,
-a požádáš o verdikt na nezměněném headu. Trvá-li reviewer na svém,
-nepokračuješ dalším kolem ani review neobcházíš; obě stanoviska předložíš
-uživateli. Nález, který má cenu, ale do PR nepatří, zapíšeš jako issue.
-
-**Popis PR nese kontext k rozhodnutí.** Kdo o merge rozhoduje, nesmí „proč"
-odvozovat z diffu: popis pravdivě vysvětlí motivaci, cílový stav a přínos,
-co se mění i záměrně nemění, jak je to ověřené a jaká zůstávají rizika,
-blokery či follow-upy — a po změně scope nebo rebase se aktualizuje, aby při
-rozhodnutí odpovídal skutečnému HEADu.
-
-**Poznatky patří tam, kde je najdou ostatní.** Aha momenty, rozhodnutí a
-zjištění z konverzace průběžně zapisuješ na správná místa: syntéza poznání →
-Knowledgebase; trvalé rozhodnutí → decision record; plán a jeho stav →
-Mission Control a task ledgery; otevřený technický problém nebo nejistota →
-GitHub Issue v přesném owning repu; změna pravidel práce → `AGENTS.md` daného
-scope — vždy jako PR ze svého worktree. Chat i soukromá paměť agenta (gbrain)
-jsou jen cache: poznatek,
-který zůstane jen tam, se ztratí. Zapisuješ jen relevantní, netajné poznatky,
-které tvůj uživatel smí do daného store umístit; personalspace a cross-org
-izolace mají před povinností zapisovat vždy přednost — v pochybnosti nech
-obsah v soukromé paměti a založ jen scoped issue či pointer.
-
-**Poslední slovo má vždy uživatel.** Tvůj úkol je odvést práci tak, aby ho
-měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
-a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
-
-## Design System je společný základ Organizace
-
-Každý aktivní člen Organizace má mít přístup ke čtení jejího Design Systemu,
-včetně účtů jejích Environmentů Henry. Platí to pro všechny
-Teamy a pro organizační i produktové Design Systemy, které Organizace vlastní.
-Při založení, vyčlenění do samostatného repozitáře, onboardingu člena i
-instalaci Environmentu ověř skutečnou dostupnost. Admin zajistí alespoň
-GitHub Read přes existující Teamy, případně scoped repo grant pro nepokryté
-účty; manifest ani členství samo o sobě repo grant nedokazuje. Chybějící
-přístup je nedokončený onboarding nebo migrace, ne volitelné rozšíření.
-Pravidlo nezakládá právo zápisu, veřejnou viditelnost ani přístup jiné
-Organizace. Živá oprávnění zůstávají autoritou; Agent bez mandátu Admina
-grant sám nerozšiřuje a předá konkrétní chybějící přístup k nápravě.
-
-## Buddy v Osobním Prostředí
-
-Hard pravidlo Lazuria: jeden uživatel má právě jednu vlastní hostovanou osobní Mašinu, své Osobní Prostředí. Buddy běží přímo v ní a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného uživatele; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
-
-Buddy je Hermes Agent z forku `Lazurio/hermes-agent`, instalovaný oficiální cestou upstreamu, s pamětí v gbrainu z forku `Lazurio/gbrain` nad vaultem v Personalspace (decision 0210). Pracuje z Lazurio Folderu, bez sandboxu a s plnými právy Osobního Prostředí. Kam se dostane Osobní Prostředí, tam se dostane i Buddy; do dalších Prostředí vstupuje relací SSH a přihlášení Osobního Prostředí nepřeposílá. Buddy je koordinátor a sám nic neimplementuje: svou vlastní práci dává botům MausBotu v Prostředí, kam práce patří, vlákna T3 Code smí kvůli přehledu kdykoli číst, ale zakládá a vede je jen na žádost uživatele, a agenti ve vláknech s ním nekomunikují (dodatek 0210 z 2026-10-20 noc). Samostatná Buddy VPS, Resident distribuce Buddyho a Zulip skončily. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Buddy z Produktu 1 je bez tailnetu a SSH, jen přes Lazurio účet z webu (decision 0207). Osobní Prostředí v tailnetu (piloty, Produkt 2) je nodem tailnetu jednoho Conglomerate Hostu; osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Text sám nemění žádný runtime, profil, ACL ani mandát.
-
-## Správa infrastruktury Ownery
-
-Při onboardingu nebo změnách správy Conglomerate Hostu postupuj podle
-[`manual/conglomerate-owner-administration.md`](manual/conglomerate-owner-administration.md).
-Standard platí pro všechny Organizace; úplné granty a důkazy hostu drží
-Deployment Repo vlastníka této Mašiny, tenantní repa pouze vlastní scoped vstupy
-nebo reference. Ověř živou roli GitHub Owner a povol pouze jmenovitě schválené
-zdrojové mašiny. Běžná správa má fungovat přes Headscale z Ownerova počítače
-nebo osobní VM bez závislosti na mašině jiného Ownera; provider rescue je
-nouzová cesta. Neslibuj nasazení ani automatickou revokaci jen na základě
-tohoto standardu.
-
-## Security hranice Personalspace
-
-Personalspace je výhradní intimní prostor právě jednoho uživatele a jeho
-volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
-Personalspace se na
-mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
-Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
-exportovaného Draftu. Owner má na své osobní Mašině plná práva. Task
-Agenti v Environmentu pracují s plným přístupem: jejich hranicí je Environment
-a pravidla práce, ne sandbox harnessu ani lokální per-modulový IAM; menší práva
-znamenají samostatný Environment (decision 0172).
-
-**Buddy** běží v Osobním Prostředí svého uživatele (decision 0210). Paměť a
-konverzace Buddyho jsou personalspace se vším, co pro něj platí, a přístup do
-Osobního Prostředí patří uživateli, ne agentovi — i když ho lokální mašina
-technicky dovolí použít. **Deklarace v manifestu není důkaz přístupu; ten se
-prokazuje operací, a dokud ho nemáš, platí odpověď „nemá".**
-
-## Lazurio Module Standard
-
-Každý Modul (i org-level aplikace) vzniká, mění se a spouští podle
-[`manual/module-standard.md`](manual/module-standard.md) (decision 0171):
-TypeScript strict, jednoprocesový `dev` skript, deklarovaná příprava
-(`lazurio.preparation`), host a port jen z `LAZURIO_RUNTIME_LISTENER_<ID>_*`,
-žádné `.env` na start cestě, žádné importy mimo repo Modulu, lease v poolu
-Organizace. Launchpad pro odchylky Modulu **neimplementuje workaroundy**;
-odchylku opravuješ v Modulu. Konformanci ověřuje `lazurio module setup`
-(kontroly `MS-01`–`MS-13`); nový Modul zakládáš scaffoldem
-`lazurio module create` nebo z Dashboardu, nikdy ručně. Postup drží skill
-`.agents/skills/lazurio-module-standard/SKILL.md`.
+Tento soubor drží hodnoty, hranice a krátká pravidla pro agenty v Lazurio
+rootu. Podrobnosti a postupy jsou v manuálech a skillech, na které pravidla
+odkazují, a platí stejně jako tento soubor (decision 0112, dodatek
+z 2026-10-24). Hranice a hodnoty jsou pevné, provedení je na tvém úsudku.
+Lidská mapa repa je `MAP.md`; čísla rozhodnutí vysvětluje
+`manual/decision-register.md`.
 
 ## Zásadní pravidlo
 
-Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizations/<org>/`, přečti její `AGENTS.md` a až potom měň její obsah.
+V konkrétní Organizaci nepracuj z rootu. Vyber `organizations/<org>/`,
+přečti její `AGENTS.md` a až potom měň její obsah. Pravidla rootu platí jen
+pro root. Když nevíš, kam změna patří, začni tímto souborem a `MAP.md`;
+když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 
-## Otevírání Launchpadu pro App Agenty
+## Tento root
 
-Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěný
-browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
-ověření výsledku.
+- Lazurio root je obal nad `organizations/` a `personalspace/` na jedné
+  mašině: sdílený framework (Launchpad, Guide, šablony, manuály,
+  mountpointy), ne firma ani klientské repo. Každá Organizace je samostatný
+  Git repozitář a vlastní access hranice; root jejich data nikdy nemíchá.
+- Scope jde shora dolů: root (víc Organizací) → Organizace (jedna firma =
+  jedna GitHub organizace = jedna access hranice) → workspace Modul
+  a `productionspace/` (org-level repa mimo Moduly).
+- Launchpad objevuje Organizace sám (auto-discovery, decision 0042) a pro
+  objevené mounty platí stejně přísné kontroly; `launchpad.gen3.json` drží
+  jen sdílená metadata a není allowlist. Checkout šablony žije jako nested
+  repo v `productionspace/` Admin Organizace, ne jako další Organizace
+  (0127). Podrobnosti drží `launchpad/README.md` a `MAP.md`.
+- Conglomerate je hranice důvěry svého zakladatele pro sdílený tailnet
+  Conglomerate Hostu, ne další access hranice. Do tailnetu se smí přihlásit
+  člen kterékoli Organizace, kterou host obsluhuje, ale data, členství,
+  schválení zařízení ani granty se mezi Organizacemi nepřenášejí a vstup do
+  jejich Prostředí dál drží členství a grant dané Organizace (0184
+  s dodatkem z 2026-10-23, 0192).
+- Organizace jsou lokální gitignored nested repa v `organizations/<org>/`
+  (root trackuje jen `organizations/README.md`); `personalspace/` je
+  gitignored privátní kontext mimo GitHub organizace.
+- Root upravuj jen když se mění `launchpad.gen3.json`, seznam nebo mountpoint
+  Organizací, pravidla `personalspace/`, cross-organization izolace, šablony,
+  sdílený Launchpad nebo Guide, root manuál, mapa, agentní pravidla nebo
+  základní skill balíček `.agents/skills/`.
 
-Každé vlákno, které Launchpad, průvodce nebo prompt otevírá v Chatu, začíná v projektu
-Lazurio Folderu; prompt sám jmenuje Organizaci a práci. Předání promptu odkazem nenese
-model ani reasoning effort: platí výchozí model T3 Code z Nastavení, který Environment drží
-jako dobrou volbu (decision 0189 v manual/decision-register.md).
+## Hranice
 
-Když uživatel řekne „web Lazuria“, myslí tím Workspace Modul
-`website-lazurio` Organizace `HumanAndMachine-ai` a jeho App `Website Lazurio`,
-nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
-`lazurio module status HumanAndMachine-ai/website-lazurio --json`, spusť jej
-přes `lazurio module start HumanAndMachine-ai/website-lazurio --json` a ve
-vestavěném browseru otevři `result.runtime.url` vrácené lifecycle kontraktem;
-adresu ani port neodvozuj ručně.
+- **Organizace jsou oddělené.** Mezi Organizacemi nikdy nekopíruj secrets,
+  zákaznická data, business strategii ani osobní overlaye. Povolené jsou
+  obecné vzory, anonymizované šablony a poučení v obecné podobě.
+- **Veřejná repa.** `HumanAndMachines/Lazurio` a všechna repa `Lazurio/*` jsou
+  veřejná. V jejich commitech, pull requestech, issues, dokumentaci ani
+  komentářích nejmenuj zákaznické Organizace, jejich Moduly ani Mašiny
+  a nepiš do nich obsah konkrétní Organizace.
+- **Personalspace** je intimní prostor právě jednoho uživatele a jeho Buddyho
+  (0091). Každý Kolega má vlastní mašinu s plnými lokálními právy a vlastní
+  privátní Personalspace. Nikdo cizí ho nečte, ani Steward, Admin nebo
+  provozovatel hostingu, a nikdy se nesdílí. Cizí Personalspace se na
+  mašinu nemountuje, Launchpad ho nematerializuje a ty ho nečteš.
+  Spolupráce patří do Organizace nebo do vědomě exportovaného výstupu;
+  sdílená Mašina Organizace Personalspace uživatele nepřebírá.
+- **Přístupy.** GitHub je autorita přístupů ke zdrojovému kódu: repozitáře,
+  schopnosti Teamů, branch rules, review a Publikace. Vstup do Prostředí drží
+  Lazurio účet, aktivní členství a konkrétní grant a síť Adminem schválené
+  zařízení v Headscale (0192; cílový kontrakt, ne tvrzení o nasazení, viz
+  `manual/environment-access-model.md`). Zvolí-li si Organizace veřejné DNS
+  (0213), lidé vstupují bez tailnetu jen branami Prostředí a trezor zůstává
+  v tailnetu. Druhý paralelní ACL nevzniká
+  a aktuální práva se neobcházejí.
+- **Mašina je hranice**, ne typ hardwaru: fyzické zařízení, virtuální server
+  nebo providerem izolovaný hostovaný prostor, který tvoří jednu runtime,
+  bezpečnostní a recovery hranici se známým Ownerem. Proces, Modul,
+  worktree, Unixový účet ani kontejner Mašinou nejsou a Mašina není IAM,
+  role ani položka centrálního registru. Ownerem sdílené Mašiny je
+  Organizace, ne právě přihlášený uživatel. Při práci pojmenuj
+  konkrétní Mašinu, jejího Ownera a případnou vyšší provider nebo operator
+  hranici (`ARCHITECTURE.md`).
+- **Plný přístup v Prostředí** (0172): pracuješ bez sandboxu a bez lokálního
+  IAM, hranicí je Prostředí. Je to schopnost, ne souhlas: Publikace a zápisy
+  do napojených aplikací čekají na pokyn uživatele. Menší práva znamenají
+  samostatné Prostředí.
+- **Přístup se prokazuje operací.** Deklarace v manifestu ho nedokazuje;
+  dokud ho neprokážeš, platí „nemá“.
+- **Secrets** drž jen v lokálních ignored custody cestách podle
+  `manual/security/local-secret-custody.md`: secrets rootu a uživatele
+  v `personalspace/<owner>_GEN3/secrets/…`, secrets Organizace a jejích
+  Prostředí Henry v jejím `private/secrets/…`. Hodnoty nikdy nevypisuj;
+  strukturu ukáže `scripts/custody/custody-shape.mjs` a výpis hlídá
+  `scripts/custody/custody-guard.mjs`. Do Gitu patří jen standard, pointery
+  a metadata-only ověření.
+- **Proces místo mechanismu.** Když hranici neumí vynutit mechanismus, drží ji
+  proces: dodržíš ji, nejistotu přiznáš a bez potřebné autority
+  nepokračuješ. Co umí zajistit skript, skill nebo doctor, nedrží jen text.
 
-Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
+## Kdo je kdo
 
-- Organizace: `lazurio launchpad serve --organization <přesný company.slug>`;
-- lokální Personalspace uživatele: `lazurio launchpad serve --personalspace`;
-- nejasný nebo cross-organization scope: `lazurio launchpad serve` a nevymýšlej
-  scope ani nemíchej data Organizací.
+- **Uživatel** je člověk, pro kterého a s nímž agenti pracují; je to vztah,
+  ne role v Organizaci. Kdo Prostředí ovládá, ovládá i agenty, které v něm
+  spouští: jednají za něj v jeho živých právech a poslední slovo má on. Na
+  Osobním Prostředí je to jeho Owner, na Pracovním ten, komu ho Organizace
+  přiřadila, na Týmovém ten, kdo je připojený a má oprávnění, a na Prostředí
+  Henry odpovědný Owner nebo Admin Organizace (0175, 0192). Starší záznamy mu
+  říkají Operátor nebo Principál. Provozovatel hostingu je jiná role.
+- **Kolega** je uživatel v Organizaci. Pravomoce má podle svých rolí
+  (Organization Admin, Steward, Builder, User) a Teamů. Uživateli neříkej
+  Builder, jako by šlo o jiný druh člověka.
+- **Task Agent** jsi ty: pracovní relace nástroje (Claude Code, Codex,
+  Cursor…). Nemáš vlastní pravomoce a promptem žádné nezískáš. „Agent“ je
+  přípustná zkratka; strojový enum je `task_agent`.
+- **Buddy** je osobní zástupce uživatele (oddíl Osobní Prostředí a Buddy).
+- Automatizovanou práci Organizace nese **Prostředí Henry**: Pracovní
+  Prostředí nastavené tak, aby pracovalo samo přes boty Lazurio MausBotu,
+  s účtem persony a odpovědným uživatelem (0169, 0170). Persona není
+  uživatel, identita ani pravomoc.
 
-Příkaz znovu použije zdravou instanci nebo Launchpad spustí a vypíše
-`LAZURIO_LAUNCHPAD_URL=...`; port ani route nedopočítávej. URL otevři jen ve
-vestavěném browseru dané App, nikdy human launcherem ani v externím browseru. Při
-`LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` vyžádej scoped zápis jen do uvedené
-OS-standard state cesty a tentýž příkaz zopakuj; nevytvářej druhý locator.
-Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
+## Názvy a texty pro uživatele
 
-## Agentní orientace před prací
+- Produkt se jmenuje **Lazurio** (0128); starší názvy HumanAndMachine
+  a Conglomerate se jako název produktu nepoužívají. Launchpad a Dashboard
+  jsou interní názvy částí; v textech pro uživatele cíl pojmenuj „Apps“,
+  „Přehled Organizace“ nebo „Nastavení“ a názvy příkazů nech přesné.
+  Historická GitHub organizace `HumanAndMachines` a repo
+  `HumanAndMachines/Lazurio` se nepřejmenovávají. Conglomerate zůstává odborný pojem pro graf Mašin
+  jednoho uživatele napříč Organizacemi a Conglomerate Host pro Mašinu
+  s Headscale a Vaultwardenem (0144).
+- Místo, kde uživatel pracuje, je česky **Prostředí** (velké P, střední rod:
+  toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou jen
+  tři: **Osobní**, **Pracovní** a **Týmové Prostředí**; o konkrétním
+  Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
+  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`). Vlastní
+  počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
+  kde je třeba ho odlišit, „Prostředí na serveru“ a anglicky Remote
+  Environment, nikdy „Vzdálené Prostředí“. Slovy Mašina, VM ani server
+  Prostředí nepojmenovávej. Osobní zástupce je **Buddy** a obsah Osobního
+  Prostředí **Osobní Workspace** (0207).
+- **Machine / Mašina** zůstává přesný technický pojem pro hranici, na které
+  Prostředí běží: v identifikátorech, příkazech, schématech, custody,
+  decision records a `ARCHITECTURE.md` ho nepřepisuj. Pravidla pro agenty
+  smějí používat odborný pojem Environment.
+- Uživatelům vykej (0199): malé vy/váš/vám, výzvy v množném čísle a žádný
+  minulý čas, který by vynucoval rod. Organizaci říkej Organizace, ne firma,
+  a piš tento/tato/toto, ne tenhle/tahle/tohle. Pravidla pro agenty
+  a prompty uživatele zůstávají v tykání. Podrobnosti drží stránka Hlas
+  v design systému Lazuria.
 
-1. **Urči scope.** Root vs `organizations/<org>/` vs `personalspace/`. Úkol
-   o firmě, klientovi, modulu, Mission Control plánu nebo productionspace
-   repu pokračuje v Organization checkoutu podle jeho `AGENTS.md`; úkol
-   o personalspace podle `personalspace/<owner>_GEN3/AGENTS.md`. Root
-   pravidla platí jen pro root. **Čtvrtý scope je Buddy:** běží v Osobním
-   Prostředí svého uživatele (decision 0210) a jeho instalace, běh, paměť,
-   konverzace a profil patří tomuto Prostředí a Personalspace jeho Ownera.
-   Task Agent v jiném Prostředí do Buddyho nesahá bez pokynu Ownera a
-   přístup prokazuje operací. Dosavadní hostované instalace Buddyho na
-   samostatné VPS zůstávají do své migrace, jak jsou: jejich vnitřek
-   (instalace, runtime, paměť, zálohy, incidenty) se řídí vygenerovaným
-   `AGENTS.md` aktivního Resident rootu na hostu a privátním profilem jeho
-   Ownera, ne pravidly source checkoutu, a lokální spuštění je u nich
-   zakázané.
-2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
-   Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
-   `bun run doctor:task`. Update po vrstvách srovná Lazurio Root → Organization
-   Rooty → jejich namountovaná org-level repa a Workspace Moduly na clean
-   `main` výhradně fast-forwardem; repozitáře jedné vrstvy běží souběžně.
-   Náhodné
-   tracked i untracked změny uloží do ověřeného recovery stashe a neobnovuje
-   je; cizí branch přepne zpět na `main`, její commity ale zachová. Po skutečné
-   změně source ověří přesné package rooty deklarovaných Apps; při problému
-   jednou provede čistou instalaci z verzovaného lockfilu s návratem původních
-   balíčků při selhání. Lokální commity na `main`, diverged historii, detached
-   stav bez bezpečné vazby, rozpracovaný merge/rebase/am ani neplatný lockfile
-   neopravuje odhadem: vrátí přesný prompt „Vyřešit s Codexem“. Productionspace,
-   Personalspace, worktrees a root-space repository-db jsou z obecného update
-   mechanismu vyloučené. Explicitní `lazurio organization install` smí jako
-   úzký bootstrap doplnit aktivní deklarovaný `repository_db_mount` pouze na
-   `mission-control/db` nebo kanonickém `workspace/<module>/db` pod ověřeným
-   parent Git repem; deprecated `modules/<module>/db` odmítne bez materializace.
-   Existující repository-db neaktualizuje a nezískává commit/publish autoritu.
-   Stejně omezeně si Modul svůj aktivně deklarovaný `workspace/<module>/db`
-   nebo `mission-control/db` doplní sám při přípravě před startem či
-   otevřením, pokud checkout chybí a živý uživatel k němu má přístup; když to
-   nejde, start odmítne se srozumitelným důvodem. Existující datový checkout
-   jen ponechá, nic nefetchuje a nikdy nezakládá prázdný remote (dodatek 0152
-   z 2026-10-17). Chybějící aktivní deklarace se nedoplňuje:
-   Deklarovaný Mission Control bez právě jednoho aktivního
-   `repository_db_mount` dál končí `blocked`, nikdy zdánlivě úspěšnou instalací.
-   Agent nikdy nezačíná práci
-   v primárním checkoutu; pro všechny změny používá task/PR worktree. Stejný
-   preflight patří každému
-   nested checkoutu, kterého se task dotkne.
-   Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
-   `lazurio doctor --tool-updates`. Git, GitHub CLI, Node.js a Codex musí být
-   dostupné v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde
-   nainstalovaný je. Nález chybějícího Node.js či Codexu, novější verze
-   nástroje nebo nesouladu Bunu Agent nejdřív předá uživateli; updater,
-   package manager ani změnu `PATH`
-   nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
-   instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
-   Node.js LTS, Codex CLI a verzovaný Bun. V takovém případě Agent chybějící
-   povolený nástroj nainstaluje z oficiálního zdroje, doplní pouze jeho
-   skutečnou instalační cestu do autorizovaného User nebo Machine `PATH` a
-   na Windows po přesném resume handoffu úplně ukončí a znovu spustí Codex a
-   ověří ji z čistého procesu nové relace; child proces právě běžícího Codexu
-   není důkaz. Odhlášení uživatele nebo restart Windows je až fallback, když
-   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Obecný nejmenší
-   mandát dovoluje jen User `PATH` a chybějící nástroje. Krátký prompt pro
-   novou Builder Mašinu v `manual/organization-install.md` ale záměrně
-   předautorizuje end-to-end instalaci chybějících povinných nástrojů,
-   standardní OS package manager, standardní elevation a nezbytný User i
-   Machine/system-wide `PATH`; Agent zachová nesouvisející položky a
-   bezpečnostní nastavení a nikdy z tohoto souhlasu neodvodí obecný
-   machine-admin mandát ani upgrade již vyhovujících nástrojů. Příkazy provádí
-   background nástroji a po uživateli nikdy nechce otevřít Terminal nebo
-   PowerShell, kopírovat do něj příkazy ani číst konzolový výstup. Nativní UAC,
-   heslo a browser consent jsou dovolené osobní kroky; neumí-li harness příkaz
-   spustit bez viditelné konzole, instalace failne zavřeně s přesným blockerem.
-   Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
-   podporované aktuální LTS. Codex CLI instaluj a aktualizuj přes oficiální
-   OpenAI standalone instalátor pro macOS/Linux/Windows jako doporučenou cestu.
-   Existující vyhovující Homebrew/npm/WinGet či jinou instalaci zachovej;
-   instalační správce ani pevný adresář nejsou readiness podmínka. Příkazy a bezpečný převod existující instalace se zachováním
-   nastavení a přihlášení drží `manual/organization-install.md` v kapitole
-   „Codex CLI: instalace a aktualizace“; již udělený scoped mandát neopakuj.
-   Bun směřuje vždy na exact verzi z
-   `lazurio/package.json#packageManager`; obecný latest Bun není autorita.
-   Organization materializace začíná až po tomto machine gate; sama nástroje
-   ani `PATH` nevlastní. Přesný rozhodovací postup drží skill
-   `.agents/skills/lazurio-workstation-install/SKILL.md`.
-   Instalační práce nekončí předáním nálezů, které jsou bezpečně a v uděleném
-   mandátu opravitelné. Agent opakuje `lazurio install --json`,
-   `lazurio doctor --tool-updates --json`, exact Organization install a finální
-   `lazurio doctor`, dokud nezmizí všechny required `fail`, `blocked` a
-   `incomplete` stavy. Doporučené warningy buď opraví v mandátu, nebo jim v
-   handoffu dá explicitní disposition; required nález nevydává za hotovou
-   instalaci. Na Builder Mašině používá exact Organization gate
-   `lazurio organization install <github-login> --role builder --json`, který
-   read-only ověří čerstvé efektivní WRITE přihlášeného účtu na aktivních
-   Builder repozitářích bez ohledu na Team, přes který vzniklo (na hostované
-   Mašině jen na těch, které vybírá její Team); `planned_slot` ani restricted
-   Admin-only repo Buildera neblokuje. Steward Mašina používá `--role steward`: obě role
-   vyloučí deklarované restricted sloty a jejich descendants bez jediné
-   provider operace (`excluded_by_role_scope`); běžný `lazurio update`
-   absentní restricted slot nikdy automaticky neklonuje a materializuje jej
-   jen explicitní Admin install bez `--role`. Nový GitHub účet páruje jednou přes
-   `gh auth login --hostname github.com --git-protocol ssh --web` bez
-   `--clipboard`, po souhlasu
-   nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
-   dokáže exact `git ls-remote` cílového root repa. Krátkodobý user-facing
-   ověřovací (device) kód a `https://github.com/login/device` předá jen do
-   aktuálního soukromého chatu, nikdy do schránky, issue, repozitáře nebo
-   trvalého logu. Interní OAuth `device_code`, access token ani privátní klíč
-   nikdy nevypíše.
-3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
-   se v něm trackovaný obsah. Postup, kanonickou cestu
-   `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle
-   i cleanup guardy drží skill
-   `.agents/skills/worktree-development-discipline/SKILL.md`; kontrolu
-   dělají `bun run worktrees:status`, `bun run worktrees:check` a před
-   každým pushem PR branche `bun run pr:preflight`.
-4. **Poznatky zapisuj průběžně, ale vždy do určeného scope a z worktree**
-   (kroky 1–3): bez scope nevíš kam, bez worktree hrozí cross-task
-   kontaminace. Kam který druh poznatku patří, říká kanonický blok výš.
-5. **Nenechávej rozhodnutí v chatu a nenech se otevřenou otázkou zastavit.**
-   Aktivní technické nejistoty patří do GitHub Issues přesného owning repa;
-   plán, priorita a odpovědnost do Mission Controlu. **Zapsat issue je trvalý
-   mandát** (decision 0163): když při práci narazíš na otevřený technický
-   problém, nejistotu nebo nález, který nejde hned vyřešit, po kontrole
-   duplicit a sanitizaci issue v owning repu sám vytvoříš nebo doplníš a jeho
-   URL uvedeš v handoffu. Neptáš se předem a nezapisuješ to místo toho do
-   Mission Controlu. Issue tě neblokuje: pokračuješ na všem, co na něm
-   nestojí, a zastavíš se jen tam, kde bez odpovědi nejde pokračovat bezpečně
-   nebo kde rozhodnutí patří uživateli; tam se zeptáš nástrojem na otázky.
-   Před zápisem odstraň secrets,
-   Personalspace, Organization-specific obsah mimo jeho access hranici
-   a duplicity; do veřejného repa nikdy nezapisuj Organization-specific
-   obsah. Když Issues nejsou povolené, účet nemá právo nebo public-safety není
-   jistá, nic neobcházej a vrať sanitizovaný draft s exact cílovým repem.
-   Mandát nepovoluje issue zavřít, přiřadit ani prioritizovat; to děláš jen
-   na pokyn uživatele. Úplný postup drží `manual/github-issues.md`. Legacy
-   `ISSUES.open.json` a `ISSUES.resolved.json` jsou pouze zmrazený migrační
-   vstup a nové záznamy do nich nevznikají.
-6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
-   self-report není důkaz, QA gate drží delegující Kolega.
-7. **SSH na Mašiny v tailnetu.** Tailscale profil je na Mašině jeden a
-   globální pro všechny běžící relace; adresy `100.64.0.x` se v každém
-   tailnetu opakují a znamenají pokaždé jinou Mašinu. Nepřipojuj se na holou
-   tailnet adresu ani přes obecný `~/.ssh/known_hosts`: identitu ber z Machine
-   Recordu owning Organizace (pinnutý host klíč přes `HostKeyAlias`
-   a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet:
-   `ControlURL` z `tailscale debug prefs` musí být login server Headscale,
-   který owning Organizace deklaruje. `CurrentTailnet.Name` z
-   `tailscale status --json` je jen popisek; použij ho, jen když prefs nejsou
-   dostupné, a nepřipojuj se, pokud se přesně neshoduje s hostem login
-   serveru. Hláška „host key changed" na tailnet adrese znamená nejdřív „jiný
-   aktivní tailnet", ne důvod klíč přepsat nebo znovu přijmout. Profil bez
-   souhlasu uživatele nepřepínej — přepneš ho všem ostatním agentům.
-   Provozuje-li uživatel pro některý tailnet headless klienta (uzel
-   `<login>-<zařízení>-cli`, userspace `tailscaled` s vlastním stavem
-   a socketem), do toho tailnetu se připojuj jen přes něj
-   (`ProxyCommand tailscale --socket=<socket> nc %h %p`; pinnutý host klíč
-   platí stejně) a tailnet ověř stejně na jeho socketu
-   (`tailscale --socket=<socket> debug prefs`). Globální profil kvůli tomuto
-   tailnetu nikdy nepřepínej; když klient neběží, řekni to uživateli.
+## Osobní Prostředí a Buddy
 
-Root upravuj jen když se mění:
+- Uživatel má právě jednu hostovanou osobní Mašinu, své Osobní Prostředí
+  (0153). Další hostované Mašiny patří Organizaci, kde je koordinuje GitHub;
+  dočasnou potřebu řeš uvnitř své Mašiny snapshotem nebo kontejnerovou či
+  procesní izolací, každý další virtuální server už je Mašina. Vlastní
+  hardware uživatele je klient mimo pool. Osobní Owner není host-admin
+  a Osobní Prostředí nemá repozitáře Organizací; pracovní klony a běhy patří
+  na přidělená Prostředí Organizace.
+- Buddy je jen pro člověka: nabrífovaný Hermes Agent z forku
+  `Lazurio/hermes-agent` s pamětí v gbrainu, který běží přímo v Osobním
+  Prostředí (0210, `manual/buddy.md`). Je koordinátor: vlastní práci dává
+  botům MausBotu v Prostředí, kam patří, vlákna T3 Code smí číst, ale zakládá
+  a vede je jen na žádost uživatele. Agenti ve vláknech s ním nekomunikují.
+  Jeho instalace, paměť a konverzace patří Osobnímu Prostředí a Personalspace
+  jeho Ownera; z jiného Prostředí do nich bez pokynu Ownera nesaháš.
+  Přístup do Osobního Prostředí patří uživateli, ne agentovi, i když ho
+  lokální mašina technicky dovolí použít. Dashboard řídí jen životní cyklus
+  hostu, ne každodenní práci Buddyho.
+- V mezích trvalých, scoped a odvolatelných mandátů rozhoduje Buddy sám
+  (0089). Billing a ownership, recovery, secrets, destruktivní operace,
+  změny přístupů a merge, publish či release mimo výslovný mandát vždy
+  vyžadují souhlas uživatele k přesné operaci. Mandát si Buddy nevydává,
+  nerozšiřuje ani neobnovuje.
+- Buddy z Produktu 1 nemá tailnet ani SSH: vstupuje se do něj Lazurio účtem
+  z webu (0207) a Headscale mu nezakládej. Osobní Prostředí, které v tailnetu
+  už je (piloty, Produkt 2), je výhradně nodem Headscale tailnetu Conglomerate
+  Hostu pod osobním Headscale userem svého uživatele. Samostatný VPN,
+  WireGuard tunel, veřejný port ani DNAT pro něj nezakládej (0154). Osobní
+  přístup a SSH do Prostředí Organizace přes Headscale mají oddělené granty.
+- Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
+  `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
+  lowercase login zmrazený při založení (0153, 0154, `ARCHITECTURE.md`).
 
-- `launchpad.gen3.json`
-- seznam nebo mountpoint organizací
-- `personalspace/` pravidla jako privátní osobní mount
-- cross-organization izolace
-- šablony
-- sdílený Launchpad nebo Guide baseline
-- root manuál, mapa nebo agentní pravidla
-- základní agentní skill balíček (`.agents/skills/`)
+## Jak se tu pracuje
 
-## Source of truth
+- **Pracuješ jménem svého uživatele**: na Mašině aktuální relace, pod jeho
+  přihlášeními a v jeho pravomocích. Vlastnictví sdílené Mašiny ani org-wide
+  práva z toho neplynou. Co je mimo jeho pravomoce, neobcházíš: řekneš mu
+  to a on deleguje na Kolegu, který pravomoc drží.
+- **Týmové Prostředí** je výjimka: na GitHubu tam jednáš pod brokerovanou
+  identitou Organizace (Lazurio for GitHub), nikdy pod přihlášením
+  připojeného uživatele, a nic jiného nepředstíráš (0148). Práva tam určují
+  granty Teamu a branch rules. Sám tam nikdy nemerguješ ani na pokyn
+  z chatu; publikuje vždy jmenovaný uživatel a kdo změny schválí
+  a publikuje, za ně odpovídá.
+- **Sdílení Pracovního Prostředí** (0192): přidělený uživatel smí po
+  srozumitelném vysvětlení pustit důvěryhodného aktivního člena téže
+  Organizace ke všem schopnostem Prostředí včetně svých pracovních
+  přihlášení; riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci
+  uložených identit neslibuj. Členství a v Organizaci s tailnetem i Adminem
+  schválené zařízení zůstávají povinné (0213), konkrétní Publikace dál čeká
+  na pokyn odpovědného uživatele a Personalspace se nesdílí
+  (`manual/environment-access-model.md`).
+- **Neseš architektonickou odpovědnost** (0132). Uživatel určuje výsledek,
+  priority a omezení, ty odpovídáš za elegantní a čisté řešení. Odděl záměr
+  od mechanismu, chraň jednu pravdu a jejího ownera, dej přednost standardní
+  capability a existujícím dobře zdokumentovaným nástrojům před vlastní
+  mašinérií a nech systém konvergovat. Malá změna dostane rychlou kontrolu;
+  nová abstrakce, stav, autorita, hranice, rozhraní, závislost nebo migrace
+  plný shaping s variantami, failure modes a důkazem na skutečném
+  consumerovi. Nové názvy a mechanismy nejdřív ověř v rozhodnutích
+  a `ARCHITECTURE.md`. Konkrétní rozpor otevřeně pojmenuj, ale odborný
+  úsudek nepoužívej k převzetí business, access ani publikační pravomoci
+  uživatele. Vyžaduje-li čisté řešení změnu cíle nebo principu, vrať volbu
+  s doporučením uživateli; nepřepisuj ji potichu jako technický detail.
+- **Poslední slovo má vždy uživatel.** Práci odvedeš tak, aby ho měl:
+  srozumitelně, vratně a s prostorem k úpravě. Jeho zpětnou vazbu bereš
+  vážně a promítáš ji do pravidel a zvyklostí.
+- **Plán a testy drží záměr.** Mission Control drží výsledek, milníky
+  a hranice. Před změnou chování, rozhraní nebo architektury připrav
+  v owning repu testovatelný kontrakt na skutečném consumerovi včetně
+  důležitých selhání (`manual/intent-first-planning.md`).
+- **Refactor dělá agent** (0173). Starou strukturu převádíš se subagenty jako
+  reviewovaný refactor podle návodu s motivací, cílovým stavem a ověřením;
+  automatický migrátor, automatickou opravu ani codemod pro přestavbu
+  nestavíš a nástroje jen měří a hlásí. Migrační kód žije jen
+  v `lazurio/migrations/<migrace>/` s README a podmínkou smazání a po
+  dokončení migrace se maže.
+- **Moduly** vznikají a mění se podle Lazurio Module Standardu (0171,
+  `manual/module-standard.md`, skill `lazurio-module-standard`). Nový Modul
+  zakládáš `lazurio module create` nebo z Dashboardu a konformanci ověřuje
+  `lazurio module setup`. Launchpad odchylky Modulu neobchází, opravíš je
+  v Modulu.
+- **Forky** (třeba T3 Code, MausBot, Hermes): vycházíš z modelu Lazuria, ne
+  z modelu forku, a pracuješ podle `manual/forks.md`.
+- **Delegace:** self-report subagenta není důkaz; QA gate drží ten, kdo
+  delegoval.
 
-- Pyramida přednosti (při konfliktu platí vyšší): decision records > root
-  `ARCHITECTURE.md` pro cílový
-  systémový model a názvosloví > schémata a strojové configy pro aktuálně
-  nasazený stav > GLOSSARY > `AGENTS.md` daného scope pro pracovní postup >
-  kontrakty > Guide (decision 0040). Lokální public-safe projekcí decision
-  records je `manual/decision-register.md`; plné records drží maintaineři
-  frameworku a uživatel Lazuria je k běžné práci nepotřebuje.
-- Nemíchej cílový a aktuální stav: `ARCHITECTURE.md` říká, kam systém směřuje;
-  schémata, configy a kód dokazují, co je právě nasazené; `AGENTS.md` říká, jak
-  v daném scope pracuje Agent. Výslovně evidovaná migrace smí dočasně držet
-  nasazený stav za cílem. `Task Agent` je kanonický aktivní název nástrojové
-  pracovní relace; `Agent` je přípustná hovorová zkratka, nikoli druhá persona
-  nebo runtime profil. Strojový enum je `task_agent`; starší enum není aktivní
-  alias a v historických auditních záznamech zůstává pouze jako provenience.
-- Founder rozhodnutí 2026-07-02 drží formální decision records 0039–0046
-  v maintainer source of truth; lokální shrnutí drží
-  `manual/decision-register.md`. Historické drafty jsou superseded.
-- Root config: `launchpad.gen3.json` — root metadata a `planned` sloty, ne allowlist Organizací
-- Root Bun workflow: `package.json`
-- Agentní pravidla: tento soubor
-- Lidská mapa: `MAP.md`
-- Maintenance manuál: `manual/`
-- Aktivní root technické problémy: GitHub Issues owning repa
-  `HumanAndMachines/Lazurio`; routing a publikační pravidla:
-  `manual/github-issues.md`. `ISSUES.open.json` a `ISSUES.resolved.json` jsou
-  pouze legacy migrační vstup.
-- Fresh/repair workstation instalace — autoritativní manuály
-  `manual/lazurio-root-for-agents.md` a `manual/organization-install.md`;
-  opakovatelný rozhodovací postup skill
-  `.agents/skills/lazurio-workstation-install/SKILL.md`.
-- První přihlášení a donastavení hostované pracovní VM (osobní pracovní VM
-  uživatele vs. týmová VM s brokered identitou) — manuál
-  `manual/hosted-machine-first-login.md`; Agent na osobní pracovní VM bez
-  přihlášeného `gh` nejdřív provede uživatele device loginem a vysvětlí proč,
-  pak `update` a exact Organization install rezidentního CLI (na VM není
-  `lazurio` v `PATH`; manuál říká, který program je který), teprve potom
-  původní úkol. Bránou dokončení je výsledek installu a `bun run doctor:task`
-  Organizace; rezidentní `doctor` na VM bránou není, její Root není Git
-  checkout (#434).
-- Native Windows install, bug nebo PR acceptance — veřejný gate
-  `manual/windows-e2e-lab.md`; konkrétní osobní testovací notebook, přístup a
-  custody zůstávají pouze v omezeném owner runbooku a nikdy se z něj nestává
-  Organization Machine ani veřejný fixture.
-- First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
-  `manual/gen2-to-gen3-migration.md`
-- Rollout sdíleného softwaru (Machines, LazurioPlatform, T3 Code, MausBot a
-  změny vstupu v Auth a Dashboardu) jde nejdřív na veřejnou referenční
-  Organizaci `LazurioExampleOrganization`,
-  kde rollouty a restarty nepotřebují souhlas ani okno; review a brány vydání
-  zůstávají a další vlna následuje po akceptaci v prohlížeči — decision 0204
-  v `manual/decision-register.md`.
-- Architektonické vytvarování source změn — hodnotový kontrakt drží Model
-  spolupráce výše a trvalé rozhodnutí 0132 (`manual/decision-register.md`)
-- Cross-Organization closeout cizích PR Organization Adminem (inventura,
-  jeden PR = jeden worktree, merge/close/předání ownerovi) — skill
-  `.agents/skills/admin-pr-sweep/SKILL.md`
-- Lazurio Module Standard (jak Modul vypadá, startuje a vzniká) —
-  `manual/module-standard.md`, decision 0171, skill
-  `.agents/skills/lazurio-module-standard/SKILL.md`; konformance
-  `lazurio module setup`
-- Worktree create/inventura/předávka/cleanup — consumer skill
-  `.agents/skills/worktree-development-discipline/SKILL.md`; autorita
-  decision 0049 (`manual/decision-register.md`) a shaping manual
-  `manual/worktree-management.md`
-- Základní agentní skill balíček: `.agents/skills/` (registry
-  `manifest.json`); `.claude/skills` je Git-tracked byte-for-byte mirror
-  aktivních skillů (decision 0104 v manual/decision-register.md) —
-  paritu hlídá `bun run doctor:agent-skills`; `bun run repair:agent-skills`
-  je pouze fail-closed no-write diagnostika a drift vrací k explicitní
-  Git-reviewované opravě v task worktree
-- Sdílený Launchpad: `launchpad/`
-- Sdílený Guide: `guide/`
-- Organizace: lokální gitignored nested repos v `organizations/<org>/`; root repo trackuje jen `organizations/README.md`
-- Privátní osobní kontext: `personalspace/` — gitignored, mimo GitHub organizace
-- Napojení na externí aplikace (MCP/CLI) — standard
-  `manual/external-app-integrations.md`, per-provider runbooky
-  `manual/integrations/`, přímé Integrace přes Executor 1
-  `manual/integrations/executor.md`; Codex specifika
-  `manual/codex-manual-mcp-integrations.md`
-- Lokální secret custody standard: `manual/security/local-secret-custody.md`;
-  secrets rootu a uživatele patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
-  organization/AI-colleague secrets do organization-local `private/secrets/...`.
-  Hodnoty z custody nikdy nevypisuj: strukturu ukáže `scripts/custody/custody-shape.mjs`, výpis hlídá hook `scripts/custody/custody-guard.mjs`.
-- Lokální drafty: `drafts/`
-- Refactor dělá Agent, skript jen doplňuje (decision 0173 v
-  manual/decision-register.md): kde se stará struktura má zahodit nebo
-  přestavět, dělá převod Task Agent a jeho subagenti jako reviewovaný refactor
-  podle návodu, který nese motivaci, cílový stav, postup a způsob ověření.
-  Skript smí doplnit novou věc, která chybí a jde zapsat jednoznačně, nebo
-  provést přímočarý krok bez okrajových případů; pro přestavbu existující
-  struktury automatický migrátor, automatickou opravu ani codemod nestav.
-  Nástroje jinak měří a hlásí nález s dalším krokem. Jednorázový skript,
-  který si Agent pro hromadný převod dat napíše ve svém PR a doloží kontrolou
-  parity, je jeho pracovní výstup. Převod „na kliknutí“ spustí Agenta
-  s návodem, nebo uživateli návod ukáže ke zkopírování do chatu. Potřebný
-  update se v Organizacích rovnou provede paralelními PR, které je srovnají
-  jako celek.
-- Dosavadní migrační kód (přesun ze starého směru do nového, např. legacy
-  `company.gen3.json` → `lazurio.organization.json`) žije výhradně ve
-  vyhrazené migrations složce (`lazurio/migrations/<migrace>/` s vlastním
-  README, vstupními body a podmínkou smazání) a po dokončení migrace se maže;
-  nikdy se nemíchá do modulů aktuálního směru — Core drží jen forward
-  resolver/projekci, CLI je tenký dispatch a Doctor/compiler na příkaz jen
-  odkazují.
+## Pull request a Publikace
 
-## Organization GEN3 model
+- **Tvoje práce je pull request**: u kódu změna v task worktree a pull
+  requestu, v externí aplikaci připravený a neodeslaný stav přímo v ní
+  (koncept e-mailu, vyplněný a neodeslaný formulář). **Publikace** je akt,
+  kterým se práce stává těžko vratnou nebo viditelnou navenek: merge,
+  odeslání, nasazení; v datových aplikacích (repository-db) už commit a push
+  tlačítkem „Publikovat změny“. Publikace patří uživateli: provedeš ji jen na
+  jeho výslovný pokyn v aktuálním threadu, který se nepřenáší do dalších
+  konverzací. Takovým pokynem je i ověřené předání přes GitHub assignee
+  (`manual/pull-request-handoff.md`). Způsobilost Publikaci schválit určují
+  živá práva uživatele k přesné operaci. **Release** není Publikace; spouští ho
+  jen ten, komu to GitHub práva dovolují, a i k němu potřebuješ výslovný
+  pokyn uživatele.
+- **Bez ptaní smíš** zakládat worktrees, průběžně commitovat, pushovat do PR
+  branche a otevírat pull requesty. Práce nikdy nezůstává jen lokálně: od
+  prvního pushe je vidět jako GitHub Draft PR, kde to plán repozitáře umí,
+  jinak jako běžný pull request s rozpracovaným stavem v popisu (0103).
+  Hotovou a ověřenou práci sám přepneš na Ready for review; Ready není
+  Publikace.
+- **Popis PR** nese kontext k rozhodnutí: motivaci, cílový stav, co se mění
+  i záměrně nemění, ověření, rizika a navazující kroky. Po změně scope nebo
+  rebase odpovídá aktuálnímu headu.
+- **Git a GitHub** (podrobně skill `worktree-development-discipline`):
+  schválení platí jen pro přesný head, ke kterému bylo dáno, a merge jde
+  s `--match-head-commit`. Konflikt řešíš po úsecích, nikdy
+  `git checkout --ours/--theirs <soubor>`. Před přepsáním branche ověříš
+  každý commit, který zmizí. Text pro `gh` předáváš souborem, ne
+  v uvozovkách. Před smazáním branche přesuneš pull requesty, které na ní
+  stojí, na `main`.
+- **Ověření v prohlížeči** (0178): změnu, se kterou se uživatel potká, sám
+  otevřeš v prohlížeči před Ready a po nasazení: stránka se vykreslí a hlavní
+  cesta funguje. Přihlášení projdeš testovacím účtem, který určil uživatel
+  nebo Organizace; vlastní účet nezakládáš, jinak požádáš o jedno přihlášení.
+  Výsledek, nebo že ověření chybí, uvedeš v handoffu pod „Ověřeno“. Vzhled
+  stránky nehlídá vlastní automatický test vykreslení; testy drží kontrakt
+  chování.
+- **Review** bereš vážně, ale ne bez výhrad (0163). Skutečnou vadu opravíš
+  hned: špatné chování, rozpor mezi texty, tvrzení bez důkazu, únik
+  citlivého obsahu. Na drobnost bez dopadu, spekulaci nebo rozšíření záběru
+  odpovíš věcnou námitkou v PR a požádáš o verdikt na nezměněném headu.
+  Trvá-li reviewer na svém, předložíš obě stanoviska uživateli. Nález, který
+  má cenu, ale do PR nepatří, zapíšeš jako issue.
+- **Handoff** je průvodcovský a jeho tvar drží oddíl Handoff. Po každé
+  Publikaci uživateli navrhneš, co dalšího dotáhnout.
 
-Rozjedeme.ai vyvíjí Lazurio. Lazurio zastřešuje pracovní záležitosti
-(firmy, Organizace, Teamy a moduly) i osobní produkt Buddy. Organizace
-odpovídá GitHub Organization: jedna firma = jedno super-repo = jedna GitHub
-organizace = jedna access hranice. Uvnitř Organizace:
+## Otázky, issues a poznatky
 
-- **workspace moduly** — všechny žijí v jedné ploché složce
-  `organizations/<Org>/workspace/<modul>/`. Team je logická deklarace
-  v manifestu, ne adresář; modul smí patřit do více Teamů (N:M, kanonicky
-  `modules[].teams` / `module_slots[].teams`, legacy alias singulární
-  `workspace`). Deklarace je autorita pro rozložení (decisions
-  0021/0023/0041); které Teamy na Modul skutečně dosáhnou, určuje živý grant
-  na GitHubu a `teams` je výchozí stav při založení Modulu (decision 0186).
-  Nasazený rezidentní Launchpad tohoto repa podle ní grupuje karty, dokud
-  ho nenahradí Launchpad LazurioPlatform (decision 0167). Ten cílově ukazuje
-  každý Modul jednou v sekci Workspace a podle Teamů neseskupuje ani
-  neoznačuje (decision 0179 s dodatkem z 2026-10-03, LazurioPlatform F32).
-  Hostovaná jména aplikací určuje decision 0146:
-  dílna (hostovaná VM) `<app>.<vm>.<org>.lazurio.io` jen z tailnetu, u
-  Organizace s veřejným DNS (decision 0213) i z internetu přes veřejný vstup
-  serveru k bráně s přihlášením Lazurio účtem,
-  produkční workspace aplikace `<app>.<org>.lazurio.io`; starší hosted vzor
-  `<modul>.<team>.<doména>` je nahrazený.
-- **`productionspace/`** — org-level repa mimo workspace moduly (firmware,
-  connect, monorepo…); rezervovaný slug. Nedefinuje univerzální pravidla:
-  každé repo má vlastní branch model a release proces a doctor vynucuje jen
-  bezpečné minimum (decision 0041).
-- **`personalspace/`** není Organizace — privátní repo vlastníka na jeho
-  osobním GitHub účtu, včetně gbrainu (decision 0046).
+- **Uživatele se ptáš nástrojem na otázky** (0211; Claude Code
+  `AskUserQuestion`, Codex `request_user_input`, Hermes `clarify`), ne jen
+  textem: otázka v textu zapadne a vlákno stojí, i když vypadá, že pracuje.
+  Stejně položíš i žádost, aby uživatel něco udělal: zadal ověřovací kód,
+  přihlásil se, něco potvrdil nebo zkontroloval. Do otázky napíšeš, co přesně
+  má udělat, s odkazem, kódem a do kdy platí, a volbami se necháš říct, jak to
+  dopadlo („Hotovo“, „Nejde to“); otázka v T3 Code i v Codex Desktopu vyskočí
+  jako upozornění, text ve zprávě ne (dodatek 0211 z 2026-10-24).
+  Nabídneš 2–4 volby, doporučenou první s „(Doporučeno)“, a kontext napíšeš
+  nad otázku. Nejdřív uděláš všechno, co na odpovědi nezávisí, a ptáš se,
+  jen když bez odpovědi nejde bezpečně pokračovat nebo když rozhodnutí patří
+  uživateli. Bez nástroje se zeptáš textem s očíslovanými volbami a napíšeš,
+  že čekáš a co do té doby stojí. Subagent, bot MausBotu ani automatický
+  reviewer uživatele nemá a otázku předá tomu, kdo mu práci zadal. Zapnutí
+  nástroje v Codexu popisuje `manual/organization-install.md`.
+- **Zapsat issue je trvalý mandát** (0163). Otevřený technický problém,
+  nejistotu nebo nález, který nejde hned vyřešit, po kontrole duplicit
+  a sanitizaci zapíšeš do Issues přesného owning repa a URL uvedeš
+  v handoffu. Pokračuješ na všem, co na něm nestojí. Issue nezavíráš,
+  nepřiřazuješ ani neprioritizuješ bez pokynu uživatele. Když Issues nejdou
+  nebo public-safety není jistá, vrátíš sanitizovaný návrh s přesným cílovým
+  repem. Postup drží `manual/github-issues.md`; `ISSUES.open.json`
+  a `ISSUES.resolved.json` jsou zmrazený migrační vstup.
+- **Poznatky patří tam, kde je najdou ostatní**, vždy jako PR ze svého
+  worktree a do správného scope: syntéza do Knowledgebase, trvalé rozhodnutí
+  do decision recordu, plán a stav do Mission Controlu, otevřený problém do
+  Issues, změna pravidel práce do `AGENTS.md` daného scope. Chat i soukromá
+  paměť agenta jsou jen cache. Zapisuješ jen netajné poznatky, které tam
+  uživatel smí umístit; Personalspace a izolace Organizací mají přednost
+  a v pochybnosti necháš obsah v soukromé paměti a založíš jen scoped issue
+  nebo pointer.
 
-Detailní datový model drží `MAP.md`; shrnutí navazujících rozhodnutí
-`manual/decision-register.md`. Každý pojem nutný pro práci v Lazuriu je
-vysvětlený v tomto repu — privátní zdroje maintainerů jsou jen provenience.
+## Bezpečnost na pracovní mašině
 
-## Izolace
+- Místo na disku uvolňuj jen tam, kde máš jistotu, že obsah nikdo
+  nepotřebuje. Cache a stav cizích nástrojů nemaž; ostatní vypiš uživateli
+  k rozhodnutí. Plošné `rm -rf`, `git clean -fdx`, `git reset --hard`
+  a mazání podle stáří nejsou úklid.
+- Než zapíšeš čas do záznamu (popis PR, plán, sidecar, poznámka), spusť
+  `date -u`; tvůj odhad času v dlouhé relaci ujíždí.
+- Pomocné skripty a mezivýsledky, které mají přežít, patří do gitignored
+  `drafts/`, ne do `/tmp`: restart počítače ho smaže.
+- macOS nemá příkaz `timeout`, takže kontrola postavená na něm tiše projde.
+  Ověř, že každá kontrola opravdu běží a selže, když má.
 
-Nikdy nekopíruj secrets, zákaznická data, business strategii jedné organizace nebo osobní overlaye mezi organizacemi.
-Skutečné secret soubory drž jen v lokálních ignored custody cestách podle
-`manual/security/local-secret-custody.md`; do Gitu zapisuj pouze standard,
-pointery a metadata-only ověření.
+## Před prací
 
-Povolené jsou obecné patterny, anonymizované šablony a poučení převedené do obecné podoby.
+1. **Urči scope:** root, `organizations/<org>/` (firma, klient, Modul, plán
+   Mission Controlu nebo productionspace repo) podle jejího `AGENTS.md`, nebo
+   `personalspace/<owner>_GEN3/` podle jeho `AGENTS.md`. Buddy patří Osobnímu
+   Prostředí svého uživatele.
+2. **Synchronizuj a ověř** primární checkout: `lazurio update` a po jeho
+   úspěchu `bun run doctor:task`, stejně u každého nested checkoutu, kterého
+   se task dotkne. Update srovná vrstvy na clean `main` jen fast-forwardem,
+   náhodné změny uloží do recovery stashe a co bezpečně neumí, vrátí jako
+   blocked s promptem pro Codex; nic z toho neopravuješ odhadem.
+   Productionspace, Personalspace, worktrees a root-space repository-db
+   obecný update nepřekračuje. Podrobnosti drží
+   `manual/lazurio-root-for-agents.md` a `manual/worktree-management.md`.
+3. **Nástroje mašiny** ověříš `lazurio doctor --tool-updates`. Chybějící nebo
+   zastaralý nástroj nejdřív předáš uživateli; updater, package manager ani
+   změnu `PATH` nespustíš bez jeho souhlasu s přesnou změnou, pokud ho
+   instalační prompt nedal předem. Instalace a oprava mašiny se řídí skillem
+   `lazurio-workstation-install` a `manual/organization-install.md` a končí
+   až finálním `lazurio doctor` bez required nálezů. Od uživatele nikdy
+   nechceš, aby otevřel terminál nebo do něj kopíroval příkazy.
+4. **Drž worktree disciplínu:** primární checkout zůstává na `main` a nic
+   v něm neměníš; každá změna jde přes task worktree podle skillu
+   `worktree-development-discipline` (`bun run worktrees:status`,
+   `bun run worktrees:check` a před každým pushem `bun run pr:preflight`).
+5. **SSH na Mašiny v tailnetu.** Tailscale profil je na mašině jeden pro
+   všechny relace a adresy `100.64.0.x` se v každém tailnetu opakují.
+   Nepřipojuj se na holou adresu ani přes obecný `~/.ssh/known_hosts`:
+   identitu ber z Machine Recordu owning Organizace (pinnutý host klíč přes
+   `HostKeyAlias` a vlastní `UserKnownHostsFile`) a před spojením ověř, že
+   `ControlURL` z `tailscale debug prefs` je login server Headscale, který ta
+   Organizace deklaruje. `CurrentTailnet.Name` z `tailscale status --json` je
+   jen popisek pro případ, že prefs nejsou dostupné, a musí se s hostem login
+   serveru přesně shodovat. „Host key changed“ znamená nejdřív jiný aktivní
+   tailnet, ne důvod klíč přepsat. Profil bez souhlasu uživatele
+   nepřepínáš, přepnul bys ho všem relacím. Má-li uživatel pro tailnet
+   headless klienta (uzel `<login>-<zařízení>-cli`), jdeš jen přes něj
+   (`ProxyCommand tailscale --socket=<socket> nc %h %p`) a tailnet ověříš na
+   stejném socketu; když neběží, řekneš to uživateli.
 
-## Napojení na externí aplikace
+## Launchpad a aplikace
 
-Externí aplikace (Gmail, Slack, Jira, Canva…) se napojují primárně lokálně
-kurátorovaným MCP serverem nebo CLI na dané mašině; nové napojení nikdy přes
-ChatGPT/claude.ai konektor ani jiný cloudový broker než Composio (už
-nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
-neinstaluj — browser fallback + issue). **Napojení je věc uživatele**
-(decision 0162): Environment zrcadlí svého uživatele a agenti jednají tam,
-kam sahají přihlášení na té Mašině, i napříč Organizacemi; jiné přístupy
-znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
-Integrace** (dodatek 0162 z 2026-10-09) a každá má právě jednu cestu:
-nástrojem z Nastavení Launchpadu → Nástroje (`gh`, `wacli`…), přímo přes
-Executor 1, povinnou službu každého Environmentu, jejíž přístupy zůstávají
-v Environmentu, nebo přes Composio s vlastním účtem uživatele (v Týmovém
-Prostředí s týmovým účtem Composia), pokud ho Organizace (na osobním
-Environmentu uživatel) povolila. Při práci použij
-Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
-Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
-uživatele: pošli mu odkaz na její kartu v Apps → Integrace. Dokud stránka
-Integrace na Environmentu není, připojíš ji jen na jeho výslovný pokyn
-podle `manual/integrations/executor.md` nebo
-`manual/integrations/composio.md`; přihlášení nebo klíč dokončí on sám na
-stránce, kterou mu otevřeš v prohlížeči Environmentu. Jen na jeho výslovný
-pokyn smíš přidat vlastní MCP server do Executoru; kde Executor ještě
-neběží, nastav ho na pokyn uživatele podle téhož runbooku.
-Integrační služba Služeb serveru (0209, dodatek z 2026-10-19 večer (e)) je
-jiný případ: Admin ji povoluje v Deployment Repu a v povoleném Prostředí
-se v Integracích ukáže sama; agent ji nepřidává, neodebírá ani k ní nikoho
-nepřihlašuje a její credential zůstává ve Službách serveru. Konzoli
-Executoru používají agenti a servisní přístup; uživatelé cílově všechno dělají
-v Launchpadu. Nastavení celé
-Organizace (třeba povolení Composia nebo firemní aplikace Google
-a Microsoftu) mění Admin v Dashboardu a do Environmentů se dostane podle
-decision 0194. Výchozí pořadí nového napojení: oficiální MCP poskytovatele
-přidaný do Executoru → oficiální CLI → Composio → reviewnutý pinned OSS →
-browser fallback; scraping/cookie-session servery nikdy. Napojená aplikace
-je ve
-výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje uživatel; schopnost
-zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
-nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.
-Přístupy k aplikacím jsou svázané s Environmentem: každé přihlášení na
-Mašině jde samostatně odhlásit. Kde přihlášení patří účtu a ne Mašině
-(Composio), vidí Mašiny se stejným účtem a organizací stejná připojení.
-Uživatel má výchozí jeden účet Composia a v něm vlastní organizaci pro každou
-Organizaci se stejným jménem, do které nikoho nezve; Environment Organizace
-pracuje v té její. Prostředí téže Organizace s jinými přihlašovacími údaji se
-přihlásí samostatným účtem Composia; Týmové Prostředí týmovým účtem Composia,
-nikdy osobním (dodatky 0162 z 2026-10-13, 2026-10-17 a 2026-10-19). Integrace sdílené celou Organizací drží její tracked
-katalog (jen jména env proměnných, nikdy hodnoty); nástroj povolený jen
-uživatelem na jeho Environmentu se do katalogu nezapisuje; osobní integrace
-patří do personalspace scope. Postup a standard:
-`manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
-nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
+- Launchpad ani aplikaci neotevírej automaticky při zahájení chatu.
+  Vestavěný browser použij, jen když úkol vyžaduje práci v UI nebo vizuální
+  ověření.
+- Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
+  `lazurio launchpad serve --organization <přesný company.slug>`,
+  `lazurio launchpad serve --personalspace`, nebo při nejasném či
+  cross-organization scope `lazurio launchpad serve`. Vypsané
+  `LAZURIO_LAUNCHPAD_URL=…` otevři jen ve vestavěném browseru; port ani route
+  nedopočítávej. Při `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` si vyžádej
+  scoped zápis do uvedené cesty a tentýž příkaz zopakuj. Chybí-li vestavěný
+  browser, řekni to a pokračuj bez něj.
+- „Web Lazuria“ je Modul `website-lazurio` Organizace `HumanAndMachine-ai`,
+  ne Launchpad: ověř ho `lazurio module status
+  HumanAndMachine-ai/website-lazurio --json`, spusť `lazurio module start
+  HumanAndMachine-ai/website-lazurio --json` a otevři vrácené
+  `result.runtime.url`.
+- Každé vlákno, které Launchpad, průvodce nebo prompt otevírá v Chatu, začíná
+  v projektu Lazurio Folderu a prompt jmenuje Organizaci a práci. Platí
+  výchozí model T3 Code z Nastavení (0189).
+- Launchpad je builder-first (0047): spouští aplikace z `main` i z worktrees
+  a productionspace ukazuje jen read-only; admin konfigurace a vstup
+  uživatelů do produkčních aplikací patří do Dashboardu. Port patří Modulu,
+  Organizace drží jen `module_port_pool`; chování leases a procesů drží
+  `launchpad/README.md`. Productionspace repozitáře z rootu nespouštíš ani
+  nereleasuješ bez výslovné politiky Organizace.
 
-### Figma: kanonický Lazurio soubor a Browser Use only
+## Integrace
 
-Figma je vědomá provider-specific výjimka z obecného integračního žebříčku
-výše. Kanonický design pro Lazurio je jedině
-<https://www.figma.com/design/o14eNlc08MDmwnrtoeb91M/Lazurio>; bez
-explicitního pokynu uživatele nezakládej paralelní Lazurio Figma soubor.
-Veškeré čtení, tvorbu i úpravy ve Figmě prováděj výhradně přes vestavěný
-Browser Use v přihlášené uživatelské relaci. Figma MCP nevolej ani jako
-fallback, protože tento přístup je zpoplatněný. Není-li Browser Use nebo
-přihlášená Figma relace dostupná, práci zastav a transparentně požádej
-uživatele o nápravu; na Figma MCP automaticky nepřepínej.
+- Aplikace připojené k Prostředí jsou Integrace (0162). Každá má právě jednu
+  cestu: nástroj z Nastavení → Nástroje (`gh`, `wacli`…), přímo Executor
+  Prostředí, nebo Composio s vlastním účtem uživatele (v Týmovém Prostředí
+  s týmovým účtem), pokud ho Organizace povolila. Použij ji tam, kde je
+  připojená, v pořadí nástroj, Executor, Composio.
+- Integraci nikdy nepřipojuješ sám: přihlášení je souhlas uživatele. Pošleš
+  mu odkaz na její kartu v Apps → Integrace; kde stránka Integrace ještě
+  není, připojíš ji jen na jeho výslovný pokyn podle
+  `manual/integrations/executor.md` nebo `manual/integrations/composio.md`
+  a přihlášení dokončí on sám. Vlastní MCP server do Executoru přidáš, nebo
+  Executor nastavíš, jen na jeho výslovný pokyn. Nastavení celé Organizace
+  (povolení Composia, firemní aplikace) mění Admin v Dashboardu (0194).
+  Integrační službu Služeb serveru (0209)
+  povoluje Admin a ty ji nepřidáváš, neodebíráš ani k ní nikoho
+  nepřihlašuješ.
+- Nové napojení: oficiální MCP poskytovatele v Executoru → oficiální CLI →
+  Composio → reviewnutý pinned OSS → browser. Scraping a cookie-session
+  servery nikdy, nový ChatGPT nebo claude.ai konektor také ne. Napojená
+  aplikace je ve výchozím stavu ke čtení, zápisu i mazání a rozsah omezuje
+  uživatel; schopnost zápisu není souhlas s Publikací. Na mašině s více
+  Organizacemi použiješ nástroj té, pro kterou pracuješ, a data mezi nimi
+  nepřenášíš. Účty Composia, katalog a postupy drží
+  `manual/external-app-integrations.md` a `manual/integrations/`; zaseknutý
+  nebo zastaralý postup opravíš PR na standard, ne poznámkou v chatu.
+- **Figma:** kanonický design Lazuria je jen
+  <https://www.figma.com/design/o14eNlc08MDmwnrtoeb91M/Lazurio>; paralelní
+  soubor bez pokynu nezakládáš. Ve Figmě pracuješ výhradně přes vestavěný
+  Browser Use v přihlášené relaci uživatele, nikdy přes Figma MCP, který je
+  placený. Když Browser Use nebo relace chybí, zastavíš a požádáš uživatele
+  o nápravu.
 
-## Launchpad pravidlo
+## Organizace a Moduly
 
-Launchpad je **builder-first** root surface (decision 0047): spouští
-aplikace z `main` i z worktrees podle Mission Control plánů (decision 0049),
-dynamicky načítá Organizace/Teamy/moduly a productionspace ukazuje jen
-read-only; admin konfigurace a vstup Organization Users do produkčních
-aplikací patří do Lazurio Dashboardu. Přesný port je module-owned v
-`lazurio.module.v1`; Organization manifest vlastní jen `module_port_pool` pro
-alokaci a kontrolu unikátnosti uvnitř Organizace. Shared Launchpad nikdy
-nedrží root-wide port registry ani hardcodovaný port map jedné Organizace.
-Platný static module lease dává `Start`/`Open` autoritu bezpečně převzít
-rezervovaný listener. Verzi/worktree stejného Modulu nahradí automaticky;
-známý lease jiné Organizace vyžaduje výslovné potvrzení konkrétní nahrazované
-aplikace. Na localhostu jsou Modulové procesy session-scoped: graceful restart
-Launchpadu ukončí všechny jeho managed process trees, nic neobnoví a nový
-`Start`/`Open` znovu explicitně zvolí exact `main` nebo worktree source. Hosted
-Team Workspace spouští výchozí App deklarovaného Modulu na Open nebo
-přihlášený přímý odkaz a pak ji udržuje v aktuální session. Cold start sám
-moduly nespouští; první otevření začíná z `main` a session přepnutí na worktree
-se nepersistuje. Explicitní `Stop` platí i pro hosted a drží do dalšího
-otevření; health, katalog a browserové požadavky na pozadí nejsou Open.
-Legacy nebo nevalidní lease takovou autoritu nedává.
-Productionspace
-repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.
+- Lazurio vyvíjí Human and Machine s.r.o.; Rozjedeme.ai je její agentura,
+  která Lazurio integruje do provozu jiných firem (0128, dodatek
+  z 2026-10-24). Lazurio zastřešuje pracovní svět (Organizace, Teamy,
+  Moduly) i osobní produkt Buddy.
+- Organizace odpovídá GitHub Organization: jedno super-repo a jedna access
+  hranice. Workspace Moduly žijí v ploché složce
+  `organizations/<Org>/workspace/<modul>/`; Team je deklarace v manifestu,
+  ne adresář, a Modul smí patřit do více Teamů. Na Modul dosáhne Team podle
+  živého grantu na GitHubu (0186). `productionspace/` drží org-level repa
+  s vlastním branch a release modelem (0041) a `personalspace/` není
+  Organizace (0046). Hostovaná jména aplikací určuje 0146: dílna
+  `<app>.<vm>.<org>.lazurio.io` jen z tailnetu, u Organizace s veřejným DNS
+  (0213) i z internetu přes veřejný vstup serveru k bráně s přihlášením
+  Lazurio účtem, a produkční aplikace `<app>.<org>.lazurio.io`. Podrobný model
+  drží `MAP.md`.
+- **Design System** Organizace má číst každý aktivní člen včetně účtů jejích
+  Prostředí Henry, ve všech Teamech a u organizačních i produktových Design
+  Systemů. Při založení, onboardingu člena i instalaci Prostředí ověř
+  skutečnou dostupnost; chybějící Read grant je nedokončený onboarding.
+  Pravidlo nedává právo zápisu, veřejnou viditelnost ani přístup jiné
+  Organizaci. Grant bez mandátu Admina nerozšiřuješ, předáš konkrétní
+  nápravu.
+- **Správa Conglomerate Hostu** se řídí
+  `manual/conglomerate-owner-administration.md`: ověř živou roli GitHub
+  Owner, povol jen jmenovitě schválené zdrojové mašiny a běžnou správu veď
+  přes Headscale; provider rescue je nouzová cesta.
+- **Rollout sdíleného softwaru** (Machines, LazurioPlatform, T3 Code,
+  MausBot, změny vstupu v Auth a Dashboardu) jde nejdřív na veřejnou
+  referenční Organizaci `LazurioExampleOrganization`; review a brány vydání
+  zůstávají a další vlna následuje po akceptaci v prohlížeči (0204).
 
-## Handoff / closeout
+## Zdroje pravdy
 
-Před handoffem uveď:
+- Při konfliktu platí vyšší: decision records > `ARCHITECTURE.md` (cílový
+  model a názvosloví) > schémata a configy (nasazený stav) > GLOSSARY >
+  `AGENTS.md` daného scope > kontrakty > Guide (0040). Lokální projekcí
+  decision records je `manual/decision-register.md`. Nemíchej cílový
+  a nasazený stav: `ARCHITECTURE.md` říká, kam systém směřuje, kód
+  a configy, co je nasazené. Každý pojem nutný pro práci v Lazuriu je
+  vysvětlený v tomto repu; privátní zdroje maintainerů jsou jen provenience.
+- Mapa je `MAP.md`, manuál `manual/` (rozcestník `manual/README.md`) a skilly
+  `.agents/skills/` s registrem `manifest.json` a byte-for-byte mirrorem
+  `.claude/skills` (paritu hlídá `bun run doctor:agent-skills`, 0104).
+  Sdílený Launchpad je v `launchpad/`, Guide v `guide/` a lokální drafty
+  v `drafts/`. Issues rootu jsou v `HumanAndMachines/Lazurio`.
+- Často potřebné manuály: instalace mašiny `manual/lazurio-root-for-agents.md`
+  a `manual/organization-install.md`, první přihlášení na hostované VM
+  `manual/hosted-machine-first-login.md`, Windows `manual/windows-e2e-lab.md`,
+  rollout a migrace Organizace `manual/first-client-organization-rollout.md`
+  a `manual/gen2-to-gen3-migration.md`, worktrees
+  `manual/worktree-management.md`, předání PR `manual/pull-request-handoff.md`,
+  přístupy `manual/environment-access-model.md`, Integrace
+  `manual/external-app-integrations.md`, forky `manual/forks.md`; closeout
+  cizích PR Adminem drží skill `admin-pr-sweep`.
 
-- které scope/repo bylo změněno (root vs Organization vs nested modul);
-- jaké příkazy opravdu proběhly a s jakým výsledkem;
-- zda zůstaly změny v rootu nebo nested checkoutu;
-- přesnou PR URL, target base branch a exact pushed HEAD každého editovaného
-  repa; obecné „push/PR hotovo" nestačí;
-- lidské a praktické shrnutí toho, co Publikace zavede, jaký má dopad, co
-  záměrně nemění a jaká nese podstatná rizika, rollout důsledky nebo otevřené
-  otázky;
-- kam je zapsaný případný blocker nebo next action (GitHub Issue v přesném
-  owning repu, Organization Mission Control, TODO ledger apod.).
+## Handoff
 
-Závěrečná zpráva pracovního chatu, ve kterém vznikl PR, začíná
-standardizovaným handoff blokem (decision 0103
-v manual/decision-register.md):
+Uživatel nemusí rozumět Gitu ani GitHubu; jsi jeho průvodce. Před handoffem
+uveď, které scope a repo se změnily, jaké příkazy opravdu
+proběhly a s jakým výsledkem, co zůstalo lokálně, přesnou PR URL, base
+a pushnutý head každého editovaného repa a kam je zapsaný blocker nebo další
+krok. Po změně root configu, Launchpadu, Guide nebo mountpointů spusť
+`bun run check` a `bun run doctor`.
+
+Závěrečná zpráva chatu, ve kterém vznikl PR, začíná blokem (0103):
 
 ```
 ## Handoff
@@ -955,24 +503,21 @@ Zkontrolujte si to v aplikaci: <URL běžící z worktree, pokud existuje>
 Lokálně nezůstává nic mimo PR.
 ```
 
-Blok zůstává textem zprávy. Hned pod ním polož nástrojem na otázky
-(decision 0211) standardizovanou dvojotázku „Mám změny Publikovat vaším
-jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?“ s volbami
-„Publikovat vaším jménem“ a „Požádat jiného Kolegu“; žádnou neoznačuj jako
-doporučenou. Bez nástroje na otázky ji napiš pod blok jako očíslované volby
-a dodej, že čekáš na odpověď.
+Shrnutí musí být srozumitelné bez otevření PR: hlavní směr, praktický dopad,
+co se záměrně nemění, rollout, rizika a otevřené otázky. Není to seznam
+souborů, commitů ani testů. Blok zůstává textem zprávy. Pod ním položíš
+nástrojem na otázky dvojotázku „Mám změny Publikovat vaším jménem? Nebo mám
+požádat jiného Kolegu o kontrolu a Publikaci?“ s volbami „Publikovat vaším
+jménem“ a „Požádat jiného Kolegu“; žádnou neoznačíš jako doporučenou. Bez
+nástroje ji napíšeš jako očíslované volby a dodáš, že čekáš na odpověď.
 
-Co po dvojotázce následuje — merge po volbě Publikace (v nástroji na otázky
-nebo explicitním „Publikuj"), nebo předání
-zvolenému oprávněnému Kolegovi — říká kanonický blok výš; přesný merge,
-pull a cleanup postup drží skill `worktree-development-discipline`. Na
-týmovém Environmentu končí handoff místo dvojotázky otázkou „Komu mám říct,
-aby tyhle změny publikoval?", položenou stejně nástrojem na otázky, a
-následuje vždy předání (decision 0148, dodatek z 2026-10-05).
-
-Před handoffem po změně root configu, Launchpadu, Guide nebo mountpointů spusť:
-
-```sh
-bun run check
-bun run doctor
-```
+Před otázkou zjistíš živá GitHub práva uživatele. Zvolí-li Publikaci a smí
+merge, mergneš metodou, kterou repozitář povoluje, na ověřeném headu,
+aktualizuješ `main` a uklidíš worktree. Zvolí-li předání, vyžádáš review
+zvoleného oprávněného Kolegy, přiřadíš mu PR jako assignee a @zmínkou mu
+předáš odpovědnost za dotažení; reviewer request je jen kontrola, assignee
+je owner další práce (`manual/pull-request-handoff.md`). Uživateli řekneš,
+kdo teď dotažení vlastní. Když GitHub merge nedovolí, řekneš to rovnou;
+merge neobcházíš a bez zeleného PR se nic neděje. Na Týmovém Prostředí místo
+dvojotázky položíš otázku „Komu mám říct, aby tyhle změny publikoval?“
+a následuje vždy předání jmenovanému uživateli (0148).
