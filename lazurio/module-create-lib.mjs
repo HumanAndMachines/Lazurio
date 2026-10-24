@@ -24,7 +24,7 @@ import { readAllModuleContracts } from "./module-port-lib.mjs";
 import { materializeRuntimeFromModule, normalizeModuleManifest } from "./core/module-contract-lib.mjs";
 import { normalizeOrganizationPortPool } from "./core/organization-port-policy-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
-import { readRequiredBunVersion, resolveExecutableOnPath } from "./core/toolchain-lib.mjs";
+import { readToolchainManifest, resolveExecutableOnPath } from "./core/toolchain-lib.mjs";
 import { runGit } from "./runtime/git-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
 import { acquireModuleRuntimeLock } from "./runtime/module-runtime-lock-lib.mjs";
@@ -84,6 +84,10 @@ export async function createModule({
   cwd = process.cwd(),
   skipInstall = process.env.LAZURIO_SCAFFOLD_SKIP_INSTALL === "1",
   templatesRoot = DEFAULT_MODULE_TEMPLATES_ROOT,
+  // lazurio/toolchain.json: the new Module pins its default Bun and uv and is
+  // measured against it; the registry seam is the one MS-02 asks.
+  toolchain = readToolchainManifest(),
+  isBunVersionPublished = undefined,
 }) {
   const root = resolve(lazurioRoot);
   const report = baseReport({ dryRun, stack });
@@ -101,7 +105,11 @@ export async function createModule({
     const moduleRoot = join(target.organizationRoot, "workspace", slug);
     report.module_root = moduleRoot;
     const templates = await loadModuleTemplates(templatesRoot);
-    const versions = { bun: readRequiredBunVersion(), ...DEFAULT_SCAFFOLD_VERSIONS };
+    const versions = {
+      ...DEFAULT_SCAFFOLD_VERSIONS,
+      bun: toolchain.tools.bun.default,
+      uv: toolchain.tools.uv.default,
+    };
     const input = { stack, slug, display_name: displayName, teams, port, templates, versions };
 
     let plan = await planFor({ lazurioRoot: root, target, input });
@@ -150,9 +158,9 @@ export async function createModule({
       await lock.release();
     }
 
-    const toolchainIssues = await prepareToolchain({ moduleRoot, plan, skipInstall, report });
+    const toolchainIssues = await prepareToolchain({ moduleRoot, plan, skipInstall, report, uvVersion: versions.uv });
     const commitIssue = await commitModule({ moduleRoot, plan });
-    const evaluation = await measureModule({ lazurioRoot: root, target, moduleRoot, plan });
+    const evaluation = await measureModule({ lazurioRoot: root, target, moduleRoot, plan, toolchain, isBunVersionPublished });
     report.standard = { checks: evaluation.checks };
     report.issues.push(...toolchainIssues, ...(commitIssue ? [commitIssue] : []), ...evaluation.contractIssues);
     const failing = evaluation.checks.filter((check) => check.status === "fail");
@@ -496,7 +504,7 @@ async function writeModule({ moduleRoot, plan, target }) {
   }
 }
 
-async function prepareToolchain({ moduleRoot, plan, skipInstall, report }) {
+async function prepareToolchain({ moduleRoot, plan, skipInstall, report, uvVersion }) {
   const lockPath = plan.generated_by_install[0];
   if (!lockPath) return [];
   const appRoot = join(moduleRoot, ...dirname(lockPath).split("/"));
@@ -507,7 +515,7 @@ async function prepareToolchain({ moduleRoot, plan, skipInstall, report }) {
   const uv = lockPath.endsWith("uv.lock");
   const executable = uv ? resolveExecutableOnPath("uv") : process.execPath;
   if (!executable) {
-    report.warnings.push(`uv není v PATH; ${lockPath} nevznikl. Nainstalujte uv ${DEFAULT_SCAFFOLD_VERSIONS.uv} a spusťte uv lock v ${appRoot}.`);
+    report.warnings.push(`uv není v PATH; ${lockPath} nevznikl. Nainstalujte uv ${uvVersion} a spusťte uv lock v ${appRoot}.`);
     return [];
   }
   const command = uv ? [executable, "lock"] : [executable, "install"];
@@ -539,7 +547,7 @@ async function commitModule({ moduleRoot, plan }) {
   return null;
 }
 
-async function measureModule({ lazurioRoot, target, moduleRoot, plan }) {
+async function measureModule({ lazurioRoot, target, moduleRoot, plan, toolchain, isBunVersionPublished }) {
   const manifest = JSON.parse(await readFile(join(moduleRoot, "lazurio.module.json"), "utf8"));
   const packages = new Map();
   const contractIssues = [];
@@ -573,6 +581,8 @@ async function measureModule({ lazurioRoot, target, moduleRoot, plan }) {
     organization,
     organizations,
     modules,
+    toolchain,
+    isBunVersionPublished,
   });
   return { checks: evaluation.checks, contractIssues };
 }

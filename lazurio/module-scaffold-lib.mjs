@@ -2,22 +2,27 @@
 // Lazurio Module Standard kap. 13). This is the single generator of a new
 // Module: `lazurio module create` writes its plan to disk and the Dashboard
 // "Nový Modul" (DEV-6634 task 407) commits the same plan to a new GitHub
-// repository and the slot to an Organization PR. No I/O happens here: the
+// repository and the slot to an Organization PR. The plan does no I/O: the
 // caller reads templates, the Organization manifest and the existing leases,
-// and decides where the plan goes.
+// and decides where the plan goes. Only the default versions below come from
+// lazurio/toolchain.json, read once when this module loads.
 
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
+import { readToolchainManifest } from "./core/toolchain-lib.mjs";
 
 export const MODULE_SCAFFOLD_PLAN_VERSION = "lazurio.module_scaffold.plan.v1";
 export const SCAFFOLD_LISTENER_ID = "app";
 export const SCAFFOLD_LEASE_ID = "main";
 export const SCAFFOLD_APP_PACKAGE = "app/v1/package.json";
 
-/** Versions the scaffold pins besides Bun (which comes from lazurio/package.json). */
+/** Versions the scaffold pins besides Bun, which the caller passes: the
+ * released module kit, and uv as the toolchain manifest's default (decision
+ * 0171, addendum of 2026-10-24, point 5); its default Bun is
+ * `tools.bun.default` of the same manifest. */
 export const DEFAULT_SCAFFOLD_VERSIONS = Object.freeze({
   module_kit: "0.2.0",
-  uv: "0.11.6",
+  uv: readToolchainManifest().tools.uv.default,
 });
 
 const STACKS = Object.freeze({
