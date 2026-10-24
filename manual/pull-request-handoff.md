@@ -65,6 +65,21 @@ repo může vyžadovat Henryho schválení a umožňovat merge jen Ownerům.
 Henry v takovém repozitáři zajistí review a předá dovolený merge Ownerovi.
 Přiřazení takové omezení nepřebije.
 
+## Trvalý mandát k pinům nástrojů
+
+Jediný trvalý publikační mandát persony drží Dodatek 0171 z 2026-10-24 v
+`manual/decision-register.md`. Henry smí sám mergnout pull request,
+který sám založil ve workspace repozitáři své Organizace (včetně Mission
+Controlu a design systému, nikdy v infra ani productionspace, 0169) a
+který jen posouvá piny nástrojů o patch nebo minor verzi, nejvýš na
+výchozí verzi Lazuria, a přegeneruje lockfile. Podmínkou je zelené CI a
+čerstvé nezávislé APPROVED na přesném headu a merge jde s
+`--match-head-commit`. Major posun Henry předá Ownerovi GitHub
+organizace přiřazením jako assignee podle tohoto kontraktu. Mandát
+neobchází branch rules ani review, nepokrývá jiný obsah, Release ani
+nasazení a Owner nebo Admin Organizace ho může zúžit nebo odvolat. Živá
+GitHub práva jsou další podmínkou, ne náhradou za tento rozsah.
+
 ## Consumer a důležité selhání
 
 Nativní příjem MausBotu využívá GitHub události a stávající frontu,
