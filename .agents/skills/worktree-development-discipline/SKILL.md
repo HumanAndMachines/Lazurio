@@ -193,7 +193,8 @@ autoritu.
    Pak použij owner repo `git worktree remove <path>` a `git worktree prune`;
    sidecar smaž až potom. Než smažeš remote branch mergnutého PR, přesuň
    pull requesty, které na ní stojí, na `main`
-   (`gh pr edit <číslo> --base main`); smazání branche je jinak zavře.
+   (`gh pr edit <číslo> --base main`); smazání branche (třeba přes refs API)
+   by je jinak mohlo zavřít.
 14. Plošné `rm -rf`, `--force`, `git branch -D` a automatické mazání podle stáří
    nejsou běžný cleanup. Nesplněný guard se předává konkrétně.
 
