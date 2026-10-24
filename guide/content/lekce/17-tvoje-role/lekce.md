@@ -19,6 +19,6 @@ Role říká, za jaký typ práce člověk odpovídá. Není to nálepka navždy
 
 Jeden člověk může mít víc rolí. Důležité je říct, v jaké roli právě mluví. Jinak se snadno smíchá osobní názor, technické rozhodnutí a obchodní priorita.
 
-Když zadáváte práci AI kolegovi, pomůže věta: „Teď to řeším jako obchodník / vedoucí projektu / nový kolega.“
+Když zadáváte práci agentovi, pomůže věta: „Teď to řeším jako obchodník / vedoucí projektu / nový kolega.“
 
 Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

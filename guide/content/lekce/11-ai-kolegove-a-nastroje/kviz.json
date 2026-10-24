@@ -2,7 +2,7 @@
   "questions": [
     {
       "id": "q1",
-      "text": "Kdy je dobré použít AI kolegu?",
+      "text": "Kdy je dobré použít agenta?",
       "type": "single",
       "options": [
         {
@@ -25,6 +25,32 @@
         }
       ],
       "explanation": "Cílem je pracovat jednoduše, čitelně a bezpečně."
+    },
+    {
+      "id": "q2",
+      "text": "Co je Prostředí Henry?",
+      "type": "single",
+      "options": [
+        {
+          "id": "a",
+          "text": "Pracovní Prostředí Organizace, ve kterém pracují boti a za které odpovídá konkrétní člověk.",
+          "correct": true,
+          "feedback": "Ano. Automatizace běží v obyčejném Pracovním Prostředí a odpovídá za ně člověk."
+        },
+        {
+          "id": "b",
+          "text": "Nový kolega, který má vlastní místo a pravomoci jako člověk.",
+          "correct": false,
+          "feedback": "Ne. Prostředí Henry není další kolega, je to Pracovní Prostředí s automatizacemi."
+        },
+        {
+          "id": "c",
+          "text": "Osobní zástupce, který jedná jen za vás.",
+          "correct": false,
+          "feedback": "Ne. Osobní zástupce jednoho uživatele je Buddy v jeho Osobním Prostředí."
+        }
+      ],
+      "explanation": "Prostředí Henry je obyčejné Pracovní Prostředí s nastavenými automatizacemi. Nastavuje ho a odpovídá za něj člověk, který Organizaci spravuje."
     }
   ]
 }

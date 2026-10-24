@@ -20,6 +20,6 @@ Chyba neznamená, že se něco pokazilo vaší vinou. Často jen znamená, že �
 
 Nejvíc pomůže přesný popis: jaký byl záměr, co se stalo a co je vidět na obrazovce. Screenshot je často lepší než dlouhé vysvětlování.
 
-Neklikejte náhodně dál, pokud nevíte, co se děje. Klidný popis problému pomůže správci nebo AI kolegovi mnohem víc než panika.
+Neklikejte náhodně dál, pokud nevíte, co se děje. Klidný popis problému pomůže správci nebo agentovi mnohem víc než panika.
 
 Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

@@ -12,13 +12,13 @@ ukol: false
 
 - Co se v této lekci naučíte:
   - proč výsledek nemá zůstat jen v chatu;
-  - co znamená kontrola změny;
+  - co je pull request a kdy změna začne platit;
   - proč je normální chtít review.
 
-Když vznikne použitelný výsledek, nemá zůstat jen v chatu. Musí se dostat na místo, kde ho tým najde a kde je vidět, co se změnilo.
+Když vznikne použitelný výsledek, nemá zůstat jen v chatu. U znalostí, návodů nebo kódu patří do pull requestu: návrhu změny, na kterém je vidět, co se mění, proč a kdo ji zkontroloval.
 
-Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo AI kolega může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
+Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo agent si může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
 
-Pro netechnického kolegu stačí vědět: u důležité věci chtějte náhled, krátké vysvětlení změn a informaci, kdo ji zkontroloval.
+Změna začne platit až Publikací, třeba sloučením pull requestu nebo odesláním e-mailu. Rozhoduje o ní člověk s oprávněním a agent ji smí provést jen na jeho výslovný pokyn.
 
 Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

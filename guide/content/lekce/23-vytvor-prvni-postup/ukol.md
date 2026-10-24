@@ -4,7 +4,7 @@ type: reflection
 checklist:
   - "Vyberte jednu konkrétní situaci z dnešní nebo nedávné práce."
   - "Napište ji jednoduše jednou až třemi větami."
-  - "Doplňte, co by měl další člověk nebo AI kolega vědět, aby mohl navázat."
+  - "Doplňte, co by měl další člověk nebo agent vědět, aby mohl navázat."
   - "Když něco nevíte jistě, označte to jako otázku, ne jako domněnku."
 ---
 

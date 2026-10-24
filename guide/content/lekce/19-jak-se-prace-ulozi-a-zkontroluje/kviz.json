@@ -25,6 +25,32 @@
         }
       ],
       "explanation": "Cílem je pracovat jednoduše, čitelně a bezpečně."
+    },
+    {
+      "id": "q2",
+      "text": "Kdy začne platit změna, kterou připravil agent?",
+      "type": "single",
+      "options": [
+        {
+          "id": "a",
+          "text": "Až po Publikaci, o které rozhodne člověk s oprávněním.",
+          "correct": true,
+          "feedback": "Ano. Do té doby jde připravenou práci ještě upravit nebo zahodit."
+        },
+        {
+          "id": "b",
+          "text": "Hned, jak ji agent připraví.",
+          "correct": false,
+          "feedback": "Ne. Připravená práce ještě neplatí, čeká na kontrolu a Publikaci."
+        },
+        {
+          "id": "c",
+          "text": "Až ji agent sám sloučí, i bez pokynu.",
+          "correct": false,
+          "feedback": "Ne. Agent smí Publikovat jen na výslovný pokyn člověka, který na to má oprávnění."
+        }
+      ],
+      "explanation": "Agent práci připraví, třeba jako pull request. Platit začne až Publikací, o které rozhoduje člověk s oprávněním."
     }
   ]
 }
