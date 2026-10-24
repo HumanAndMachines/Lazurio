@@ -915,7 +915,8 @@ nepřijme. Čistá oprava starý `node_modules` neuchovává: je to odvozený ca
 který lze z autoritativního lockfilu znovu vytvořit. Source ani jiná Git data
 nepřepisuje odhadem.
 
-Kód App (`Install`, `Repair`, start i obnovu balíčků po `lazurio update`)
+Kód App (`Install`, `Repair`, start, sestavení App z `main` a její
+`start_script`, obnovu balíčků i sestavení po `lazurio update`)
 spouští přesně Bun, který App připíná v `package.json#packageManager`
 (`bun@x.y.z`, decision 0171 s dodatkem z 2026-10-24). Je to runtime App, ne
 nástroj uživatele: použije se Bun uživatele, když hlásí přesně tuto verzi
@@ -934,9 +935,10 @@ v `%LOCALAPPDATA%\Lazurio\runtimes\bun\<verze>\` a zámek mezi procesy tam není
 stejně jako v Platformě bez kvalifikovaného `flock`: dva procesy opravující
 tutéž rozbitou verzi se nevylučují, zůstává jen kontrola identity před
 odsunutím rozbité kopie a přejmenování jedním krokem. App bez přesného pinu
-běží Bunem uživatele jako dřív a vlastní procesy Lazuria zůstávají na Bunu,
-na kterém běží. Co nejde mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní
-nebo spustí, a nikdy nepoužije jinou verzi: `runtime-unavailable` (registr
+běží Bunem uživatele jako dřív a vlastní procesy Lazuria, včetně statického
+serveru sestavení, zůstávají na Bunu, na kterém běží. Co nejde mít, Lazurio
+odmítne dřív, než cokoli zastaví, uvolní nebo spustí, a nikdy nepoužije
+jinou verzi: `runtime-unavailable` (registr
 neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
 `runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
 Doctor tyto piny jen ukazuje v kontrole `launchpad.module_runtimes`: každou

@@ -469,6 +469,11 @@ na Launchpad Platformy zanikne.
   `no-cache` s ETag, jen GET a HEAD, nic mimo sestavení). App s vlastním
   serverem spustí `bun --no-env-file run <start_script>` s
   `NODE_ENV=production` a s klientem v `LAZURIO_RUNTIME_BUILD_OUTPUT`.
+- **Bun.** Sestavení i `start_script` spouští přesně Bun, který App připíná
+  v `packageManager`, s jeho adresářem první v PATH, stejně jako ostatní kód
+  App (dodatek 0171 z 2026-10-24). Statický server je kód Lazuria a běží na
+  Bunu, na kterém běží Launchpad. Pin, který nejde mít, start i otevření
+  odmítne dřív, než se cokoli sestaví nebo zastaví.
 - **Sestavení** běží jako `bun --no-env-file run <build_script>` v adresáři
   balíčku App s `NODE_ENV=production` a bez listenerů, adres a tajemství, po
   stejné kontrole balíčků, kterou start dělá i dnes. Výstup v balíčku App
@@ -480,8 +485,9 @@ na Launchpad Platformy zanikne.
   `served.json` a `logs/<klíč>.log`. Drží aktuální a předchozí sestavení
   a to, které právě běží; starší maže.
 - **`lazurio update`**, který Modul posunul, po obnově balíčků hned sestaví
-  nový klíč každé takové App, takže další otevření je okamžité. Výsledek
-  hlásí po Apps a běžící App nerestartuje.
+  nový klíč každé takové App jejím připnutým Bunem, takže další otevření je
+  okamžité. Výsledek hlásí po Apps a běžící App nerestartuje. Pin, který nejde
+  mít, je nález té App, ne zablokovaný update.
 - **Otevření běžící App**, jejíž klíč se mezitím změnil, ji restartuje na
   nové sestavení: nejdřív sestaví, pak App zastaví a spustí. Jinou výměnu
   tento Launchpad nemá.

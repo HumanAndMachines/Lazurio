@@ -4,10 +4,11 @@
 // script, and `lazurio update` builds a moved App without restarting it.
 import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
+import { createModuleBunResolver, moduleBunRoot } from "../../lazurio/runtime/bun-runtime-lib.mjs";
 import { createRuntimeManager } from "../../lazurio/runtime/runtime-lib.mjs";
 import { runLazurioUpdate } from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit, writeJson } from "./git-fixture-helpers.test.mjs";
@@ -21,7 +22,7 @@ afterAll(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }).catch(() => {});
 });
 
-async function createBuiltModuleFixture({ kind = "static", version = "v1" } = {}) {
+async function createBuiltModuleFixture({ kind = "static", version = "v1", pin = null } = {}) {
   const port = await findFreePort();
   const root = await createLaunchpadGitFixture();
   roots.push(root);
@@ -47,6 +48,7 @@ async function createBuiltModuleFixture({ kind = "static", version = "v1" } = {}
     name: appId,
     private: true,
     type: "module",
+    ...(pin ? { packageManager: pin } : {}),
     scripts: {
       dev: "bun --no-env-file dev.mjs",
       build: "bun --no-env-file build.mjs",
@@ -79,6 +81,8 @@ async function createBuiltModuleFixture({ kind = "static", version = "v1" } = {}
     'const version = (await readFile("version.txt", "utf8")).trim();',
     'await mkdir("runs", { recursive: true });',
     'await appendFile("runs/builds.txt", `${version}\\n`);',
+    // The Bun the build ran under (a fake pinned Bun exports its version) and its PATH.
+    'await appendFile("runs/build-env.jsonl", `${JSON.stringify({ bun: process.env.LAZURIO_FIXTURE_BUN ?? null, path: process.env.PATH ?? "" })}\\n`);',
     'if (version.startsWith("broken")) { console.error("the build is broken"); process.exit(1); }',
     'await mkdir("dist", { recursive: true });',
     'await writeFile("dist/index.html", `<h1>${version}</h1>`);',
@@ -94,6 +98,8 @@ async function createBuiltModuleFixture({ kind = "static", version = "v1" } = {}
     "const output = process.env.LAZURIO_RUNTIME_BUILD_OUTPUT ?? null;",
     `Bun.serve({ ${listen} fetch: async () => Response.json({`,
     "  nodeEnv: process.env.NODE_ENV ?? null,",
+    "  bun: process.env.LAZURIO_FIXTURE_BUN ?? null,",
+    '  path: process.env.PATH ?? "",',
     "  output,",
     '  client: output ? await readFile(`${output}/index.html`, "utf8") : null,',
     "}) });",
@@ -125,10 +131,84 @@ async function createBuiltModuleFixture({ kind = "static", version = "v1" } = {}
       runGit(["push", "origin", "main"], moduleRoot);
       return runGit(["rev-parse", "HEAD"], moduleRoot).trim();
     },
+    // The App's package moves to another Bun pin on main.
+    commitPin: async (next) => {
+      const packagePath = join(appRoot, "package.json");
+      await writeJson(packagePath, { ...JSON.parse(await readFile(packagePath, "utf8")), packageManager: next });
+      runGit(["commit", "-am", `pin ${next}`], moduleRoot);
+      runGit(["push", "origin", "main"], moduleRoot);
+      return runGit(["rev-parse", "HEAD"], moduleRoot).trim();
+    },
     builds: async () => (await readFile(join(appRoot, "runs", "builds.txt"), "utf8").catch(() => ""))
       .split("\n").filter(Boolean),
+    buildEnvs: async () => (await readFile(join(appRoot, "runs", "build-env.jsonl"), "utf8").catch(() => ""))
+      .split("\n").filter(Boolean).map((line) => JSON.parse(line)),
     devRan: () => existsSync(join(appRoot, "runs", "dev-ran.txt")),
   };
+}
+
+// The Bun an App pins (decision 0171, addendum of 2026-10-24), with the seams
+// of the root's own tests of it: Bun's npm distribution is a fake that lays
+// out, per version, a program named bun that logs its calls, reports the
+// version and otherwise runs the real Bun with LAZURIO_FIXTURE_BUN exported.
+// The root's own Bun is a wrapper that logs its calls too. No network.
+const posixTest = test.skipIf(!["darwin", "linux"].includes(process.platform));
+const linuxArm = Object.freeze({ platform: "linux", arch: "arm64", libc: "glibc", avx2: null });
+
+async function loggingBun(program, logPath, exports = "") {
+  await mkdir(dirname(program), { recursive: true });
+  await writeFile(program, [
+    "#!/bin/sh",
+    `printf '%s\\n' "$*" >> '${logPath}'`,
+    exports,
+    `exec '${process.execPath}' "$@"`,
+    "",
+  ].join("\n"), { mode: 0o755 });
+  await chmod(program, 0o755);
+}
+
+async function pinnedBuns(root) {
+  const home = join(root, "home");
+  await mkdir(home, { recursive: true });
+  const offline = new Set();
+  const rootBun = join(root, "root-bun", "bun");
+  await loggingBun(rootBun, join(root, "root-bun.log"));
+  const path = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+  const calls = async (log) => (await readFile(log, "utf8").catch(() => ""))
+    .split("\n").filter((line) => line !== "" && line !== "--version");
+  return {
+    offline,
+    rootBun,
+    bin: (version) => join(moduleBunRoot(home), version, "node_modules", "@oven", "bun-linux-aarch64", "bin"),
+    rootCalls: () => calls(join(root, "root-bun.log")),
+    calls: (version) => calls(join(root, `bun-${version}.log`)),
+    resolve: createModuleBunResolver({
+      home,
+      userBun: rootBun,
+      path,
+      system: async () => linuxArm,
+      freeBytes: async () => 10 * 1024 ** 3,
+      install: async (input) => {
+        if (offline.has(input.version)) return { kind: "refused", reason: "runtime-unavailable" };
+        await loggingBun(
+          join(input.directory, "node_modules", input.packageName, "bin", "bun"),
+          join(root, `bun-${input.version}.log`),
+          [
+            `if [ "$1" = "--version" ]; then echo '${input.version}'; exit 0; fi`,
+            `LAZURIO_FIXTURE_BUN='${input.version}'; export LAZURIO_FIXTURE_BUN`,
+          ].join("\n"),
+        );
+        return { kind: "installed" };
+      },
+    }),
+  };
+}
+
+// The pinned version's directory ahead of the system's on a process's PATH.
+function pinnedFirst(path, bin) {
+  const entries = path.split(":");
+  const own = entries.indexOf(bin);
+  return own >= 0 && own < entries.indexOf("/usr/bin");
 }
 
 test("a static App from main builds on its first Open, reuses it, rebuilds after a commit and keeps it on a broken one", async () => {
@@ -266,57 +346,64 @@ test("a worktree source keeps running its dev script", async () => {
   }
 }, TEST_TIMEOUT_MS);
 
+// `lazurio update` after the module's checkout moved to its current commit;
+// the result of the module's repository.
+async function updateMovedModule(fixture, deps = {}) {
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "lazurio-update-runtime-"));
+  roots.push(runtimeRoot);
+  const organization = {
+    key: "BetaCo::root",
+    repo_kind: "organization_root",
+    organization: "BetaCo",
+    module: "root",
+    workspace: null,
+    repo_path: "organizations/BetaCo_GEN3",
+    absolute_path: fixture.orgRoot,
+    expected_branch: "main",
+  };
+  const moduleRepo = {
+    key: "BetaCo::deals",
+    repo_kind: "module",
+    organization: "BetaCo",
+    module: "deals",
+    workspace: "workspace",
+    repo_path: "organizations/BetaCo_GEN3/workspace/deals",
+    absolute_path: fixture.moduleRoot,
+    expected_branch: "main",
+  };
+  const moved = (item) => item.key === moduleRepo.key;
+  const report = await runLazurioUpdate({
+    rootPath: fixture.root,
+    runtimeRoot,
+    deps: {
+      acquireLock: async () => ({ release: async () => {} }),
+      sshSharing: null,
+      buildInventory: async () => ({ repos: [organization, moduleRepo], warnings: [] }),
+      // The fast-forward itself is the commit before; the update sees it moved.
+      updateRepo: async (item) => ({
+        repo_key: item.key,
+        repo_kind: item.repo_kind,
+        organization: item.organization,
+        module: item.module,
+        path: item.repo_path,
+        state: moved(item) ? "updated" : "current",
+        actions: moved(item) ? ["fast_forward"] : [],
+        message: "fixture",
+      }),
+      buildCacheRoot: fixture.cacheRoot,
+      ...deps,
+    },
+  });
+  return report.results.find((item) => item.repo_key === moduleRepo.key);
+}
+
 test("lazurio update builds the new key of a moved built App and leaves the running App alone", async () => {
   const fixture = await createBuiltModuleFixture();
   const runtime = fixture.runtime();
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "lazurio-update-runtime-"));
-  roots.push(runtimeRoot);
   try {
     const first = await runtime.open(appId);
     const v2 = await fixture.commit("v2");
-    const organization = {
-      key: "BetaCo::root",
-      repo_kind: "organization_root",
-      organization: "BetaCo",
-      module: "root",
-      workspace: null,
-      repo_path: "organizations/BetaCo_GEN3",
-      absolute_path: fixture.orgRoot,
-      expected_branch: "main",
-    };
-    const moduleRepo = {
-      key: "BetaCo::deals",
-      repo_kind: "module",
-      organization: "BetaCo",
-      module: "deals",
-      workspace: "workspace",
-      repo_path: "organizations/BetaCo_GEN3/workspace/deals",
-      absolute_path: fixture.moduleRoot,
-      expected_branch: "main",
-    };
-    const moved = (item) => item.key === moduleRepo.key;
-    const report = await runLazurioUpdate({
-      rootPath: fixture.root,
-      runtimeRoot,
-      deps: {
-        acquireLock: async () => ({ release: async () => {} }),
-        sshSharing: null,
-        buildInventory: async () => ({ repos: [organization, moduleRepo], warnings: [] }),
-        // The fast-forward itself is the commit above; the update sees it moved.
-        updateRepo: async (item) => ({
-          repo_key: item.key,
-          repo_kind: item.repo_kind,
-          organization: item.organization,
-          module: item.module,
-          path: item.repo_path,
-          state: moved(item) ? "updated" : "current",
-          actions: moved(item) ? ["fast_forward"] : [],
-          message: "fixture",
-        }),
-        buildCacheRoot: fixture.cacheRoot,
-      },
-    });
-    const result = report.results.find((item) => item.repo_key === moduleRepo.key);
+    const result = await updateMovedModule(fixture);
     expect(result).toMatchObject({
       state: "updated",
       actions: expect.arrayContaining(["fast_forward", "apps_built"]),
@@ -335,6 +422,103 @@ test("lazurio update builds the new key of a moved built App and leaves the runn
   } finally {
     await runtime.shutdown();
   }
+}, TEST_TIMEOUT_MS);
+
+posixTest("a static App from main builds with the Bun it pins, first on its PATH, while the root's static server stays on the root's own Bun", async () => {
+  const fixture = await createBuiltModuleFixture({ pin: "bun@1.4.98" });
+  const buns = await pinnedBuns(fixture.root);
+  const runtime = fixture.runtime({ bunExecutable: buns.rootBun, resolveModuleBunFn: buns.resolve });
+  try {
+    const opened = await runtime.open(appId);
+    expect(opened.build).toMatchObject({ mode: "static", key: fixture.head() });
+    expect(await body(`${fixture.url}/`)).toBe("<h1>v1</h1>");
+    const [build] = await fixture.buildEnvs();
+    expect(build.bun).toBe("1.4.98");
+    expect(pinnedFirst(build.path, buns.bin("1.4.98"))).toBe(true);
+    expect(await buns.calls("1.4.98")).toContain("--no-env-file run build");
+    // The static server is the root's code: it runs on the root's Bun and on
+    // nothing the App pins.
+    expect((await buns.calls("1.4.98")).some((call) => call.includes("static-build-server.mjs"))).toBe(false);
+    const served = (await buns.rootCalls()).filter((call) => call.includes("static-build-server.mjs"));
+    expect(served).toHaveLength(1);
+    expect(served[0].startsWith("--no-env-file --config=")).toBe(true);
+  } finally {
+    await runtime.shutdown();
+  }
+}, TEST_TIMEOUT_MS);
+
+posixTest("an App with its own server builds and runs its start_script with the Bun it pins; a pin it cannot have refuses the Open and the Start before anything is built, stopped or started", async () => {
+  const fixture = await createBuiltModuleFixture({ kind: "server", pin: "bun@1.4.97" });
+  const buns = await pinnedBuns(fixture.root);
+  const runtime = fixture.runtime({ bunExecutable: buns.rootBun, resolveModuleBunFn: buns.resolve });
+  const answer = () => fetch(`${fixture.url}/`).then((response) => response.json(), () => null);
+  const packagePath = "organizations/BetaCo_GEN3/workspace/deals/app/package.json";
+  try {
+    const first = await runtime.open(appId);
+    expect(first.build).toMatchObject({ mode: "server", key: fixture.head() });
+    const running = await answer();
+    expect(running).toMatchObject({ nodeEnv: "production", bun: "1.4.97", client: "<h1>v1</h1>" });
+    expect(pinnedFirst(running.path, buns.bin("1.4.97"))).toBe(true);
+    const [build] = await fixture.buildEnvs();
+    expect(build.bun).toBe("1.4.97");
+    expect(pinnedFirst(build.path, buns.bin("1.4.97"))).toBe(true);
+    expect(await buns.calls("1.4.97")).toEqual(expect.arrayContaining(["--no-env-file run build", "--no-env-file run start"]));
+    expect(await buns.rootCalls()).toEqual([]);
+
+    // main moves to a pin that cannot be had: the Open that would rebuild and
+    // restart the App refuses before it builds or stops anything, and the
+    // running App keeps serving.
+    buns.offline.add("1.4.96");
+    await fixture.commitPin("bun@1.4.96");
+    const refusal = {
+      status: 409,
+      code: "app_runtime_refused",
+      metadata: { failure_kind: "runtime-unavailable", package_path: packagePath },
+    };
+    await expect(runtime.open(appId)).rejects.toMatchObject(refusal);
+    expect(await fixture.builds()).toEqual(["v1"]);
+    expect(await runtime.health(appId)).toMatchObject({ status: "healthy", pid: first.runtime.pid });
+    expect((await answer())?.bun).toBe("1.4.97");
+
+    // Stopped, its Start refuses the same way before it builds or takes the
+    // listener.
+    await runtime.stop(appId);
+    await expect(runtime.start(appId)).rejects.toMatchObject(refusal);
+    expect(await fixture.builds()).toEqual(["v1"]);
+    expect((await runtime.health(appId)).status).toBe("stopped");
+    expect(await answer()).toBeNull();
+    expect(fixture.devRan()).toBe(false);
+
+    // Once it can be fetched, the same Open builds and runs the new pin.
+    buns.offline.delete("1.4.96");
+    const reopened = await runtime.open(appId);
+    expect(reopened.build).toMatchObject({ mode: "server", key: fixture.head() });
+    expect((await answer())?.bun).toBe("1.4.96");
+    expect((await fixture.buildEnvs()).map((entry) => entry.bun)).toEqual(["1.4.97", "1.4.96"]);
+  } finally {
+    await runtime.shutdown();
+  }
+}, TEST_TIMEOUT_MS);
+
+posixTest("lazurio update builds a moved App with the Bun it pins, and a pin it cannot have is a finding, not a blocked update", async () => {
+  const fixture = await createBuiltModuleFixture({ pin: "bun@1.4.95" });
+  const buns = await pinnedBuns(fixture.root);
+  const v2 = await fixture.commit("v2");
+  const built = await updateMovedModule(fixture, { resolveModuleBun: buns.resolve });
+  expect(built).toMatchObject({ state: "updated", builds: [{ app_id: appId, state: "built", key: v2 }] });
+  const [build] = await fixture.buildEnvs();
+  expect(build.bun).toBe("1.4.95");
+  expect(pinnedFirst(build.path, buns.bin("1.4.95"))).toBe(true);
+
+  buns.offline.add("1.4.94");
+  await fixture.commitPin("bun@1.4.94");
+  const refused = await updateMovedModule(fixture, { resolveModuleBun: buns.resolve });
+  expect(refused).toMatchObject({
+    state: "updated",
+    builds: [{ app_id: appId, state: "failed", reason: "runtime-unavailable", key: null, previous_key: null }],
+  });
+  expect(refused.builds[0].message).toContain("organizations/BetaCo_GEN3/workspace/deals/app/package.json");
+  expect(await fixture.builds()).toEqual(["v2"]);
 }, TEST_TIMEOUT_MS);
 
 async function keyDirectories(cacheRoot) {

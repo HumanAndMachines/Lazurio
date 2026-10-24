@@ -10,6 +10,13 @@ import {
 } from "./discovery-lib.mjs";
 import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildCacheRoot as defaultBuildCacheRoot, builtAppMode, ensureAppBuild } from "./built-app-lib.mjs";
+import {
+  BunRuntimeRefused,
+  bunRuntimeRefusalMessage,
+  createModuleBunResolver,
+  exactBunPin,
+  withModuleBun,
+} from "./bun-runtime-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { createHostedWorkspaceConfiguration, hostedTeamSelectsModule } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
@@ -344,11 +351,9 @@ export async function runLazurioUpdate({
     if (dependencyPhase.blocked) results.push(dependencyPhase.blocked);
     applyDependencyOutcomes(results, dependencyPhase.outcomes, repoDescriptors);
 
-    // The tools a Module declares (its own Bun, DEV-6682) are made ready here,
-    // after its packages and before any build of it runs.
-
     // Builds of the moved built Apps, on a computer only: a Remote Environment
     // runs the Platform's Launchpad, which builds by itself (decision 0212).
+    // Each build first makes ready the Bun its App pins, after its packages.
     if (hostedWorkspace.profile !== "hosted") {
       await buildUpdatedApps({
         rootPath: absoluteRoot,
@@ -1530,9 +1535,11 @@ async function reconcileUpdatedDependencies({
 async function buildUpdatedApps({ rootPath, results, changedApps, warnings, deps }) {
   const ensureBuild = deps?.ensureAppBuild ?? ensureAppBuild;
   const cacheRoot = deps?.buildCacheRoot ?? defaultBuildCacheRoot();
-  // The Bun that runs an App's scripts, from one place per App (DEV-6682 swaps
-  // in the Bun the Module declares).
-  const bunExecutableForApp = deps?.bunExecutableForApp ?? (() => process.execPath);
+  // A build runs with exactly the Bun its App pins (decision 0171, addendum
+  // of 2026-10-24), from the cache the Launchpad and the package refresh above
+  // share, so the build left here is the one the Launchpad would make; an App
+  // that pins none builds with the Bun Lazurio runs on.
+  const resolveBun = deps?.resolveModuleBun ?? createModuleBunResolver({ userBun: process.execPath, env: process.env });
   for (const { app, repo, repoRoot, cwd } of changedApps) {
     if (builtAppMode(app) === null) continue;
     const index = results.findIndex((result) => result.repo_key === repo.key);
@@ -1541,43 +1548,11 @@ async function buildUpdatedApps({ rootPath, results, changedApps, warnings, deps
     if (!result || result.state === "blocked") continue;
     let outcome;
     try {
-      const organizationPath = typeof app.organization_path === "string" ? app.organization_path.trim() : "";
-      const built = await ensureBuild({
-        app,
-        cwd,
-        checkoutRoot: repoRoot,
-        organizationRoot: app.organization_kind === "organization" && organizationPath
-          ? await canonicalPath(resolve(rootPath, organizationPath))
-          : null,
-        cacheRoot,
-        bunExecutable: bunExecutableForApp(app),
-        env: dependencyInstallEnvironment({ target: { app, cwd }, rootPath }),
-      });
-      if (built.ok && built.output === null && !built.finding) continue;
-      outcome = built.ok && !built.finding
-        ? { app_id: app.id, title: app.title ?? app.id, state: built.built ? "built" : "current", key: built.key }
-        : {
-            app_id: app.id,
-            title: app.title ?? app.id,
-            state: "failed",
-            reason: built.finding.reason,
-            key: built.finding.key,
-            log_path: built.finding.log_path,
-            previous_key: built.ok ? built.key : null,
-            message: built.finding.message,
-          };
+      outcome = await buildMovedApp({ app, repoRoot, cwd, rootPath, cacheRoot, ensureBuild, resolveBun });
     } catch (error) {
-      outcome = {
-        app_id: app.id,
-        title: app.title ?? app.id,
-        state: "failed",
-        reason: "build-failed",
-        key: null,
-        log_path: null,
-        previous_key: null,
-        message: error instanceof Error ? error.message : String(error),
-      };
+      outcome = failedBuild(app, { reason: "build-failed", message: error instanceof Error ? error.message : String(error) });
     }
+    if (outcome === null) continue;
     results[index] = {
       ...result,
       actions: outcome.state === "built" && !result.actions?.includes("apps_built")
@@ -1588,6 +1563,63 @@ async function buildUpdatedApps({ rootPath, results, changedApps, warnings, deps
     if (outcome.state === "failed") {
       warnings.push(`${outcome.title}: ${outcome.message} (${outcome.reason}${outcome.log_path ? `, log: ${outcome.log_path}` : ""})`);
     }
+  }
+}
+
+// One moved built App: the Bun it pins, then its build. Null when there is
+// nothing to report (a server App without a client builds nothing).
+async function buildMovedApp({ app, repoRoot, cwd, rootPath, cacheRoot, ensureBuild, resolveBun }) {
+  const pinned = await pinnedBuildBun({ app, cwd, resolveBun });
+  // Nothing is built: a finding with the refusal's reason, as a failed build
+  // is, and the previous build stays.
+  if (!pinned.ok) return failedBuild(app, { reason: pinned.reason, message: pinned.message });
+  const organizationPath = typeof app.organization_path === "string" ? app.organization_path.trim() : "";
+  const built = await ensureBuild({
+    app,
+    cwd,
+    checkoutRoot: repoRoot,
+    organizationRoot: app.organization_kind === "organization" && organizationPath
+      ? await canonicalPath(resolve(rootPath, organizationPath))
+      : null,
+    cacheRoot,
+    bunExecutable: pinned.bun.executable,
+    env: withModuleBun(dependencyInstallEnvironment({ target: { app, cwd }, rootPath }), pinned.bun),
+  });
+  if (built.ok && built.output === null && !built.finding) return null;
+  if (built.ok && !built.finding) {
+    return { app_id: app.id, title: app.title ?? app.id, state: built.built ? "built" : "current", key: built.key };
+  }
+  return failedBuild(app, {
+    reason: built.finding.reason,
+    key: built.finding.key,
+    log_path: built.finding.log_path,
+    previous_key: built.ok ? built.key : null,
+    message: built.finding.message,
+  });
+}
+
+function failedBuild(app, { reason, message, key = null, log_path = null, previous_key = null }) {
+  return { app_id: app.id, title: app.title ?? app.id, state: "failed", reason, key, log_path, previous_key, message };
+}
+
+// The Bun an App's build runs with: exactly the version its package.json pins
+// now, or a refusal with its typed reason named by that package, never
+// another version.
+async function pinnedBuildBun({ app, cwd, resolveBun }) {
+  const packageJson = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
+  try {
+    return { ok: true, bun: await resolveBun({ packageManager: exactBunPin(packageJson?.packageManager), owner: cwd }) };
+  } catch (error) {
+    if (!(error instanceof BunRuntimeRefused)) throw error;
+    return {
+      ok: false,
+      reason: error.reason,
+      message: bunRuntimeRefusalMessage(error.reason, {
+        file: app.package_path ?? "package.json",
+        version: error.version,
+        cacheRoot: error.cacheRoot,
+      }),
+    };
   }
 }
 
