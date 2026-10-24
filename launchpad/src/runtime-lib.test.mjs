@@ -5032,9 +5032,15 @@ test("hosted maintenance leaves a pinned Bun that cannot pass by itself to a per
       for (let wait = 0; wait < 300 && refusals === 0; wait += 1) await sleep(10);
       await sleep(400);
       const [entry] = runtime.maintenanceSummary().apps;
-      expect(entry).toMatchObject({ status: "degraded", failure_kind: "app_runtime_refused" });
-      if (retried) expect(refusals).toBeGreaterThan(2);
-      else expect(refusals).toBe(1);
+      expect(entry.failure_kind).toBe("app_runtime_refused");
+      if (retried) {
+        // Still retried: an attempt may be under way when the summary is read.
+        expect(refusals).toBeGreaterThan(2);
+      } else {
+        // Nothing runs any more: it stays degraded until a person starts it.
+        expect(entry.status).toBe("degraded");
+        expect(refusals).toBe(1);
+      }
     } finally {
       await runtime.shutdown();
     }
