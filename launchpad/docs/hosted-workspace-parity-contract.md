@@ -3,7 +3,8 @@
 > **Stav (2026-09-18):** hosted identita Launchpadu je přepnutá na model
 > decision 0146 (`manual/decision-register.md`): každá aplikace běží na kořeni
 > vlastního hostname `https://<app>.<machine>.<domain>/` (dílna = hostovaná VM,
-> jen z tailnetu), produkční workspace aplikace na `<app>.<org>.lazurio.io`,
+> jen z tailnetu; u Organizace s veřejným DNS podle decision 0213 i přes
+> veřejný vstup serveru), produkční workspace aplikace na `<app>.<org>.lazurio.io`,
 > bare hostname VM je rozcestník. Pre-0146 tvar `<module>.<team>.<domain>` a
 > jeho path routing jsou **superseded**; tento dokument dál platí jen pro
 > parity rozsah synchronizace, jednu logickou Builder mašinu, runner a

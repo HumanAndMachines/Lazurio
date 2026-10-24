@@ -121,7 +121,8 @@ pracovní Root.
   každý Modul jednou v sekci Workspace a podle Teamů neseskupuje ani neoznačuje
   (decision 0179 s dodatkem z 2026-10-03, LazurioPlatform F32). Hostovaná jména
   aplikací určuje decision 0146: `<app>.<vm>.<org>.lazurio.io` v dílně
-  (hostovaná VM, jen tailnet) a `<app>.<org>.lazurio.io` pro produkční
+  (hostovaná VM, jen tailnet; u Organizace s veřejným DNS podle decision 0213
+  i z internetu přes veřejný vstup serveru) a `<app>.<org>.lazurio.io` pro produkční
   workspace aplikace; starší tvar `<modul>.<team>.<doména>` je nahrazený.
 - `organizations/<org>/productionspace/` — org-level repozitáře dané Organizace, které nejsou workspace moduly (např. firmware, connect, platformní runtime nebo pracovní template checkout); každé repo si definuje vlastní pravidla a Doctor u nich vynucuje jen bezpečné minimum (decisions 0041 a 0127 v manual/decision-register.md)
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní

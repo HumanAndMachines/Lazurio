@@ -810,7 +810,9 @@ organizace = jedna access hranice. Uvnitř Organizace:
   každý Modul jednou v sekci Workspace a podle Teamů neseskupuje ani
   neoznačuje (decision 0179 s dodatkem z 2026-10-03, LazurioPlatform F32).
   Hostovaná jména aplikací určuje decision 0146:
-  dílna (hostovaná VM) `<app>.<vm>.<org>.lazurio.io` jen z tailnetu,
+  dílna (hostovaná VM) `<app>.<vm>.<org>.lazurio.io` jen z tailnetu, u
+  Organizace s veřejným DNS (decision 0213) i z internetu přes veřejný vstup
+  serveru k bráně s přihlášením Lazurio účtem,
   produkční workspace aplikace `<app>.<org>.lazurio.io`; starší hosted vzor
   `<modul>.<team>.<doména>` je nahrazený.
 - **`productionspace/`** — org-level repa mimo workspace moduly (firmware,
