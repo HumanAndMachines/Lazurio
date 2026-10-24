@@ -283,7 +283,10 @@ Launchpad proto používá tři oddělené lifecycle profily:
 - **localhost** je úsporná dílna. `Start` a `Open` spouštějí přesný `main` nebo
   worktree jen pro život aktuální Server instance. Kliknutí nevytváří trvalý
   intent; graceful shutdown ukončí celý spravovaný process tree a další start
-  Launchpadu nic neobnovuje;
+  Launchpadu nic neobnovuje. App z `main`, která deklaruje sestavenou verzi
+  (`build_output` nebo `start_script`), běží jako sestavení aktuálního commitu
+  uložené mimo checkout, nikdy jako vývojový server; ten běží jen z worktree
+  (decision 0212 bod 9, Module Standard kap. 4.7);
 - **Hosted Team Workspace** drží T3 a Launchpad always-on, ale moduly spouští
   podle potřeby (DEV-6579, náhrada eager části decision 0137). Manifesty
   Organizace určují dostupné Team moduly a jejich výchozí Apps. `Open` i
@@ -459,7 +462,9 @@ procesu neobnovují starý cache: aplikace zůstane blokovaná, neúplný strom 
 při dalším Repair znovu odstraní a frozen instalace se bezpečně zopakuje.
 Běžící managed aplikaci Launchpad po dobu opravy zastaví a znovu spustí pouze
 po ověřeném úspěchu. Neplatný lockfile je source chyba pro Agenta, ne důvod
-vytvořit lokálně jinou verzi dependencies.
+vytvořit lokálně jinou verzi dependencies. Na počítači pak update sestaví nový
+commit každé App posunutého Modulu, která z `main` běží sestavená; běžící App
+nerestartuje, na nové sestavení ji převede až další `Open`.
 
 Hranice mutace a hledání balíčků je vždy přesný owning checkout. Relativní
 `file:` dependency smí jako read-only zdroj ukázat i do jiného checkoutu uvnitř
