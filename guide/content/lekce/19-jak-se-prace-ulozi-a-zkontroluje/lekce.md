@@ -15,12 +15,10 @@ ukol: false
   - co je pull request a kdy změna začne platit;
   - proč je normální chtít review.
 
-Když vznikne použitelný výsledek, nemá zůstat jen v chatu. Musí se dostat na místo, kde ho tým najde a kde je vidět, co se změnilo. U změn ve znalostech, návodech nebo kódu je tím místem pull request: návrh změny na GitHubu, na kterém je vidět, co přesně se mění, a který jde ještě upravit nebo zahodit.
+Když vznikne použitelný výsledek, nemá zůstat jen v chatu. U znalostí, návodů nebo kódu patří do pull requestu: návrhu změny, na kterém je vidět, co se mění, proč a kdo ji zkontroloval.
 
 Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo agent si může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
 
-Změna začne platit až Publikací: pull request se sloučí do hlavní verze, e-mail se odešle nebo v aplikaci stisknete „Publikovat změny“. Do té doby agent práci jen připravuje, třeba e-mail nechá uložený jako koncept. O Publikaci rozhoduje člověk, který na ni má oprávnění, a agent ji smí provést jen na jeho výslovný pokyn.
-
-Pro netechnického kolegu stačí vědět: u důležité věci chtějte náhled, krátké vysvětlení změn a informaci, kdo ji zkontroloval.
+Změna začne platit až Publikací, třeba sloučením pull requestu nebo odesláním e-mailu. Rozhoduje o ní člověk s oprávněním a agent ji smí provést jen na jeho výslovný pokyn.
 
 Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.
