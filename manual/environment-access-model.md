@@ -42,8 +42,12 @@ nezavádí. Vědomě zpřístupněná aplikace či export nesmí obejít tuto hr
    aplikaci. Brána kontroluje rozsah na serverové straně.
 
 Nevzniká veřejná alternativní cesta k pracovnímu Environmentu ani k jeho
-aplikacím. Jedinou výjimkou je veřejná referenční Organizace podle decision
-0204; ostatních Organizací se netýká. Přihlašovací/control-plane endpoint nutný k založení požadavku na
+aplikacím. Výjimkou je Organizace, která si podle decision 0213 zvolila
+veřejné DNS: tam síťová podmínka (bod 1) a schválení zařízení pro lidi
+neplatí, lidé vstupují bez tailnetu jen branami Environmentů s přihlášením
+Lazurio účtem a každá brána obnovuje relaci nejvýš po dvou minutách.
+Environmenty zůstávají uzly tailnetu a trezor Organizace zůstává pro lidi jen
+v tailnetu. Ostatních Organizací se to netýká. Přihlašovací/control-plane endpoint nutný k založení požadavku na
 připojení není přístupem k pracovním datům. Síťová schválení se vážou na
 konkrétní identitu zařízení a účet; jejich přesný mechanismus musí prokázat
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
@@ -169,8 +173,9 @@ převod na týmový režim ani další schválení Adminem.
 
 Tato volba je pro pomoc uživatele, kterému sdílející důvěřuje. Pro spolupráci
 bez takové osobní důvěry slouží samostatný týmový Environment. V obou
-případech zůstává povinné členství v Organizaci a konkrétní zařízení
-schválené Adminem; kamarád nebo příbuzný není výjimkou. Pracovní sdílení
+případech zůstává povinné členství v Organizaci a v Organizaci s tailnetem i
+konkrétní zařízení schválené Adminem (0213); kamarád nebo příbuzný není
+výjimkou. Pracovní sdílení
 se netýká soukromého Personalspace a nezakládá do něj oprávnění ani nová
 propojení. Ručně uložené vzdálené credentials však mohou jeho data technicky
 vystavit; zákaz číst cizí Personalspace tím nezaniká a model neslibuje

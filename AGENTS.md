@@ -117,7 +117,9 @@ ohraničené hranice** a **definované procesy**.
   schopnosti Teamů a branch rules určují operace nad zdroji. Cílový vstup
   uživatele do individuálního i týmového Environmentu určuje Lazurio účet,
   aktivní členství a konkrétní grant Auth; síť navíc vyžaduje zařízení
-  schválené Adminem v Headscale. GitHub je volitelná propojená identita,
+  schválené Adminem v Headscale, pokud si Organizace nezvolila veřejné DNS
+  (decision 0213): tam lidé vstupují bez tailnetu jen branami Environmentů a
+  trezor zůstává v tailnetu. GitHub je volitelná propojená identita,
   ne podmínka každého vstupu. Uživateli neříkej Builder, jako by šlo o jiný
   druh člověka. Přesný schválený model, delegaci uvnitř Organizace a migrační
   hranice drží [decision 0192](manual/environment-access-model.md).
@@ -233,8 +235,9 @@ Přidělený uživatel smí po srozumitelném vysvětlení předat důvěryhodn�
 aktivnímu členovi stejné Organizace všechny dostupné schopnosti
 Environmentu, včetně osobních pracovních přihlášení a vzdálených přístupů.
 Riziko přijímá sdílející; nevynucuj preventivní odhlašování, výmaz,
-převod na týmový broker nebo další Admin souhlas. Členství a konkrétní
-zařízení schválené Adminem zůstávají povinné. Izolaci uložených identit
+převod na týmový broker nebo další Admin souhlas. Členství a v Organizaci
+s tailnetem i konkrétní zařízení schválené Adminem zůstávají povinné
+(0213). Izolaci uložených identit
 ani automatické zneplatnění zkopírovaných údajů po odebrání vstupu
 neslibuj. Konkrétní publikace dál vyžaduje pokyn odpovědného uživatele;
 uvnitř tohoto runtime hranici drží proces. Nejde o sdílení Personalspace.
