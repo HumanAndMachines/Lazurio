@@ -22,17 +22,22 @@
     "module": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "surface": { "enum": ["internal", "manual", "admin", "public-preview"] },
     "dev_script": { "type": "string", "minLength": 1 },
+    "start_script": {
+      "description": "Skript balíčku App, který z main spustí její vlastní server jako jeden proces v produkčním režimu (Module Standard 4.6, rozhodnutí 0195 bod 24). Smí být stejný jako dev_script.",
+      "type": "string",
+      "minLength": 1
+    },
     "preview_script": { "type": "string", "minLength": 1 },
     "build_script": { "type": "string", "minLength": 1 },
     "build_output": {
-      "description": "Adresář statického výstupu sestavení v balíčku App (Module Standard 4.5, rozhodnutí 0195 bod 19). Platforma ho po sestavení z main servíruje sama.",
+      "description": "Adresář výstupu sestavení v balíčku App (Module Standard 4.5 a 4.6, rozhodnutí 0195 body 19 a 24). Bez start_script ho Platforma po sestavení z main servíruje sama; se start_script je to klient App, který Platforma předá jejímu serveru v LAZURIO_RUNTIME_BUILD_OUTPUT.",
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
       "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$"
     },
     "static_fallback": {
-      "description": "Co dostane neznámá cesta: 404 = 404.html sestavení se stavem 404, spa = index.html. Jen spolu s build_output.",
+      "description": "Co dostane neznámá cesta: 404 = 404.html sestavení se stavem 404, spa = index.html. Jen spolu s build_output a nikdy se start_script.",
       "enum": ["404", "spa"]
     },
     "required_module_slots": {
@@ -82,6 +87,12 @@
     }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "required": ["start_script"] },
+      "then": { "not": { "required": ["static_fallback"] } }
+    }
+  ],
   "$defs": {
     "listener": {
       "type": "object",

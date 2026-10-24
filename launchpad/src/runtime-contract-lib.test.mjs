@@ -1,9 +1,16 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   normalizePackageRuntime,
   runtimeListenerEnvironmentNames,
   validateDeclaredRuntime,
 } from "../../lazurio/core/runtime-contract-lib.mjs";
+import { validateAgainstSchema } from "../../lazurio/runtime/json-schema-mini.mjs";
+
+const runtimeSchema = JSON.parse(
+  readFileSync(join(import.meta.dirname, "..", "..", "lazurio", "schemas", "lazurio-runtime.schema.json"), "utf8"),
+);
 
 test("listener environment names include the hosted external origin for both roles", () => {
   // Deployed readers: Knowledgebase listener `app` reads
@@ -274,4 +281,66 @@ test("rejects a built version the Platform could not serve", () => {
     ],
   })).toContain("build_output vyžaduje právě jeden listener");
   expect(issues({ build_output: undefined, static_fallback: "spa" })).toContain("static_fallback smí být jen spolu s build_output");
+});
+
+// Module Standard 4.6 (decision 0195 point 24, LazurioPlatform F58 addendum
+// (2) of 2026-10-21): an App with its own server runs `start_script` from
+// main. Its process gets its listeners and secrets like its development run,
+// so its client (`build_output`) is bound by neither the one-listener nor the
+// no-secrets rule of a static App, and it routes its own requests.
+const serverScripts = {
+  scripts: {
+    dev: "bun --no-env-file run src/server.ts",
+    start: "bun --no-env-file run src/server.ts",
+    build: "vite build",
+  },
+};
+function serverRuntime(overrides = {}) {
+  return runtime({
+    start_script: "start",
+    build_script: "build",
+    build_output: "dist",
+    secrets: ["EXTERNAL_API_KEY"],
+    optional_secrets: ["OPTIONAL_API_KEY"],
+    ...overrides,
+  });
+}
+
+test("accepts an App with its own server from main (Module Standard 4.6)", () => {
+  // A client with two listeners and secrets.
+  expect(validateDeclaredRuntime({ runtime: serverRuntime(), packageJson: serverScripts })).toEqual([]);
+  // A server without a client, whose start script is its development script.
+  expect(validateDeclaredRuntime({
+    runtime: runtime({ start_script: "dev" }),
+    packageJson: serverScripts,
+  })).toEqual([]);
+  expect(validateAgainstSchema(serverRuntime(), runtimeSchema, "runtime")).toEqual([]);
+  expect(validateAgainstSchema(runtime({ start_script: "dev" }), runtimeSchema, "runtime")).toEqual([]);
+});
+
+test("rejects a server App the Platform could not start", () => {
+  const issues = (overrides, packageJson = serverScripts) =>
+    validateDeclaredRuntime({ runtime: serverRuntime(overrides), packageJson }).join("\n");
+  expect(issues({ start_script: " " })).toContain("start_script musí být neprázdný string");
+  expect(issues({ start_script: "serve" })).toContain("start_script serve neexistuje v scripts");
+  expect(issues({}, { scripts: { ...serverScripts.scripts, start: "vite --host $HOST --port $PORT" } }))
+    .toContain("start_script používá $PORT bez přenositelné fail-closed kontroly");
+  expect(issues({ static_fallback: "spa" })).toContain("static_fallback nesmí být spolu se start_script");
+  expect(issues({ static_fallback: "spa", build_output: undefined, build_script: undefined }))
+    .toContain("static_fallback nesmí být spolu se start_script");
+  expect(issues({ build_script: undefined })).toContain("build_output vyžaduje build_script");
+  expect(issues({}, { scripts: { dev: "bun --no-env-file run src/server.ts", start: "bun --no-env-file run src/server.ts" } }))
+    .toContain("build_output vyžaduje build_script");
+  expect(issues({ build_output: "../dist" })).toContain("build_output musí být relativní adresář");
+  // The static App rules stay out of a server App.
+  expect(issues({})).not.toContain("právě jeden listener");
+  expect(issues({})).not.toContain("nedovoluje");
+});
+
+test("the runtime schema refuses what Core refuses for start_script", () => {
+  const schemaIssues = (value) => validateAgainstSchema(value, runtimeSchema, "runtime").join("\n");
+  expect(schemaIssues(serverRuntime({ static_fallback: "404" }))).toContain("zakázané 'not' větvi");
+  expect(schemaIssues(serverRuntime({ start_script: "" }))).toContain("minimum 1");
+  // A static App keeps its fallback.
+  expect(validateAgainstSchema(builtRuntime({ static_fallback: "spa" }), runtimeSchema, "runtime")).toEqual([]);
 });

@@ -912,6 +912,10 @@ přihlášený přímý odkaz a pak ji udržuje v aktuální session. Cold start
 moduly nespouští; první otevření začíná z `main` a session přepnutí na worktree
 se nepersistuje. Explicitní `Stop` platí i pro hosted a drží do dalšího
 otevření; health, katalog a browserové požadavky na pozadí nejsou Open.
+App z `main`, na jejímž listeneru 20 minut není otevřené spojení, Launchpad
+uspí (zastaví); to není explicitní `Stop` a další Open nebo přihlášený přímý
+odkaz ji spustí znovu v nejnovější sestavené verzi. App, kterou jiná App
+deklaruje jako souseda (0176), neusíná (decision 0195 bod 23).
 Legacy nebo nevalidní lease takovou autoritu nedává.
 Productionspace
 repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.

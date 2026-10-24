@@ -100,7 +100,7 @@ Konvence: `prepare:app` a `check:prepared`.
 - `prepare_script` dělá **všechno**, co start nesmí: build klienta, generování
   dat, `ensure` symlinků, migrace repository-db, stažení WASI bindings…
   Musí být idempotentní a bez síťového volání mimo instalaci závislostí.
-  Výjimkou je App s `build_output` (kap. 4.5): její statické sestavení je
+  Výjimkou je App s `build_output` (kap. 4.5 a 4.6): její sestavení je
   jen v `build_script` a `prepare_script` dělá jen to, co potřebuje vývojový
   server i sestavení (například `astro sync`), nikdy sestavení samotné, jinak
   by běželo dvakrát.
@@ -333,12 +333,14 @@ Vite bez vlastního serveru) k tomu v `lazurio.runtime` deklaruje:
   `dist`. Segmenty se oddělují `/`, každý odpovídá
   `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (žádné `.`, `..`, úvodní tečka, absolutní
   cesta ani zpětné lomítko), nejvýše 200 znaků.
-- **`static_fallback`** (volitelně, jen s `build_output`): `"404"` (výchozí;
+- **`static_fallback`** (volitelně, jen s `build_output` a nikdy se
+  `start_script`): `"404"` (výchozí;
   neznámá cesta dostane `404.html` sestavení se stavem 404, pokud ho
   sestavení má) nebo `"spa"` (neznámá cesta, jejíž poslední segment nemá
   tečku, dostane `index.html` se stavem 200).
 
-Kdo deklaruje `build_output`, splňuje zároveň:
+Kdo deklaruje `build_output`, splňuje zároveň (body 2, 3 a 5 platí jen pro
+statickou App, tedy bez `start_script`; App s vlastním serverem drží kap. 4.6):
 
 1. `build_script` je deklarovaný a jmenuje neprázdný skript v `scripts`.
 2. App má právě jeden listener (entrypoint) s `protocol: "http"` a
@@ -367,10 +369,70 @@ po jednom a s nízkou prioritou, do té doby servíruje předchozí sestavení a
 pak ho vymění. Neúspěšné sestavení nechá běžet předchozí verzi; vývojovou
 verzi spustí jen výslovná volba uživatele nebo `lazurio module start --dev`.
 
-App s vlastním serverem (Bun server, Vite s API v dev pluginech) zatím
-`build_output` nedeklaruje a dál běží přes `dev` skript; její produkční start
-(`start_script`) přijde jako druhá fáze. App, jejíž API žije jen ve
-vývojovém serveru, převede Agent po Modulech podle návodu (0173).
+App s vlastním serverem (Bun server, API vedle klienta) statickou sestavenou
+verzi nedeklaruje: z `main` ji spouští její `start_script` podle kap. 4.6.
+App, jejíž API žije jen ve vývojovém serveru (Vite s API v dev pluginech),
+převede Agent po Modulech podle návodu (0173) na vlastní server se
+`start_script`.
+
+### 4.6 Serverová App z `main` (`start_script`)
+
+App s vlastním serverem běží z `main` jako **jeden proces v produkčním
+režimu** a svého klienta dostane sestaveného stejně jako statická App
+(rozhodnutí 0195 bod 24, LazurioPlatform F58 dodatek (2) z 2026-10-21).
+V `lazurio.runtime` k tomu deklaruje:
+
+- **`start_script`**: skript balíčku App, který spustí její produkční server.
+  Smí být stejný jako `dev_script`, pokud už ten je produkčním serverem
+  (například Bun server, který ve vývoji připojí Vite middleware a jinak
+  servíruje sestaveného klienta). Platí pro něj kap. 4.1 stejně jako pro
+  `dev`: jeden proces, nic nesestavuje a každé volání `bun` nese
+  `--no-env-file`. Vývojový server (`vite` bez `build`, `astro dev`,
+  `bun --hot`, `bun --watch`) to není.
+- **klienta** (volitelně): `build_script` a `build_output` jako v kap. 4.5.
+  `build_script` sestaví jen klienta (například `vite build`); serverový kód
+  se nesestavuje a běží z checkoutu. `static_fallback` se `start_script`
+  deklarovat nelze, protože požadavky směruje server App sám.
+
+Body 1 a 4 kap. 4.5 platí i pro ni, body 2, 3 a 5 ne: server dostane své
+listenery (kolik jich deklaruje), tajemství, adresy sousedů a externí adresu
+stejně jako vývojová verze a health odpovídá jeho proces, ne soubor
+sestavení. Sestavení klienta ale nic z toho nedostane (bod 4), takže se do
+klienta nic tajného nezapeče.
+
+- **Start z `main`** (otevření, Start, na Prostředí na serveru i přihlášený
+  přímý odkaz): Launchpad vezme nejnovější sestavení (když žádné není,
+  nejdřív sestaví), provede běžnou přípravu (kap. 3), protože server běží
+  z checkoutu a potřebuje závislosti, a spustí `bun --no-env-file run
+  <start_script>` v adresáři balíčku App s prostředím startované App (F26),
+  `NODE_ENV=production` a s klientem navíc `LAZURIO_RUNTIME_BUILD_OUTPUT`:
+  cestou k uloženému výstupu sestavení mimo checkout, který se za běhu
+  nemění. Server servíruje klienta odtud a ve vývojové verzi, kde proměnná
+  chybí, z vlastního výstupu:
+  `process.env.LAZURIO_RUNTIME_BUILD_OUTPUT ?? "./dist"`.
+- **Klíčem sestavení je jen commit Modulu.** Data server čte za běhu
+  (rozhodnutí 0195 bod 6), takže nový commit datového repa ani
+  deklarovaného slotu App nesestavuje ani nerestartuje.
+- **Po změně `main`** Launchpad nový commit sestaví na pozadí jako v kap.
+  4.5 a hned po úspěšném sestavení App restartuje: zastaví ji a spustí novou
+  verzi. Výpadek trvá několik sekund (změřeno 3–4 s, většinu zabere
+  příprava); druhý souběžný proces nevzniká. Běh spuštěný výslovně jako
+  vývojová verze se nenahrazuje.
+- **Selhání.** Neúspěšné sestavení App nerestartuje: dál běží předchozí
+  verze a stránka nabídne výslovné spuštění vývojové verze. Commit, který
+  se sestaví, ale nenastartuje, App ukončí s nálezem a nabídkou vývojové
+  verze; předchozí verze se nedrží, protože její serverový kód žil
+  v checkoutu. Proto `main` Modulu hlídá CI (`MS-13`).
+- **Náhled z worktree** zůstává vývojový server (`dev` skript, rozhodnutí
+  0195 bod 6).
+
+**Mezikrok.** `start_script` zná LazurioPlatform od vydání s
+Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573; starší vydání
+neznámé klíče `lazurio.runtime` odmítá a App by nespustilo. Modul ho proto deklaruje až
+tam, kde takové vydání běží na všech Prostředích, která ho spouštějí,
+s referenční Organizací (0204) napřed. Launchpad tohoto repa
+(`lazurio launchpad serve`, `lazurio module start`) klíč přijme, ale App
+dál spouští přes `dev` skript.
 
 ## 5. Hranice a závislosti
 
@@ -498,12 +560,24 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 
 - příprava před startem (`check_script` → `prepare_script`), start `dev`
-  skriptu s uzavřeným env (F26), `umask 077`, loopback;
-- **sestavená verze z `main`** u App s `build_output` (kap. 4.5): sestavení
-  po jednom a s nízkou prioritou, servírování výstupu vlastním statickým
-  serverem, přestavění na pozadí po změně `main` a výměna, až je nové
-  sestavení hotové; náhled z worktree a App bez `build_output` běží přes
-  `dev` skript;
+  skriptu (z `main` u App se `start_script` start tohoto skriptu, kap. 4.6)
+  s uzavřeným env (F26), `umask 077`, loopback;
+- **sestavená verze z `main`** u App s `build_output` (kap. 4.5) a u App se
+  `start_script` (kap. 4.6): sestavení po jednom a s nízkou prioritou,
+  přestavění na pozadí po změně `main`; statický výstup servíruje vlastním
+  statickým serverem a vymění ho bez výpadku, App s vlastním serverem po
+  úspěšném sestavení restartuje. Náhled z worktree a App bez `build_output`
+  i `start_script` běží přes `dev` skript;
+- **uspávání**: App spuštěnou z `main`, na jejímž listeneru 20 minut není
+  otevřené spojení, zastaví (rozhodnutí 0195 bod 23, LazurioPlatform F58
+  dodatek z 2026-10-21), stejně jako prohlížeč uspává karty. Není to výslovné
+  Zastavit: další otevření, na Prostředí na serveru i přihlášený přímý
+  odkaz, ji spustí znovu v nejnovější sestavené verzi a první požadavek
+  počká na start. Co App drží jen v paměti, se ztratí. App, kterou jiná App
+  Organizace deklaruje jako souseda (slot Modulu `workspace/<slug>`
+  v `required_module_slots`, kap. 4.2), neusíná vůbec, dokud ji někdo
+  výslovně nezastaví. Modul, který musí pracovat bez uživatele, není App
+  Modulu, ale služba. Náhled z worktree se řídí rozhodnutím 0195 bod 6;
 - **adresy deklarovaných sousedů**: při každém startu předá za každý
   deklarovaný slot Modulu `workspace/<slug>` vlastní Organizace
   `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` z leasu výchozí App souseda
@@ -526,7 +600,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 Launchpad **nedělá**: nedědí PATH ani env uživatele, nečte `.env`,
 nepíše tajemství do logů ani souborů, nespouští souseda kvůli volání jiné App
 a volání mezi Moduly neproxuje,
-nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s `build_output` podle kap. 4.5), nepřebírá porty, nenabízí legacy
+nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s `build_output` podle kap. 4.5 a 4.6), nepřebírá porty, nenabízí legacy
 `LAZURIO_RUNTIME_HOST/PORT` (odstraní jedno vydání po dokončení W2 migrace).
 
 ## 11. Konformance: `lazurio module setup`
@@ -543,11 +617,11 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | --- | --- |
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
 | `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
-| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; povinná `secrets` je v tomto Launchpadu bez čtečky trezoru `warn`, `optional_secrets` dovoluje nedostupnou capability (kap. 4.3) |
+| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` a deklarovaný `start_script` existují; povinná `secrets` je v tomto Launchpadu bez čtečky trezoru `warn`, `optional_secrets` dovoluje nedostupnou capability (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
-| `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
+| `MS-05` | `dev` skript i `start_script` (kap. 4.6) jsou jednoprocesové: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…`; `start_script` nespouští vývojový server (`vite` bez `build` nebo `preview`, `astro dev`, `--hot`, `--watch`) |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` čtené z prostředí (`process.env`, `Bun.env`, `import.meta.env`, v Pythonu `os.environ`, `os.getenv`) jen pro souseda, kterého App deklaruje jako slot Modulu `workspace/<slug>` (decision 0176 dodatek z 2026-10-10; zmínka jména v textu se nepočítá, text, který čtení doslova opisuje, ano; jméno předané přes konstantu nebo skládané za běhu kontrola nevidí); port leasu není ve zdrojích App zapsaný natvrdo |
-| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file` před vstupem a bez `--env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
+| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě (`dev` i `start_script`) s `--no-env-file` před vstupem a bez `--env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení `db/` a `generated/` sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |
@@ -558,6 +632,15 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 Report `lazurio.module_setup.report.v1` nese seznam kontrol; `current`
 znamená všechny `pass`. Platforma čte totéž (Diagnostika, katalog), nepíše
 si vlastní tabulku.
+
+Klíče sestavené verze (`build_output`, `static_fallback`, `start_script`)
+drží runtime kontrakt Core (`runtime-contract-lib`,
+`lazurio-runtime.schema.json`) ještě před kontrolami `MS`: `static_fallback`
+spolu se `start_script`, `build_output` bez existujícího `build_script` nebo
+statická App s více listenery či tajemstvími jsou chyba kontraktu. Uspávání
+(kap. 10) konformance neměří: App musí po probuzení fungovat bez stavu, který
+držela jen v paměti, a soused, kterého App volá, musí být deklarovaný
+v `required_module_slots`, jinak usne.
 
 ## 12. Migrace (W0–W3)
 

@@ -17,9 +17,9 @@ import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
 export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-01", summary: "lazurio.module.json platné, id odpovídá slotu, lease v poolu Organizace, pooly disjunktní" },
   { id: "MS-02", summary: "packageManager je přesný Bun a lockfile je commitnutý a čerstvý" },
-  { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script existuje" },
+  { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script (a deklarovaný start_script) existuje" },
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
-  { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
+  { id: "MS-05", summary: "dev skript i start_script spouštějí právě jeden proces a start_script není vývojový server" },
   { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_*, lease soubor ani manifest sousedního Modulu, adresu souseda čte jen pro deklarovaný Modul a port leasu nemá zapsaný natvrdo" },
   { id: "MS-07", summary: "žádné .env* na start cestě, žádné dotenv a Bun se spouští s --no-env-file" },
   { id: "MS-08", summary: "TypeScript strict a žádné .js/.mjs/.cjs zdroje App" },
@@ -33,9 +33,9 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
 const CHECK_ACTIONS = Object.freeze({
   "MS-01": "Přepište port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověřte start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
   "MS-02": "Doplňte packageManager na přesnou verzi Bunu z Lazuria a commitněte čerstvý bun.lock z bun install.",
-  "MS-03": "Doplňte lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
+  "MS-03": "Doplňte lazurio.runtime s listenery, health a existujícím dev_script (a start_script, pokud ho App deklaruje) podle manual/module-setup.md.",
   "MS-04": "Doplňte lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
-  "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
+  "MS-05": "Zjednoduš dev skript i start_script na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy, do build_script nebo do App. start_script spouští produkční server App, ne vývojový server (vite bez build, astro dev, --hot, --watch).",
   "MS-06": "Čtěte host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit). Bez nich ať App skončí chybou; port leasu žije jen v lazurio.module.json. Odkaz na App sousedního Modulu pro prohlížeč odvoďte z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN; API souseda volejte ze serveru na LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN a souseda deklarujte jako slot Modulu workspace/<slug> v lazurio.runtime.required_module_slots, nikdy z jeho manifestu (decision 0176 a dodatek z 2026-10-10).",
   "MS-07": "Odstraňte .env soubory a dotenv a spouštějte Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklarujte v lazurio.runtime.secrets (trezor Environmentu).",
   "MS-08": "Zapněte strict v tsconfig.json (nebo extends strict preset) a převeďte .js/.mjs/.cjs zdroje a configy na TypeScript.",
@@ -167,6 +167,22 @@ export async function evaluateModuleStandard({
     // MS-03 runtime, listeners, health, dev_script
     const runtime = packageJson?.lazurio?.runtime;
     const devScriptName = typeof runtime?.dev_script === "string" ? runtime.dev_script : "dev";
+    // An App with its own server also starts from main as `start_script`, its
+    // one production process (kap. 4.6, decision 0195 point 24). The start
+    // path is every command the development script and the start script run,
+    // each named by the script it starts from; a command both reach is read
+    // once. MS-05, MS-07 and MS-11 hold for all of it.
+    const startScriptName = typeof runtime?.start_script === "string" ? runtime.start_script : null;
+    const devChain = nonEmptyString(scripts[devScriptName]) ? scriptChain(scripts, devScriptName) : [];
+    const productionChain = startScriptName !== null && nonEmptyString(scripts[startScriptName])
+      ? scriptChain(scripts, startScriptName)
+      : [];
+    const startPath = [
+      ...devChain.map((command) => ({ script: devScriptName, command })),
+      ...productionChain
+        .filter((command) => !devChain.includes(command))
+        .map((command) => ({ script: startScriptName, command })),
+    ];
     if (!runtime || typeof runtime !== "object") {
       record("MS-03", "fail", `${label}: lazurio.runtime chybí`);
     } else {
@@ -179,6 +195,9 @@ export async function evaluateModuleStandard({
       }
       if (!nonEmptyString(scripts[devScriptName])) {
         record("MS-03", "fail", `${label}: dev_script ${devScriptName} neexistuje v scripts`);
+      }
+      if (startScriptName !== null && !nonEmptyString(scripts[startScriptName])) {
+        record("MS-03", "fail", `${label}: start_script ${startScriptName} neexistuje v scripts`);
       }
       // Core validates both lists. This source Launchpad has no vault reader;
       // required secrets still need a compatible Platform Environment. Optional
@@ -254,12 +273,16 @@ export async function evaluateModuleStandard({
       }
     }
 
-    // MS-05 single-process dev script
-    if (nonEmptyString(scripts[devScriptName])) {
-      for (const command of scriptChain(scripts, devScriptName)) {
-        for (const finding of devScriptFindings(command)) {
-          record("MS-05", "fail", `${label}: ${devScriptName} obsahuje ${finding}: ${command}`);
-        }
+    // MS-05 single-process dev and start scripts; the production start is no
+    // development server
+    for (const { script, command } of startPath) {
+      for (const finding of devScriptFindings(command)) {
+        record("MS-05", "fail", `${label}: ${script} obsahuje ${finding}: ${command}`);
+      }
+    }
+    for (const command of productionChain) {
+      for (const finding of developmentServerFindings(command)) {
+        record("MS-05", "fail", `${label}: start_script ${startScriptName} spouští vývojový server (${finding}): ${command}`);
       }
     }
 
@@ -315,10 +338,9 @@ export async function evaluateModuleStandard({
     // started with --no-env-file (HumanAndMachines/Lazurio#471); every Bun
     // invocation on the start path carries the flag before its entry and
     // loads no --env-file.
-    const startPath = nonEmptyString(scripts[devScriptName]) ? scriptChain(scripts, devScriptName) : [];
-    for (const command of startPath) {
+    for (const { script, command } of startPath) {
       for (const finding of bunEnvFileFindings(command)) {
-        record("MS-07", "fail", `${label}: ${devScriptName} ${BUN_ENV_FILE_FINDINGS[finding]}: ${command}`);
+        record("MS-07", "fail", `${label}: ${script} ${BUN_ENV_FILE_FINDINGS[finding]}: ${command}`);
       }
     }
 
@@ -370,10 +392,9 @@ export async function evaluateModuleStandard({
     }
 
     // MS-11 start-path scripts: machine paths and symlink creation
-    const startCommands = nonEmptyString(scripts[devScriptName]) ? scriptChain(scripts, devScriptName) : [];
-    for (const command of startCommands) {
-      for (const path of absoluteMachinePaths(command)) record("MS-11", "fail", `${label}: ${devScriptName} obsahuje ${path}`);
-      if (/\bln\s+-[a-zA-Z]*s/.test(command)) record("MS-11", "fail", `${label}: ${devScriptName} vytváří symlink: ${command}`);
+    for (const { script, command } of startPath) {
+      for (const path of absoluteMachinePaths(command)) record("MS-11", "fail", `${label}: ${script} obsahuje ${path}`);
+      if (/\bln\s+-[a-zA-Z]*s/.test(command)) record("MS-11", "fail", `${label}: ${script} vytváří symlink: ${command}`);
       for (const entry of commandEntryFiles(command)) {
         const entryPath = posix.normalize(joinPosix(app.appDirectory, entry));
         if (escapesRoot(entryPath)) continue;
@@ -552,6 +573,27 @@ export function devScriptFindings(command) {
   ];
   for (const [label, pattern] of words) if (pattern.test(unquoted)) findings.push(label);
   return findings;
+}
+
+/**
+ * What makes a command a development server, which the production start of
+ * an App with its own server (`start_script`, kap. 4.6) must not run: Vite's
+ * development server (`vite` without `build` or `preview`), `astro dev` and
+ * Bun's reloading modes `--hot` and `--watch`. A Bun server started from its
+ * own file is none of them, whatever the file is named.
+ */
+export function developmentServerFindings(command) {
+  const tokens = (String(command ?? "").match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? [])
+    .map((token) => token.replace(/^(["'])(.*)\1$/, "$2"));
+  const findings = new Set();
+  tokens.forEach((token, index) => {
+    const rest = tokens.slice(index + 1);
+    const tool = posix.basename(token).replace(/\.[cm]?js$/, "");
+    if (tool === "vite" && !rest.some((item) => item === "build" || item === "preview")) findings.add("vite");
+    if (tool === "astro" && rest.includes("dev")) findings.add("astro dev");
+    if (token === "--hot" || token === "--watch") findings.add(token);
+  });
+  return [...findings];
 }
 
 const BUN_ENV_FILE_FINDINGS = Object.freeze({
