@@ -264,14 +264,16 @@ organizačního bota samy neomezují práva takto vloženého účtu.
 |---|---|
 | Lazurio účty, propojené identity, členství a oprávnění ke vstupu | Auth na standardním identity provideru; Dashboard je spravuje, nevytváří druhý seznam ACL. |
 | Technická existence, vlastník a nasazené verze Environmentu; konfigurace a důkazy sítě | Deployment Repo vlastníka a řízený apply Machines. |
-| Schválení zařízení pro Organizaci | Do přechodu na Auth síťový záměr v Deployment Repu vlastníka hostu jako jediný zapisovatel, vynucený řízeným apply Machines; cílově Auth spravovaný z Dashboardu. |
+| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Do přechodu na Auth síťový záměr v Deployment Repu vlastníka hostu jako jediný zapisovatel, vynucený řízeným apply Machines; cílově Auth spravovaný z Dashboardu. |
 | Přidělení uživatele a delegované sdílení | Jeden autoritativní account/access kontrakt Auth spravovaný přes Dashboard. Dosavadní infra assignment je migrační vstup, ne druhý nezávislý writer. |
 | Repozitáře, Team capability, schválení PR a branch rules | GitHub. |
 | Tajné hodnoty | Příslušný trezor/custody; ostatní vrstvy drží reference. |
 | Zobrazení vztahů a stavu | Dashboard, odvozeně z oprávnění, deklarací, evidence apply a čerstvého hlášení hostu. |
 
 Mapa má vrstvy **Uživatelé → Zařízení → Environmenty → Připojené aplikace**,
-seskupené po Organizacích. Rozlišuje plný a aplikační přístup, směrové
+seskupené po Organizacích. U Organizace s veřejným DNS (0213) vrstva zařízení
+chybí: síťová větev vede přes veřejný vstup serveru místo schváleného zařízení
+a tailnetu, členství a konkrétní grant u brány zůstávají společné. Rozlišuje plný a aplikační přístup, směrové
 Environment-to-Environment operace, přidělení a vlastnictví. Ukazuje také
 čekající schválení, požadovaný, nasazený, živý a odvolávaný stav. Není novou
 autoritou. Uživatel bez GitHubu smí vidět své autorizované prostředky bez
@@ -282,9 +284,11 @@ Matěje z 2026-10-06 večer v DEV-6640).
 
 ```mermaid
 flowchart LR
-  U[Uživatel: Lazurio účet] --> D[Zařízení schválené Adminem]
+  U[Uživatel: Lazurio účet] -->|Organizace s tailnetem| D[Zařízení schválené Adminem]
   D --> H[Headscale tailnet]
   H --> G[Brána: členství a konkrétní oprávnění]
+  U -->|Organizace s veřejným DNS, 0213| E[Veřejný vstup serveru: jen deklarovaná jména]
+  E --> G
   G -->|celý Environment| A[Environment A]
   G -->|jen aplikace| P[Aplikace v Environmentu]
   A -->|schválené vzdálené operace| B[Environment B]
