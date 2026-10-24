@@ -19,6 +19,6 @@ První stupeň je obyčejné ptaní: napíšete otázku a dostanete odpověď. H
 
 Druhý stupeň je práce s podklady: ukážete text, úkol nebo stránku a požádáte o návrh. Tady už může vzniknout něco použitelného, pokud jasně řeknete, z čeho má AI vycházet.
 
-Třetí stupeň je pracovní spolupráce: AI kolega ví, kde co hledat, umí připravit změnu a nechá ji zkontrolovat. Tady nejvíc záleží na hranicích a ověření.
+Třetí stupeň je pracovní spolupráce: AI agent ví, kde co hledat, umí připravit změnu a nechá ji zkontrolovat. Tady nejvíc záleží na hranicích a ověření.
 
 Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

@@ -1,5 +1,23 @@
 # Guide GEN3 changelog
 
+## 2026-10-24
+
+- DEV-6617 (issue #628): lekce učí model z dodatků rozhodnutí 0156,
+  0169/0170 a 0103 z 2026-10-24. AI už v nich nevystupuje jako kolega
+  s vlastním místem a pravomocemi a výsledek práce agenta se jmenuje pull
+  request; Publikace zůstává.
+  - Lekce 11 (titulek „AI agenti a nástroje“) vysvětluje AI agenta, který
+    pracuje pro svého uživatele, Prostředí Henry pro automatizovanou práci
+    Organizace a Buddyho v Osobním Prostředí; kvíz má druhou otázku na
+    Prostředí Henry.
+  - Lekce 19 učí pull request a Publikaci jako chvíli, kdy změna začne
+    platit; kvíz má druhou otázku na Publikaci. Lekce 15 doplňuje, že
+    v napojené službě agent práci jen připraví (třeba koncept e-mailu)
+    a odeslat ji smí až na výslovný pokyn.
+  - Ostatní lekce, praktické úkoly, kvízy, cesta, odznak „Umím zadat práci“
+    a `README.md` mluví o agentech. Id, složky, URL a pořadí lekcí se
+    nemění; starší záznamy tohoto changelogu zůstávají historií.
+
 ## 2026-08-26
 
 - DEV-6507 sjednotil existujícího Guide průvodce s výchozí vizuální identitou

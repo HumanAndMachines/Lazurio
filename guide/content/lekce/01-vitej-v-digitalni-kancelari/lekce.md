@@ -14,11 +14,11 @@ achievement_on_complete: "first-lesson"
 - Co se v této lekci naučíte:
   - co je digitální kancelář v běžném jazyce;
   - proč tu nejsou jen další složky;
-  - jak vám může pomoct AI kolega.
+  - jak vám může pomoct AI agent.
 
 Digitální kancelář je společné pracovní místo týmu. Najdete tu práci, znalosti, návody i pomocníky. Není to technická hračka; je to způsob, jak méně hledat a víc rozumět tomu, co se děje.
 
-Představte si ji jako kancelář, kde má každá věc svoje místo. Úkoly nejsou rozházené po chatech, důležité znalosti nezůstávají jen v hlavě jednoho člověka a AI kolega může pracovat s kontextem, ne jen hádat z jedné věty.
+Představte si ji jako kancelář, kde má každá věc svoje místo. Úkoly nejsou rozházené po chatech, důležité znalosti nezůstávají jen v hlavě jednoho člověka a AI agent může pracovat s kontextem, ne jen hádat z jedné věty.
 
 První pravidlo je jednoduché: nemusíte znát vnitřnosti systému. Stačí vědět, kam se jít podívat, jak se zeptat a kdy něco raději nechat zkontrolovat.
 

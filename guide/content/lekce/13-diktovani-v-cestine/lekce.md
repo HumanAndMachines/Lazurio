@@ -15,7 +15,7 @@ ukol: false
   - jak diktovat jasně;
   - co po diktování nechat upravit.
 
-Nemusíte všechno psát dokonale. Někdy je nejrychlejší říct zadání nahlas a nechat AI kolegu, aby ho srovnal do jasných bodů.
+Nemusíte všechno psát dokonale. Někdy je nejrychlejší říct zadání nahlas a nechat agenta, aby ho srovnal do jasných bodů.
 
 Diktujte jako člověku: co řešíte, pro koho to je, co nechcete pokazit. Nevadí, když věty nejsou krásné. Důležitý je směr.
 
