@@ -3687,16 +3687,19 @@ export function runtimeAppStatus(app) {
 /**
  * The Bun versions the mounted Apps pin (decision 0171, addendum of
  * 2026-10-24), as information only: never a warning or a failure. Each exact
- * pin (`packageManager: bun@x.y.z`) with the number of Apps on it and whether
- * Lazurio's runtime cache holds it for this system, then the cache's size. A
- * pin that is not exact is MS-02's finding and is not listed here. The user's
- * own Bun stays measured exactly by `platform.bun_path`.
+ * pin (`packageManager: bun@x.y.z`) with the number of Apps on it and where its
+ * Bun comes from: the user's Bun when its version is the pin (the resolver's
+ * first choice, no cache needed), otherwise Lazurio's runtime cache for this
+ * system, or a fetch on the first start. Then the cache's size. A pin that is
+ * not exact is MS-02's finding and is not listed here. The user's own Bun
+ * stays measured exactly by `platform.bun_path`.
  */
 export async function moduleRuntimesCheck({
   root,
   apps = [],
   cacheRoot = moduleBunRoot(homedir()),
   system = undefined,
+  userBunVersion = userBunVersionOf(resolveBunExecutable()),
 }) {
   const appsByVersion = new Map();
   const packagePaths = new Set(apps
@@ -3715,8 +3718,11 @@ export async function moduleRuntimesCheck({
   const cached = new Map();
   for (const version of versions) cached.set(version, await bunVersionCached(version, { cacheRoot, system }));
   const bytes = await moduleBunCacheBytes({ cacheRoot });
+  const source = (version) => version === userBunVersion
+    ? "Bun uživatele"
+    : cached.get(version) ? "v mezipaměti" : "stáhne se při prvním startu";
   const pins = versions.map((version) =>
-    `${version} (${formatCount(appsByVersion.get(version), "aplikace", "aplikace", "aplikací")}, ${cached.get(version) ? "v mezipaměti" : "není v mezipaměti"})`);
+    `${version} (${formatCount(appsByVersion.get(version), "aplikace", "aplikace", "aplikací")}, ${source(version)})`);
   const cache = bytes === 0 ? "mezipaměť Bunu Lazuria je prázdná" : `mezipaměť Bunu Lazuria zabírá ${formatBytes(bytes)}`;
   return {
     id: "launchpad.module_runtimes",
@@ -3732,8 +3738,17 @@ export async function moduleRuntimesCheck({
       ...versions.map((version) => `bun@${version}: apps ${appsByVersion.get(version)}, cached ${cached.get(version) ? "yes" : "no"}`),
       `cache: ${cacheRoot}`,
       `cache_bytes: ${bytes}`,
+      `user_bun: ${userBunVersion ?? "unknown"}`,
     ],
   };
+}
+
+// The version of the user's Bun, which the resolver tries first for each pin;
+// null when it does not answer with an exact version.
+function userBunVersionOf(executable, run = runCommand) {
+  const result = run(executable, ["--version"]);
+  const version = result.ok ? result.stdout.trim() : "";
+  return /^\d+\.\d+\.\d+$/u.test(version) ? version : null;
 }
 
 function formatBytes(bytes) {

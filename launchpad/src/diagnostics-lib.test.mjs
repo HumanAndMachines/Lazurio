@@ -249,25 +249,39 @@ test("Doctor lists the exact Bun pins of the mounted Apps with their App counts,
   await writeFile(program, "x".repeat(2048));
   const system = async () => ({ platform: "linux", arch: "x64", libc: "glibc", avx2: true });
 
-  const check = await moduleRuntimesCheck({ root, apps, cacheRoot, system });
+  // The user's Bun runs a matching pin with no cache at all, so the pin says so
+  // instead of a cache state that would read as missing.
+  const check = await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.2" });
   expect(check).toMatchObject({ id: "launchpad.module_runtimes", status: "ok", severity: "runtime", title: "Bun aplikací" });
   expect(check.message).toBe(
-    "Aplikace připínají Bun 1.4.2 (1 aplikace, není v mezipaměti) a 1.4.3 (1 aplikace, v mezipaměti); mezipaměť Bunu Lazuria zabírá 2 kB.",
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, Bun uživatele) a 1.4.3 (1 aplikace, v mezipaměti); mezipaměť Bunu Lazuria zabírá 2 kB.",
   );
   expect(check.details).toEqual([
     "bun@1.4.2: apps 1, cached no",
     "bun@1.4.3: apps 1, cached yes",
     `cache: ${cacheRoot}`,
     "cache_bytes: 2048",
+    "user_bun: 1.4.2",
   ]);
+
+  // Another uncached pin is fetched on its first start; an unknown user Bun
+  // leaves only the cache state.
+  expect((await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.3" })).message).toBe(
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, stáhne se při prvním startu) a 1.4.3 (1 aplikace, Bun uživatele); mezipaměť Bunu Lazuria zabírá 2 kB.",
+  );
+  const unknownUser = await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: null });
+  expect(unknownUser.message).toBe(
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, stáhne se při prvním startu) a 1.4.3 (1 aplikace, v mezipaměti); mezipaměť Bunu Lazuria zabírá 2 kB.",
+  );
+  expect(unknownUser.details.at(-1)).toBe("user_bun: unknown");
 
   // Several Apps on one pin count once each; nothing pinned and no cache is still information.
   apps.push(await app("organizations/Beta/workspace/wiki/app/v1/package.json", "bun@1.4.3"));
-  expect((await moduleRuntimesCheck({ root, apps, cacheRoot, system })).details.slice(0, 2)).toEqual([
+  expect((await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.2" })).details.slice(0, 2)).toEqual([
     "bun@1.4.2: apps 1, cached no",
     "bun@1.4.3: apps 2, cached yes",
   ]);
-  const empty = await moduleRuntimesCheck({ root, apps: [], cacheRoot: join(root, "absent"), system });
+  const empty = await moduleRuntimesCheck({ root, apps: [], cacheRoot: join(root, "absent"), system, userBunVersion: "1.4.2" });
   expect(empty).toMatchObject({ id: "launchpad.module_runtimes", status: "ok" });
   expect(empty.message).toBe("Žádná aplikace nepřipíná přesnou verzi Bunu; mezipaměť Bunu Lazuria je prázdná.");
 });
