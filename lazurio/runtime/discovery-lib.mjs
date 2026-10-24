@@ -2719,6 +2719,10 @@ export async function discoverLaunchpadApps(
       dev_script: app.dev_script,
       preview_script: app.preview_script ?? null,
       build_script: app.build_script ?? null,
+      // The built version from main (Module Standard 4.5 and 4.6).
+      start_script: app.start_script ?? null,
+      build_output: app.build_output ?? null,
+      static_fallback: app.static_fallback ?? null,
       required_module_slots: app.required_module_slots ?? [],
       listeners: app.listeners ?? [],
       entrypoint_listener: app.entrypoint_listener ?? null,

@@ -5,7 +5,9 @@ export const UPDATE_CLI_USAGE = `Použití: lazurio update [--json] [--root <ces
 Aktualizuje celou spravovanou hierarchii Lazurio Root → Organization Rooty →
 Workspace Moduly. Productionspace, Personalspace, worktrees a nested
 repository-db zůstávají nedotčené. Bezpečné lokální změny uloží do ověřeného
-recovery stashe; historii, kterou nelze fast-forwardnout, předá Codexu.`;
+recovery stashe; historii, kterou nelze fast-forwardnout, předá Codexu.
+U posunutého Modulu sestaví novou verzi každé App, která z main běží
+sestavená; běžící App nerestartuje, novou verzi spustí další otevření.`;
 
 export function parseUpdateCliArgs(argv) {
   const options = { json: false, help: false, root: null };
@@ -41,6 +43,10 @@ export function formatUpdateLaneReport(report) {
     const symbol = result.state === "blocked" ? "!" : result.state === "updated" ? "✓" : "·";
     lines.push(`${symbol} ${result.path}: ${result.state} — ${result.message}`);
     if (result.recovery_stash) lines.push(`  Recovery stash: ${result.recovery_stash}`);
+    for (const build of result.builds ?? []) {
+      if (build.state === "built") lines.push(`  ✓ Sestavena nová verze aplikace ${build.title}.`);
+      if (build.state === "failed") lines.push(`  ! ${build.title}: ${build.message}`);
+    }
     if (result.next_action?.prompt) {
       lines.push("  Prompt pro Codex:");
       lines.push(...result.next_action.prompt.split("\n").map((line) => `    ${line}`));

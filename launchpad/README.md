@@ -583,9 +583,12 @@ Konkrétní verze aplikace ve svém `package.json` popíše, jak se spouští, a
 #### Pravidla aplikace
 
 Runtime má právě jeden `entrypoint` listener a může mít `auxiliary` listenery.
-Všechny patří k procesu spuštěnému přes `dev_script`; to je jediný lifecycle
-skript, který Launchpad spouští. `preview_script` a `build_script` jsou jen
-metadata.
+Všechny patří k jednomu procesu App. Z worktree je to vždy `dev_script`. Z
+`main` na localhostu App s `build_output` běží jako sestavení
+(`build_script`) servírované statickým serverem Launchpadu a App se
+`start_script` jako tento skript v produkčním režimu; ostatní Apps z `main`
+spouští dál `dev_script` (decision 0212 bod 9, Module Standard kap. 4.7).
+`preview_script` je jen metadata.
 
 Každý listener odkazuje na lease Modulu. Main, verze a worktrees jedné
 aplikace tím používají přesně stejné lease; číselný port, `allocation`, `host`

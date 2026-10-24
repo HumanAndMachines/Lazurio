@@ -37,6 +37,20 @@ export function runtimeRecoveryModel(error = {}) {
     };
   }
 
+  // From main a built App runs as its build or not at all (decision 0212):
+  // the build failed and there is no earlier one to run instead.
+  if (failureKind === "build_unavailable" || code === "app_build_unavailable") {
+    return {
+      title: t("recovery.buildTitle"),
+      message: t("recovery.buildMessage"),
+      action: "codex",
+      actionLabel: t("common.solveWithCodex"),
+      code,
+      failureKind,
+      technical,
+    };
+  }
+
   if (["start_timeout", "starting_timeout", "health_timeout"].includes(failureKind)) {
     return {
       title: t("recovery.timeoutTitle"),
