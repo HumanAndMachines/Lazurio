@@ -1,17 +1,121 @@
 import { expect, test } from "bun:test";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 import {
+  REQUIRED_TOOL_VERSIONS,
   bunVersionFromPackageManager,
   classifyBunRuntime,
   classifyNodeRuntime,
+  classifyToolVersion,
   executablePathsMatch,
   nodeVersionFromOutput,
   nodeVersionRangeFromEngines,
   readRequiredBunVersion,
   readRequiredNodeVersionRange,
+  readToolchainManifest,
+  requiredNodeVersionRange,
+  requiredToolVersions,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
+
+// A synthetic lazurio/toolchain.json; `tools` replaces whole tool entries.
+function toolchainText({ tools = {}, ...rest } = {}) {
+  return JSON.stringify({
+    schema_version: "lazurio.toolchain.v1",
+    tools: {
+      bun: { default: "1.4.2", minimum: "1.4.2" },
+      node: { minimum: "22.12.0" },
+      uv: { default: "0.11.6" },
+      gh: { minimum: "2.57.0" },
+      git: { minimum: "2.31.0" },
+      ...tools,
+    },
+    ...rest,
+  });
+}
+
+function toolchainFrom(text) {
+  return readToolchainManifest({ root: "/fixture", readText: () => text });
+}
+
+test("the toolchain manifest is read from the given root and returned deeply frozen", () => {
+  const read = [];
+  const toolchain = readToolchainManifest({
+    root: "/fixture",
+    readText: (path) => {
+      read.push(path);
+      return toolchainText({ tools: { bun: { default: "1.4.4", minimum: "1.4.2" } } });
+    },
+  });
+  expect(read).toEqual([resolve("/fixture", "toolchain.json")]);
+  expect(toolchain).toEqual({
+    schema_version: "lazurio.toolchain.v1",
+    tools: {
+      bun: { default: "1.4.4", minimum: "1.4.2" },
+      node: { minimum: "22.12.0" },
+      uv: { default: "0.11.6" },
+      gh: { minimum: "2.57.0" },
+      git: { minimum: "2.31.0" },
+    },
+  });
+  expect(Object.isFrozen(toolchain)).toBe(true);
+  expect(Object.isFrozen(toolchain.tools)).toBe(true);
+  for (const tool of Object.values(toolchain.tools)) expect(Object.isFrozen(tool)).toBe(true);
+});
+
+test("the toolchain manifest fails clearly on anything but its exact shape", () => {
+  expect(() => toolchainFrom("not json")).toThrow("Lazurio toolchain manifest cannot be read");
+  expect(() => toolchainFrom("[]")).toThrow("Lazurio toolchain manifest is invalid");
+  expect(() => toolchainFrom(toolchainText({ schema_version: "lazurio.toolchain.v2" })))
+    .toThrow('unknown schema_version "lazurio.toolchain.v2"');
+  expect(() => toolchainFrom(toolchainText({ owner: "someone" }))).toThrow("unknown field owner");
+  for (const version of ["1.4", "^1.4.2", "1.4.3+sha512.abc", "v1.4.2", "01.4.2", "latest", 142, null]) {
+    expect(() => toolchainFrom(toolchainText({ tools: { bun: { default: version, minimum: "1.4.2" } } })))
+      .toThrow("tools.bun.default must be an exact x.y.z version");
+  }
+  expect(() => toolchainFrom(toolchainText({ tools: { node: { minimum: ">=22.12.0" } } })))
+    .toThrow("tools.node.minimum must be an exact x.y.z version");
+  expect(() => toolchainFrom(toolchainText({ tools: { bun: { default: "1.4.2", minimum: "1.4.3" } } })))
+    .toThrow("tools.bun.minimum 1.4.3 is above its default 1.4.2");
+  // Strict until Organizations may declare tools of their own.
+  expect(() => toolchainFrom(toolchainText({ tools: { deno: { minimum: "2.0.0" } } }))).toThrow("unknown tool deno");
+  expect(() => toolchainFrom(toolchainText({ tools: { node: { minimum: "22.12.0", default: "24.11.0" } } })))
+    .toThrow("tools.node.default is not a field of node");
+  expect(() => toolchainFrom(toolchainText({ tools: { bun: { default: "1.4.2" } } })))
+    .toThrow("tools.bun.minimum must be an exact x.y.z version");
+  const withoutUv = JSON.parse(toolchainText());
+  delete withoutUv.tools.uv;
+  expect(() => toolchainFrom(JSON.stringify(withoutUv))).toThrow("tools.uv is missing");
+});
+
+test("the CLI's own Bun and Node pins stay equal to the toolchain manifest", () => {
+  const toolchain = readToolchainManifest();
+  const cliPackage = JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8"));
+  // 0134: packageManager stays the exact pin Lazurio itself runs on.
+  expect(cliPackage.packageManager).toBe(`bun@${toolchain.tools.bun.default}`);
+  expect(cliPackage.engines.bun).toBe(toolchain.tools.bun.default);
+  expect(cliPackage.engines.node).toBe(`>=${toolchain.tools.node.minimum}`);
+  expect(readRequiredBunVersion()).toBe(toolchain.tools.bun.default);
+});
+
+test("tool minimums are derived from the toolchain manifest", () => {
+  const toolchain = readToolchainManifest();
+  expect(REQUIRED_TOOL_VERSIONS).toEqual({ git: toolchain.tools.git.minimum, github_cli: toolchain.tools.gh.minimum });
+  expect(Object.isFrozen(REQUIRED_TOOL_VERSIONS)).toBe(true);
+  expect(readRequiredNodeVersionRange()).toBe(`>=${toolchain.tools.node.minimum}`);
+
+  const raised = toolchainFrom(toolchainText({
+    tools: { git: { minimum: "2.45.0" }, gh: { minimum: "2.80.0" }, node: { minimum: "24.0.0" } },
+  }));
+  expect(requiredToolVersions(raised)).toEqual({ git: "2.45.0", github_cli: "2.80.0" });
+  expect(requiredNodeVersionRange(raised)).toBe(">=24.0.0");
+  expect(classifyToolVersion("git", "git version 2.44.0", requiredToolVersions(raised)))
+    .toMatchObject({ status: "incompatible", minimum_version: "2.45.0" });
+  expect(classifyToolVersion("github_cli", "gh version 2.79.1 (2025-10-01)", requiredToolVersions(raised)))
+    .toMatchObject({ status: "incompatible", minimum_version: "2.80.0" });
+  expect(classifyToolVersion("git", "git version 2.44.0").status).toBe("compatible");
+});
 
 test("packageManager is the exact Bun version authority", () => {
   expect(bunVersionFromPackageManager("bun@1.4.1")).toBe("1.4.1");
@@ -42,14 +146,14 @@ test("runtime classifier is exact and keeps future patches fail-closed", () => {
     .toThrow("exact stable version");
 });
 
-test("package engines are the single Node.js compatibility authority", () => {
+test("the toolchain manifest is the single Node.js compatibility authority", () => {
   expect(nodeVersionRangeFromEngines({ node: ">=22.12.0" })).toBe(">=22.12.0");
   expect(() => nodeVersionRangeFromEngines({ node: "latest" }))
     .toThrow("minimum stable Node.js version");
   expect(readRequiredNodeVersionRange({
     root: "/fixture",
-    readText: () => JSON.stringify({ engines: { node: ">=22.12.0" } }),
-  })).toBe(">=22.12.0");
+    readText: () => toolchainText({ tools: { node: { minimum: "24.11.0" } } }),
+  })).toBe(">=24.11.0");
   expect(() => readRequiredNodeVersionRange({
     root: "/fixture",
     readText: () => "not json",
