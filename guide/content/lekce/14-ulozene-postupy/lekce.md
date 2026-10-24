@@ -15,7 +15,7 @@ ukol: false
   - kdy ho uložit;
   - proč šetří nervy.
 
-Když stejnou věc děláte potřetí, pravděpodobně si zaslouží uložený postup. Nemusí být složitý. Stačí popsat kroky tak, aby je příště pochopil člověk i AI kolega.
+Když stejnou věc děláte potřetí, pravděpodobně si zaslouží uložený postup. Nemusí být složitý. Stačí popsat kroky tak, aby je příště pochopil člověk i agent.
 
 Příklad: jak připravit týdenní shrnutí, jak zkontrolovat klientský text, jak předat rozpracovanou práci. Uložený postup snižuje počet věcí, které musíte držet v hlavě.
 
