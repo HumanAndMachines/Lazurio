@@ -8,12 +8,14 @@
   request; Publikace zůstává.
   - Lekce 11 (titulek „AI agenti a nástroje“) vysvětluje AI agenta, který
     pracuje pro svého uživatele, Prostředí Henry pro automatizovanou práci
-    Organizace a Buddyho v Osobním Prostředí; kvíz má druhou otázku na
-    Prostředí Henry.
+    Organizace a Buddyho jako osobního zástupce jednoho uživatele; kvíz má
+    druhou otázku na Prostředí Henry.
   - Lekce 19 učí pull request a Publikaci jako chvíli, kdy změna začne
     platit; kvíz má druhou otázku na Publikaci. Lekce 15 doplňuje, že
-    v napojené službě agent práci jen připraví (třeba koncept e-mailu)
-    a odeslat ji smí až na výslovný pokyn.
+    v napojené službě agent e-mail jen připraví jako koncept a odešle ho až
+    na pokyn.
+  - Lekce 11, 15 a 19 mají původní délku: text lekce je jeden slide, který
+    přetečení skrývá, takže delší text by se na menší obrazovce uřízl.
   - Ostatní lekce, praktické úkoly, kvízy, cesta, odznak „Umím zadat práci“
     a `README.md` mluví o agentech. Id, složky, URL a pořadí lekcí se
     nemění; starší záznamy tohoto changelogu zůstávají historií.

@@ -47,7 +47,7 @@
           "id": "c",
           "text": "Osobní zástupce, který jedná jen za vás.",
           "correct": false,
-          "feedback": "Ne. Osobní zástupce jen pro vás je Buddy ve vašem Osobním Prostředí."
+          "feedback": "Ne. Osobní zástupce jednoho uživatele je Buddy v jeho Osobním Prostředí."
         }
       ],
       "explanation": "Prostředí Henry je obyčejné Pracovní Prostředí s nastavenými automatizacemi. Nastavuje ho a odpovídá za něj člověk, který Organizaci spravuje."

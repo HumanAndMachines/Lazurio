@@ -35,7 +35,7 @@
           "id": "a",
           "text": "Až po Publikaci, o které rozhodne člověk s oprávněním.",
           "correct": true,
-          "feedback": "Ano. Do té doby jde pull request nebo koncept ještě upravit nebo zahodit."
+          "feedback": "Ano. Do té doby jde připravenou práci ještě upravit nebo zahodit."
         },
         {
           "id": "b",
@@ -50,7 +50,7 @@
           "feedback": "Ne. Agent smí Publikovat jen na výslovný pokyn člověka, který na to má oprávnění."
         }
       ],
-      "explanation": "Agent práci připraví jako pull request nebo koncept. Platit začne až Publikací, o které rozhoduje člověk."
+      "explanation": "Agent práci připraví, třeba jako pull request. Platit začne až Publikací, o které rozhoduje člověk s oprávněním."
     }
   ]
 }
