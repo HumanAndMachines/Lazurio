@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { appendFile, lstat, mkdir, readFile, realpath, writeFile } from "fs/promises";
 import { randomUUID } from "crypto";
 import { createConnection } from "net";
+import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
 import {
   APP_CHECKOUT_ROOT,
@@ -34,6 +35,13 @@ import {
   inspectRepositoryDbWorktreeBinding,
   repositoryDbWorktreeDependencyForSlot,
 } from "./repository-db-worktree-lib.mjs";
+import {
+  BunRuntimeRefused,
+  bunRuntimeRefusalMessage,
+  createModuleBunResolver,
+  exactBunPin,
+  withModuleBun,
+} from "./bun-runtime-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -62,7 +70,9 @@ const APP_RUNTIME_CWD = Symbol("lazurio.app.runtime-cwd");
 const APP_RUNTIME_PACKAGE_PATH = Symbol("lazurio.app.runtime-package-path");
 const APP_RUNTIME_OWNER_ROOT = Symbol("lazurio.app.runtime-owner-root");
 const APP_WORKTREE_METADATA = Symbol("lazurio.app.worktree-metadata");
+const APP_PINNED_BUN = Symbol("lazurio.app.pinned-bun");
 const DEPENDENCY_RUNTIME_AUTHORITY = Symbol("lazurio.dependencies.runtime-authority");
+const DEPENDENCY_PINNED_BUN = Symbol("lazurio.dependencies.pinned-bun");
 
 export function runtimeHostsShareListener(left, right) {
   return canonicalRuntimeListenerHost(left) === canonicalRuntimeListenerHost(right);
@@ -227,6 +237,9 @@ export function createRuntimeManager({
   stopTimeoutMs = defaultStopTimeoutMs,
   writeRuntimeStateFile = writeFile,
   bunExecutable = null,
+  // The resolver of the Bun each App pins (decision 0171, addendum of
+  // 2026-10-24); tests inject one with a fake distribution.
+  resolveModuleBunFn = null,
   maintenanceIntervalMs = 5_000,
   maintenanceConcurrency = 4,
   maintenanceRetryDelaysMs = [1_000, 5_000, 30_000],
@@ -256,6 +269,19 @@ export function createRuntimeManager({
   }
   const runtimeBunExecutable = bunExecutable
     ?? (platform === process.platform ? resolveBunExecutable() : resolveBunExecutable({ platform }));
+  // The user's Bun above is the first choice for an App's pin and the
+  // installer of any other; the cache is the one LazurioPlatform shares on
+  // this machine. Created on the first pinned App, so a manager whose Apps
+  // pin nothing never touches it.
+  let moduleBunResolver = resolveModuleBunFn;
+  const resolveModuleBun = (input) => {
+    moduleBunResolver ??= createModuleBunResolver({
+      userBun: runtimeBunExecutable,
+      home: (process.platform === "win32" ? systemEnvironment.USERPROFILE : systemEnvironment.HOME) || homedir(),
+      env: systemEnvironment,
+    });
+    return moduleBunResolver(input);
+  };
   const managedProcesses = new Map();
   const moduleLeaseLocks = new Map();
   const maintainedApps = new Map();
@@ -537,7 +563,36 @@ export function createRuntimeManager({
       [APP_RUNTIME_CWD]: authority.cwd,
       [APP_RUNTIME_PACKAGE_PATH]: authority.package_path,
       [APP_RUNTIME_OWNER_ROOT]: authority.owner_root,
+      [APP_PINNED_BUN]: dependencies[DEPENDENCY_PINNED_BUN] ?? null,
     };
+  }
+
+  // The Bun one App's code runs with (decision 0171, addendum of 2026-10-24):
+  // exactly the version its package.json pins, read by the same inspection
+  // that let it start or install. An App that pins none keeps the user's Bun
+  // and its environment as before. What cannot be had refuses with its typed
+  // reason, never another version, before anything is stopped or started.
+  async function bunForApp(app) {
+    try {
+      return await resolveModuleBun({
+        packageManager: app?.[APP_PINNED_BUN] ?? null,
+        owner: app?.[APP_RUNTIME_CWD] ?? runtimeCwdForApp(app),
+      });
+    } catch (error) {
+      if (!(error instanceof BunRuntimeRefused)) throw error;
+      const packagePath = app.package_path ?? null;
+      throw new RuntimeActionError(
+        409,
+        "app_runtime_refused",
+        `${app.title}: ${bunRuntimeRefusalMessage(error.reason, {
+          file: packagePath ?? "package.json",
+          version: error.version,
+          cacheRoot: error.cacheRoot,
+        })}`,
+        [`reason: ${error.reason}`, `package: ${packagePath ?? "unknown"}`, `bun: ${error.version}`],
+        { failure_kind: error.reason, package_path: packagePath },
+      );
+    }
   }
 
   async function portOwnerIdentity(pid) {
@@ -690,6 +745,9 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
+    // Before any listener is reclaimed: a refusal changes nothing, and a
+    // shutdown during a fetch starts nothing.
+    const bun = await bunForApp(app);
     assertRuntimeManagerAcceptingStarts();
 
     await ensureRuntimeDirs();
@@ -726,9 +784,9 @@ export function createRuntimeManager({
 
     let child;
     try {
-      child = spawnProcess([runtimeBunExecutable, "run", app.dev_script], {
+      child = spawnProcess([bun.executable, "run", app.dev_script], {
         cwd: runtimeCwdForApp(app),
-        env: childEnv,
+        env: withModuleBun(childEnv, bun, { platform }),
         stdout: "pipe",
         stderr: "pipe",
         windowsHide: true,
@@ -1057,6 +1115,8 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
+    // Before the running App is stopped: a refusal changes nothing.
+    const bun = await bunForApp(app);
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
     const startedAt = new Date().toISOString();
@@ -1083,15 +1143,15 @@ export function createRuntimeManager({
       organizationDependencyRoot: app.organization_kind === "organization" && app.personal !== true
         ? dependencies[DEPENDENCY_RUNTIME_AUTHORITY].owner_root
         : null,
-      command: runtimePackageCommand(dependencies.install_command, runtimeBunExecutable),
+      command: runtimePackageCommand(dependencies.install_command, bun.executable),
       spawnProcess,
-      env: runtimeProcessEnv(app, {
+      env: withModuleBun(runtimeProcessEnv(app, {
         COMPANIES_WORKSPACE_ROOT: appFilesystemRoot,
         COMPANYASCODE_APP_ID: app.id,
         COMPANYASCODE_RUNTIME_KEY: runtimeKey,
         COMPANYASCODE_RUNTIME_SOURCE: runtimeSource.type,
         ...(runtimeSource.slug ? { COMPANYASCODE_WORKTREE_SLUG: runtimeSource.slug } : {}),
-      }),
+      }), bun, { platform }),
     };
     const installed = action === "refresh"
       ? await refreshFrozenBunDependencies(installOptions)
@@ -3933,9 +3993,12 @@ export function createRuntimeManager({
 
     const appRoot = authority.cwd;
     const absolutePackagePath = authority.package_path;
+    // The exact Bun the App pins, from the package.json this inspection reads.
+    let pinnedBun = null;
     const withAuthority = (result) => ({
       ...result,
       [DEPENDENCY_RUNTIME_AUTHORITY]: authority,
+      [DEPENDENCY_PINNED_BUN]: pinnedBun,
     });
 
     const packageJsonPresent = existsSync(absolutePackagePath);
@@ -3974,6 +4037,7 @@ export function createRuntimeManager({
     }
 
     const packageJson = dependencyInspection.package_json;
+    pinnedBun = exactBunPin(packageJson?.packageManager);
     const manager = detectPackageManager({ packageJson, lockfile, platform });
     const declaredDependencies = declaredDependencyCount(packageJson);
     const requiredDependencyCount = dependencyInspection.required_dependency_count;
