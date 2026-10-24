@@ -574,11 +574,11 @@ export function createRuntimeManager({
   // and its environment as before. What cannot be had refuses with its typed
   // reason, never another version, before anything is stopped or started.
   async function bunForApp(app) {
+    const pinned = app?.[APP_PINNED_BUN] ?? null;
+    const owner = app?.[APP_RUNTIME_CWD] ?? runtimeCwdForApp(app);
+    let bun;
     try {
-      return await resolveModuleBun({
-        packageManager: app?.[APP_PINNED_BUN] ?? null,
-        owner: app?.[APP_RUNTIME_CWD] ?? runtimeCwdForApp(app),
-      });
+      bun = await resolveModuleBun({ packageManager: pinned, owner });
     } catch (error) {
       if (!(error instanceof BunRuntimeRefused)) throw error;
       const packagePath = app.package_path ?? null;
@@ -594,6 +594,24 @@ export function createRuntimeManager({
         { failure_kind: error.reason, package_path: packagePath },
       );
     }
+    // The pin read before the resolution must still be the package's pin now
+    // that its Bun is here (a fetch can take a while): a package.json changed
+    // meanwhile refuses this start or install rather than run the App's code
+    // with the Bun of an earlier pin. The Platform keeps the same final
+    // assertion (its decision F25). A next start resolves the new pin.
+    const current = await readFile(join(owner, "package.json"), "utf8")
+      .then((text) => exactBunPin(JSON.parse(text)?.packageManager), () => undefined);
+    if (current !== pinned) {
+      const packagePath = app.package_path ?? null;
+      throw new RuntimeActionError(
+        409,
+        "app_runtime_changed",
+        `${app.title}: ${packagePath ?? "package.json"} změnil připnutou verzi Bunu, zatímco se pro aplikaci připravovala. Spusťte aplikaci znovu.`,
+        [`package: ${packagePath ?? "unknown"}`, `bun: ${pinned ?? "user"}`, `now: ${current ?? "none"}`],
+        { failure_kind: "app_runtime_changed", package_path: packagePath },
+      );
+    }
+    return bun;
   }
 
   async function portOwnerIdentity(pid) {

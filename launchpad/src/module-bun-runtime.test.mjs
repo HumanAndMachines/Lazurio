@@ -24,7 +24,15 @@ const systemPath = [userBunDirectory, "/usr/bin", "/bin"].join(":");
 function distribution(directory) {
   const offline = new Set();
   const fetched = [];
+  // A version's fetch can be held open: the test changes the package
+  // meanwhile, then lets the fetch finish.
+  const gates = new Map();
+  const entered = new Set();
   const install = async (input) => {
+    if (gates.has(input.version)) {
+      entered.add(input.version);
+      await gates.get(input.version);
+    }
     if (offline.has(input.version)) return { kind: "refused", reason: "runtime-unavailable" };
     fetched.push(`${input.packageName}@${input.version}`);
     const program = join(input.directory, "node_modules", input.packageName, "bin", "bun");
@@ -44,6 +52,8 @@ function distribution(directory) {
     install,
     offline,
     fetched,
+    gates,
+    entered,
     // What that version's program ran, its version checks left out.
     calls: async (version) => (await readFile(join(directory, `bun-${version}.log`), "utf8").catch(() => ""))
       .split("\n")
@@ -318,6 +328,56 @@ posixTest("a pinned version that cannot be had refuses Start and Install with it
     expect((await w.report("moving"))?.bun).toBe("1.4.96");
     expect((await w.runtime.health(w.appId("moving"))).managed).toBe(true);
     expect((await readdir(moduleBunRoot(w.home))).sort()).toEqual(["1.4.96", "1.4.97"]);
+  } finally {
+    await w.close();
+  }
+}, 60_000);
+
+posixTest("a pin that moves while its Bun is fetched refuses that Start and that Install, runs nothing with the earlier pin, and the next Start runs the new pin", async () => {
+  const w = await world("moved-during-fetch", [
+    { id: "starting", pin: "bun@1.4.94", installed: true },
+    { id: "installing", pin: "bun@1.4.92" },
+  ]);
+  try {
+    const hold = (version) => {
+      let release = () => {};
+      w.npm.gates.set(version, new Promise((resolve) => { release = resolve; }));
+      return () => release();
+    };
+    const movePin = async (id, pin) => {
+      const packagePath = join(w.appRoot(id), "package.json");
+      const manifest = JSON.parse(await readFile(packagePath, "utf8"));
+      await writeJson(packagePath, { ...manifest, packageManager: pin });
+    };
+    const changed = (id) => ({
+      status: 409,
+      code: "app_runtime_changed",
+      metadata: { failure_kind: "app_runtime_changed", package_path: w.packagePath(id) },
+    });
+
+    // Start: the pin moves from 1.4.94 to 1.4.93 while 1.4.94 is fetched.
+    const releaseStart = hold("1.4.94");
+    const starting = w.runtime.start(w.appId("starting")).catch((error) => error);
+    await until(() => w.npm.entered.has("1.4.94"), Boolean, 10_000);
+    await movePin("starting", "bun@1.4.93");
+    releaseStart();
+    expect(await starting).toMatchObject(changed("starting"));
+    expect(await w.npm.calls("1.4.94")).toEqual([]);
+    expect((await w.runtime.health(w.appId("starting"))).status).toBe("stopped");
+    expect(await w.report("starting")).toBeNull();
+    // The next Start runs the new pin.
+    await w.runtime.start(w.appId("starting"));
+    expect((await until(() => w.report("starting"), (value) => value !== null)).bun).toBe("1.4.93");
+
+    // Install: the pin moves from 1.4.92 to 1.4.91 while 1.4.92 is fetched.
+    const releaseInstall = hold("1.4.92");
+    const installing = w.runtime.install(w.appId("installing")).catch((error) => error);
+    await until(() => w.npm.entered.has("1.4.92"), Boolean, 10_000);
+    await movePin("installing", "bun@1.4.91");
+    releaseInstall();
+    expect(await installing).toMatchObject(changed("installing"));
+    expect(w.installs.filter((entry) => entry.executable.includes("1.4.92"))).toEqual([]);
+    expect(existsSync(join(w.appRoot("installing"), "node_modules", "fixture", "installed-by.txt"))).toBe(false);
   } finally {
     await w.close();
   }
