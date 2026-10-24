@@ -1,12 +1,12 @@
 # Lazurio vendor snapshot
 
 Launchpad načítá tyto soubory jako runtime kopii kanonického design systému
-`Rozjedeme-ai/design-system-lazurio`:
+`HumanAndMachine-ai/design-system-lazurio`:
 
 - `tokens.css`
 - `components.css`
 
-Snapshot vychází z commitu `f0a5694384a34a67e9b8a448cc022a0e8781833b`.
+Snapshot vychází z commitu `f3eb7117e81ea52b341a03b0d45a8842a9b81525`.
 Při aktualizaci se oba soubory kopírují společně a následně se spouští
 `bun run check` v repozitáři Launchpadu. Lokální úpravy vendor souborů nejsou
 zdrojem pravdy; změna nejdřív patří do design systému Lazurio.
@@ -31,3 +31,10 @@ kanonického čtyřfasetového `symbol-color.svg` z commitu
 
 Ani ikonové kopie se neupravují ručně. Změna kresby patří nejdřív do
 generátoru design systému Lazurio a potom se znovu vyexportuje celá sada.
+
+## Svěží palette refresh (2026-10-19)
+
+`tokens.css` and `components.css` are byte-for-byte copies from `HumanAndMachine-ai/design-system-lazurio`
+commit `f3eb7117e81ea52b341a03b0d45a8842a9b81525` (reviewed PR #99). Success, warning and danger
+use the approved semantic foreground, background and border values. Other assets
+retain the provenance recorded above.
