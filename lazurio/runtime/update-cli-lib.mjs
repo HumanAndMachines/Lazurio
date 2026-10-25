@@ -1,3 +1,4 @@
+import { formatBunRuntimesReport } from "./bun-runtime-cache-lib.mjs";
 import { runLazurioUpdate } from "./lazurio-update-lib.mjs";
 
 export const UPDATE_CLI_USAGE = `Použití: lazurio update [--json] [--root <cesta>]
@@ -46,6 +47,7 @@ export function formatUpdateLaneReport(report) {
       lines.push(...result.next_action.prompt.split("\n").map((line) => `    ${line}`));
     }
   }
+  if (report.tools) lines.push(...formatBunRuntimesReport(report.tools));
   if ((report.warnings ?? []).length > 0) {
     lines.push("Upozornění:", ...report.warnings.map((warning) => `- ${warning}`));
   }
