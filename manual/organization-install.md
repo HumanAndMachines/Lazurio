@@ -100,9 +100,10 @@ jmenuje cílové repo.
 Do promptu přidej pouze ty odstavce, jejichž dopad uživatel skutečně schvaluje:
 
 > Aktualizuj existující Git, GitHub CLI a Codex CLI
-> na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun
-> nastav vždy na exact stabilní verzi deklarovanou aktuálním clean Lazurio
-> `lazurio/package.json#packageManager`, i když upstream nabízí novější verzi.
+> na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun,
+> který splňuje minimum `tools.bun.minimum` z aktuálního clean Lazurio
+> `lazurio/toolchain.json`, nech, jak je; Bun pod minimem nastav na přesnou
+> výchozí verzi `tools.bun.default`, i když upstream nabízí novější verzi.
 > Codex CLI instaluj a aktualizuj oficiálním OpenAI standalone instalátorem.
 > Pokud výslovně požádám o změnu způsobu instalace, smíš převést existující Homebrew/npm/WinGet instalaci
 > na standalone: nejdřív ověř novou instalaci, pak odstraň pouze původní balíček
@@ -222,8 +223,8 @@ každému Builder repozitáři instalačního scope.
 ## Předpoklady
 
 - produkční nebo development-linked příkaz `lazurio` je v `PATH`;
-- Git, přesně pinovaný Bun, podporovaný Node.js a GitHub CLI jsou dostupné
-  v `PATH` nového čistého procesu;
+- Git, Bun v minimu z `lazurio/toolchain.json` nebo nad ním, podporovaný
+  Node.js a GitHub CLI jsou dostupné v `PATH` nového čistého procesu;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
 - Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
 - Organization owner už read-only ověřil base repository permission `none`,
@@ -272,8 +273,12 @@ a následně `lazurio`; u SSH remote musí fungovat i Gitův SSH transport.
 Machine toolchain vlastní top-level instalační tok, nikoli Organizace. Agent
 nejdřív spustí `lazurio install --json` a při troubleshootingu také
 `lazurio doctor --tool-updates --json`. Install Core odlišuje chybějící nástroj
-od stavu `*_not_on_path`; přesnou podporovanou Bun verzi dál vlastní
-`package.json#packageManager`. Podporovaný Node rozsah vlastní jedině
+od stavu `*_not_on_path`. Bun uživatele musí splnit `tools.bun.minimum`
+z `lazurio/toolchain.json` a čerstvá instalace dostane přesně výchozí
+`tools.bun.default`; přesný Bun samotného CLI dál vlastní
+`lazurio/package.json#packageManager` a příkaz `lazurio` se na něm spouští sám
+z mezipaměti runtime Lazuria (decision 0134 s dodatkem z 2026-10-24).
+Podporovaný Node rozsah vlastní jedině
 `tools.node.minimum` v `lazurio/toolchain.json` (`engines.node`
 v `lazurio/package.json` je tatáž hodnota pro npm); aktuálně je to
 `>=22.12.0`. Pro novou
@@ -299,14 +304,14 @@ hotovou. Vrátí přesný platformní blocker pro opravu instalačního surface.
 to harness bezpečně umí; jinak jediný fallback požadovaný po uživateli je zavřít
 a znovu otevřít grafickou aplikaci Codex, nikdy Terminal nebo PowerShell.
 
-Bun není připravený jen tím, že `bun --version` vrátí přesnou verzi. Verzované
+Bun není připravený jen tím, že `bun --version` vrátí verzi v minimu. Verzované
 skripty repozitářů spouštějí package binárky přes `bun x`, proto Install Core i
-Doctor tuto capability skutečně spustí (`bun x --help`) nad exact Bun z `PATH`.
+Doctor tuto capability skutečně spustí (`bun x --help`) nad Bunem z `PATH`.
 Samostatná binárka `bunx` není podmínkou: oficiální WinGet balíček `Oven-sh.Bun`
 ji na Windows nemusí dodat a Doctor její přítomnost uvádí jen informativně.
 Selhání (`bun_package_runner_unusable`, `platform.bun_package_runner`) nese
-jedinou nápravu — oficiální Bun instalátor připnutý přesně na
-`package.json#packageManager` (Windows PowerShell:
+jedinou nápravu — oficiální Bun instalátor připnutý přesně na výchozí verzi
+`tools.bun.default` z `lazurio/toolchain.json` (Windows PowerShell:
 `iex "& {$(irm https://bun.com/install.ps1)} -Version <version>"`; macOS/Linux:
 `curl -fsSL https://bun.com/install | bash -s "bun-v<version>"`) — a Agent ji
 spustí až se scoped mandátem. Balíček z jiného registru ani `bunx` z npm nejsou
@@ -357,8 +362,9 @@ potvrzení původu nebo bezpečnosti balíčku.
 Git potřebuje alespoň 2.31.0 (absolutní cesty z rev-parse), GitHub CLI 2.57.0
 (ověření aktivního účtu). Jejich minima drží `lazurio/toolchain.json`
 (`tools.git`, `tools.gh`) a čte je `lazurio/core/toolchain-lib.mjs`. Node
-minimum je tamtéž (`tools.node.minimum`); Bun zůstává přesně pinovaný přes
-`lazurio/package.json#packageManager`. Codex musí vrátit rozpoznatelnou
+i Bun minimum je tamtéž (`tools.node.minimum`, `tools.bun.minimum`); přesný
+Bun samotného CLI pinuje `lazurio/package.json#packageManager` a Doctor ho
+hlásí v `platform.cli_runtime`. Codex musí vrátit rozpoznatelnou
 stabilní verzi svého CLI; Lazurio dnes nepoužívá funkci vyžadující novější
 číselné minimum. Novější upstream release je samostatné doporučení v
 `doctor --tool-updates`, ne automatický důvod k neúspěšnému běžnému Doctoru.
@@ -457,8 +463,9 @@ ale záměrně jej neopravuje.
 Obsahuje-li instalační prompt explicitní mandát pro přesné nástroje a změnu
 User nebo Machine `PATH`, Agent nezůstane u handoff warningu:
 
-1. chybějící Git, GitHub CLI, Node.js LTS, Codex CLI nebo přesně pinovaný Bun
-   nainstaluje výhradně oficiálním postupem pro zjištěnou platformu;
+1. chybějící Git, GitHub CLI, Node.js LTS, Codex CLI nebo Bun (ten přesně ve
+   výchozí verzi `tools.bun.default`) nainstaluje výhradně oficiálním postupem
+   pro zjištěnou platformu;
 2. do výslovně autorizovaného User nebo Machine `PATH` doplní pouze skutečný
    instalační adresář nástroje, zachová nesouvisející platné položky a
    nevytvoří vazbu na task worktree;

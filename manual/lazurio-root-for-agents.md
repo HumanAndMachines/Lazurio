@@ -31,10 +31,13 @@ bezpečně předá jako nerozpoznaný vstup.
 
 Na úplně fresh Source Mašině instaluj nejdřív jen chybějící oficiální Git,
 naklonuj canonical Lazurio source do `<home>/Lazurio` a teprve z jeho
-`lazurio/package.json#packageManager` přečti exact Bun pin. Neinstaluj obecný
+`lazurio/toolchain.json` přečti výchozí Bun (`tools.bun.default`, stejná
+verze jako pin `lazurio/package.json#packageManager`). Neinstaluj obecný
 latest Bun jako dočasný mezikrok; clone Bun nepotřebuje a následný downgrade by
-jen přidal další chybnou mezifázi. Pokud source již existuje, nejdřív ověř jeho
-identitu, branch a stav a cizí nebo dirty adresář nepřepisuj.
+jen přidal další chybnou mezifázi. Existující Bun uživatele v minimu
+(`tools.bun.minimum`) nebo nad ním nech, jak je (decision 0161). Pokud source
+již existuje, nejdřív ověř jeho identitu, branch a stav a cizí nebo dirty
+adresář nepřepisuj.
 
 ## Root profil není CLI provenance
 
@@ -75,17 +78,19 @@ proto, že je Git checkout.
 ## Toolchain musí přežít instalační relaci
 
 Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
-Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také příkaz
-`bun` v `PATH`; u Gitu, GitHub CLI a Node.js rozlišuje nainstalovaný nástroj
-od `git_not_on_path`, `github_cli_not_on_path` a
-`node_runtime_not_on_path`. Git, `gh` ani `node` se nespustí, dokud příkaz z
+Mašina připravená. Install Core proto ověřuje příkaz `bun` v `PATH` proti
+minimu z `lazurio/toolchain.json` (`tools.bun.minimum`), protože Lazurio CLI
+si svůj přesný Bun spouští samo (níže); u Gitu, GitHub CLI a Node.js
+rozlišuje nainstalovaný nástroj od `git_not_on_path`, `github_cli_not_on_path`
+a `node_runtime_not_on_path`. Git, `gh` ani `node` se nespustí, dokud příkaz z
 `PATH` neodpovídá omezené sadě důvěryhodných instalačních cest. Na Windows tato
 sada zahrnuje i explicitní user-scope cesty odvozené z home právě běžícího OS
 účtu, včetně WinGet user command linku pro Node; ambientní `USERPROFILE`,
 `LOCALAPPDATA` ani libovolná dřívější položka `PATH` tuto autoritu nemění. Běžný Doctor
-navíc spouští z aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i
-nastavený SSH protokol, Node v rozsahu z `lazurio/toolchain.json`
-(`tools.node.minimum`) a `codex`.
+navíc spouští z aktuálního PATH ověřený Bun v minimu nebo nad ním, `bun x`,
+Git, `gh`, GitHub auth i nastavený SSH protokol, Node v rozsahu z
+`lazurio/toolchain.json` (`tools.node.minimum`) a `codex`;
+`platform.cli_runtime` hlásí, jestli Lazurio samo běží na svém přesném Bunu.
 Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
 aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
 required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
@@ -109,8 +114,13 @@ Agent provede jen kategorie skutečně povolené promptem. Existující platný 
 zachová, task worktree do něj nikdy nezapíše a User souhlas nerozšíří na
 Machine vrstvu. Git, GitHub CLI a Codex mohou s rozšířeným mandátem směřovat
 na aktuální oficiální stable a Node na podporované aktuální LTS. Bun je
-výjimka: vždy konverguje na exact verzi z
-`lazurio/package.json#packageManager`, ne na obecný upstream latest. Výsledek
+výjimka: čerstvá instalace i Bun pod minimem dostanou přesně výchozí verzi
+z `lazurio/toolchain.json` (`tools.bun.default`), ne obecný upstream latest, a
+existující Bun v minimu nebo nad ním zůstává, jak je. Svůj přesný Bun
+z `lazurio/package.json#packageManager` si příkaz `lazurio` spouští sám
+z mezipaměti runtime Lazuria; offline bez něj běží na Bunu uživatele
+s jedním řádkem na stderr, dokud ho `lazurio update` s připojením k
+internetu nedoplní (decision 0134 s dodatkem z 2026-10-24). Výsledek
 se na Windows ověří až po úplném ukončení a novém spuštění Codexu, v čistém
 procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
 `export` nebo `$env:Path`. Před ukončením Agent zapíše do chatu přesný resume

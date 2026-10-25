@@ -243,8 +243,9 @@ lazurio install --json
 Fresh target odvozuje vždy jako `<home>/Lazurio`; root picker ani
 `--root` nepřijímá. Když příkaz běží z ověřeného existujícího Source Rootu
 přímo v home, inspectuje tento Root bez vytvoření druhého locatoru. Kontroluje
-platformu, exact Bun a jeho příkaz v `PATH`, Git a GitHub CLI v `PATH`,
-přihlášení i tvar rozpoznaného Rootu.
+platformu, příkaz `bun` v `PATH` v minimu z `lazurio/toolchain.json`
+(přesný Bun si CLI spouští samo, decision 0134 s dodatkem z 2026-10-24), Git
+a GitHub CLI v `PATH`, přihlášení i tvar rozpoznaného Rootu.
 Chybějící součásti zatím pouze pojmenuje; nic neinstaluje a dnešní Source Root
 nepřesouvá. Managed Root se podle decision 0164 nestaví; cílem je Lazurio
 Folder spravovaný LazurioPlatform. Aktuální build rezidentních artefaktů popisuje

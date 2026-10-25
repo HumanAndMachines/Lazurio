@@ -38,8 +38,9 @@ Při publikačním mandátu pro instalační vady přečti také
 3. **Ukotvi fresh Source Root před Bunem.** Pokud Root chybí, nainstaluj
    nejdřív jen chybějící oficiální Git a clone jediný canonical Lazurio source
    do `<home>/Lazurio`. Clone Bun nepotřebuje. Ponech primární checkout na clean
-   `main` a přečti z něj exact Bun pin. Existující cizí, dirty, diverged nebo
-   nejasný adresář nepřepisuj.
+   `main` a přečti z jeho `lazurio/toolchain.json` minimum a výchozí verzi Bunu
+   (`tools.bun`). Existující cizí, dirty, diverged nebo nejasný adresář
+   nepřepisuj.
 4. **Konverguj toolchain z oficiálních zdrojů.** Povinné capability jsou Git,
    GitHub CLI, Node.js, Codex CLI a Bun. S rozšířeným mandátem aktualizuj Git,
    GitHub CLI a Codex na aktuální oficiální stable a Node na podporované
@@ -52,11 +53,15 @@ Při publikačním mandátu pro instalační vady přečti také
    cestou i přes PATH podle manuálu, potom odstraň původní balíček
    jeho správcem; zachovej nastavení, přihlášení a historii. Už udělený scoped
    mandát neopakuj. Doctor nástroje neinstaluje a způsob instalace neprokazuje.
-   Bun nastav vždy na exact stabilní verzi z aktuálního clean
-   `lazurio/package.json#packageManager`; upstream latest ani canary není
-   autorita. Po dostupnosti exact Bunu registruj source CLI jen podporovaným
-   `bun run lazurio -- cli install`. Claude Code je volitelný a kontroluje se
-   jen tam, kde je instalovaný.
+   Bun uživatele potřebuje jen minimum `tools.bun.minimum` z aktuálního clean
+   `lazurio/toolchain.json`: existující Bun v minimu nebo nad ním nech, jak je
+   (decision 0161); chybějící nebo Bun pod minimem nainstaluj přesně ve
+   výchozí verzi `tools.bun.default`. Upstream latest ani canary není autorita.
+   Přesný Bun samotného CLI z `lazurio/package.json#packageManager`
+   neinstaluj: příkaz `lazurio` se na něm spouští sám z mezipaměti runtime
+   Lazuria (decision 0134 s dodatkem z 2026-10-24). Po dostupnosti Bunu
+   registruj source CLI jen podporovaným `bun run lazurio -- cli install`.
+   Claude Code je volitelný a kontroluje se jen tam, kde je instalovaný.
 5. **Měň jen autorizovanou PATH vrstvu.** Obecný nejmenší mandát dovoluje User
    `PATH`; nový Builder prompt výslovně povoluje i nezbytný
    Machine/system-wide `PATH`, standardní elevation a systémový package
@@ -134,7 +139,9 @@ Instalace je hotová teprve tehdy, když:
 
 - Root a CLI provenance odpovídají podporovanému profilu;
 - povinné nástroje i `lazurio` fungují z relaunchnutého Codexu a jeho nového
-  čistého procesu a Bun odpovídá exact pinu;
+  čistého procesu, Bun v PATH splňuje minimum a Doctor hlásí
+  `platform.cli_runtime` ok (Lazurio běží na svém přesném Bunu; offline selhání
+  opraví `lazurio update` s připojením k internetu);
 - `lazurio install --json` je `completed`, Organization install je `current`
   nebo bezpečně `updated` a finální Doctor nemá required selhání;
 - GitHub identity, role/Team gate a exact Git transport jsou reportované

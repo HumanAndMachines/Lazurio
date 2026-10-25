@@ -30,30 +30,38 @@ jednosměrně do Lazurio Folderu spravovaného LazurioPlatform. Top-level
 Source-linked CLI dál kontroluje svůj ověřený Source Root, aby Agenti mohli
 dogfoodovat tutéž fasádu. Source Root nemigruje a jiná cesta se tiše
 neadoptuje ani nepřesouvá. Společné Core
-postupně ověří platformu, exact Bun runtime z
-`package.json#packageManager`, podporovaný Node.js rozsah z
+postupně ověří platformu, Bun uživatele proti minimu z `toolchain.json`
+(`tools.bun.minimum`), podporovaný Node.js rozsah z
 `toolchain.json` (`tools.node.minimum`), ověřenou identitu příkazů Bun,
 Git, GitHub CLI a Node.js a Codex CLI v `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.
 
-Install report `lazurio.install.report.v2` i `lazurio doctor` uvádějí
-aktuální a požadovanou Bun verzi. Odlišný patch, včetně novějšího dosud
-nepromovaného vydání, je `action_required`/Doctor failure: Kolega tak
-nedostane neotestovaný runtime jen proto, že vyšel. První read-only installer
-Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
-s externí změnou a použije standardní upstream postup; `lazurio update`
-runtime nikdy potichu nepřepisuje. Stejně tak Install Core odliší
+Samotné CLI běží na přesném Bunu z `package.json#packageManager`: příkaz
+`lazurio` (`cli.mjs`) je tenký launcher, který CLI z `cli-main.mjs` spustí ve
+svém procesu, nebo se na jiném Bunu znovu spustí na přesném Bunu z mezipaměti
+runtime Lazuria (decision 0134 s dodatkem z 2026-10-24). Kolega tak
+nedostane neotestovaný runtime CLI jen proto, že vyšel, a jeho vlastní Bun
+v minimu nebo nad ním je v pořádku (decision 0161). Offline bez přesného Bunu
+CLI běží na Bunu uživatele s jedním řádkem na stderr a Doctor failne
+`platform.cli_runtime`, dokud ho `lazurio update` online nedoplní. Install
+report `lazurio.install.report.v2` uvádí v `machine.bun` Bun, na kterém CLI
+běží, proti jeho pinu; krok `bun` posuzuje Bun uživatele v `PATH` proti
+minimu. Bun pod minimem nebo chybějící je `action_required` s přesnou výchozí
+verzí `tools.bun.default`. První read-only installer Bun uživatele sám
+nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas s externí
+změnou a použije standardní upstream postup; `lazurio update` Bun uživatele
+nikdy potichu nepřepisuje. Stejně tak Install Core odliší
 `bun_runtime_not_on_path`, `git_not_on_path`, `github_cli_not_on_path` a
-`node_runtime_not_on_path` od chybějící instalace. Exact Bun v `PATH` musí
+`node_runtime_not_on_path` od chybějící instalace. Bun v `PATH` musí
 navíc umět package runner `bun x`, který používají verzované skripty
 repozitářů; Install Core jinak vrátí `bun_package_runner_unusable` a Doctor
 failne `platform.bun_package_runner`. Samostatná binárka `bunx` není
 podmínkou — oficiální WinGet balíček ji na Windows nemusí dodat — a Doctor ji
 uvádí jen informativně. Každé Bun selhání nese oficiální instalátor připnutý
-přesně na `packageManager` verzi; balíček z jiného registru není náprava a
-Lazurio instalační příkaz nikdy samo nespouští. Dřívější stínující příkaz
+přesně na výchozí verzi `tools.bun.default`; balíček z jiného registru není
+náprava a Lazurio instalační příkaz nikdy samo nespouští. Dřívější stínující příkaz
 Node.js vrací `node_path_identity_mismatch` a před ověřením se nespouští.
 Instalační Agent s explicitním mandátem opraví pouze
 uživatelský PATH a výsledek prokáže v novém čistém procesu; Organization
@@ -83,9 +91,10 @@ souhlasem uživatele. Kontrola je pouze advisory: novější
 verze je `warn` s `next_action: ask_principal_before_update`; Lazurio nikdy
 nespustí updater, package manager ani instalační příkaz. Nedostupná síť vrátí
 výslovné `currency_unknown` místo zeleného odhadu. Volitelný přepínač drží
-běžný `lazurio doctor` rychlý a deterministický. Bun se dál posuzuje výhradně
-proti `package.json#packageManager`, protože novější nepromovaná verze není
-automaticky podporovaným Lazurio runtime.
+běžný `lazurio doctor` rychlý a deterministický. Bun do tohoto porovnání
+nevstupuje: Bun uživatele měří minimum z `toolchain.json` a Bun samotného CLI
+přesný `package.json#packageManager`, protože novější nepromovaná verze není
+automaticky podporovaným runtime Lazuria.
 
 Exit code `0` znamená připravený stav, `1` konkrétní akci uživatele a `2`
 selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` ani

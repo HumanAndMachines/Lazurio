@@ -65,9 +65,20 @@ realpath. Budoucí Resident activation proto musí active switch, relink,
 identity verification a rollback provést jako jednu samostatnou transakci.
 
 Pro localhost source, npm CLI a jeho CI je jedinou autoritou exact testovaného
-Bun runtime `package.json#packageManager`. `setup-bun`, Install Core i Doctor
-čtou stejnou hodnotu; novější patch se nestává podporovaným automaticky.
-Nesoulad pouze vrátí strojově čitelný nález a návod pro Agenta. Změna
+Bun runtime `package.json#packageManager`; novější patch se nestává
+podporovaným automaticky. `setup-bun` tuto hodnotu čte přímo a příkaz `lazurio`
+se na ní spouští sám (decision 0134 s dodatkem z 2026-10-24): když běží na jiném
+Bunu, znovu se spustí na přesném Bunu z mezipaměti runtime Lazuria
+(`~/.local/share/lazurio/runtimes/bun`, na Windows
+`%LOCALAPPDATA%\Lazurio\runtimes\bun`) stejným resolverem jako aplikace
+Modulů, s pojistkou `LAZURIO_CLI_BUN` proti smyčce. Offline bez tohoto Bunu
+běží na Bunu uživatele s jedním řádkem na stderr a Doctor selže
+v `platform.cli_runtime`, dokud ho `lazurio update` s připojením k internetu
+nedoplní; ostatní odmítnutí resolveru CLI zastaví. Bun uživatele v PATH
+Install Core i Doctor měří proti minimu `tools.bun.minimum`
+z `lazurio/toolchain.json`: verze v minimu nebo nad ním je fakt, ne nález
+(decision 0161), a čerstvá instalace dostane přesně výchozí `tools.bun.default`.
+Nález pouze vrátí strojově čitelný výsledek a návod pro Agenta. Změna
 externího Bunu vyžaduje explicitní souhlas a standardní postup zjištěného
 instalačního mechanismu; není součástí Git-only `lazurio update`.
 Immutable Resident artefakty mají oddělené profilové toolchain piny,
@@ -82,14 +93,16 @@ neutrální. Samotná dostupnost novější verze je advisory. `update_available
 instruuje Agenta, aby ověřil existující mandát nebo požádal uživatele o souhlas;
 samotný Doctor nikdy nespouští updater ani package manager. Neověřitelná
 aktuálnost zůstává `warn`, ne falešné `ok`. Bun do obecného latest-release
-porovnání nevstupuje — jeho localhost autoritou zůstává exact pin výše.
+porovnání nevstupuje: Bun uživatele měří minimum a Bun samotného CLI exact pin
+výše.
 
 Readiness nástrojů vychází ze skutečného PATH procesu, jejich funkčnosti a
 podporované verze. Způsob instalace a pevné instalační prefixy nejsou podmínka;
 Homebrew není závislost Lazuria. Stejný resolver používají Install Core, Doctor,
-Git runtime, GitHub provider i source provenance. Bun v PATH i běžící runtime
-musí mít exact pin, ale nemusí jít o tentýž soubor. Minimum Gitu a GitHub CLI
-vlastní `lazurio/core/toolchain-lib.mjs`, Node minimum `lazurio/package.json`.
+Git runtime, GitHub provider i source provenance. Bun v PATH musí splnit
+minimum a běžící runtime CLI exact pin; nemusí jít o tentýž soubor. Minima
+Gitu, GitHub CLI, Node i Bunu vlastní `lazurio/toolchain.json` a čte je
+`lazurio/core/toolchain-lib.mjs`.
 Staré identity-mismatch reason codes zůstávají čitelné pro dřívější reporty,
 nový gate je už pro instalační cestu nevydává.
 

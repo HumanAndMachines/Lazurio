@@ -837,7 +837,8 @@ nikdy aplikace nespouští ani nezastavuje.
 
 Doctor report zároveň obsahuje platform, Git a `.gitignore` checks:
 
-- podporovaný OS, Bun a Git v PATH
+- podporovaný OS, Bun v PATH v minimu z `lazurio/toolchain.json`, přesný Bun,
+  na kterém běží samo Lazurio (`platform.cli_runtime`), a Git v PATH
 - Git root a working tree stav Lazurio Rootu
 - použitelnost submodulů a organization mountpointů
 - ochranu runtime/log cest v rootu a `private/`/`archive/` cest v Company
@@ -932,10 +933,12 @@ stejně jako v Platformě bez kvalifikovaného `flock`: dva procesy opravující
 tutéž rozbitou verzi se nevylučují, zůstává jen kontrola identity před
 odsunutím rozbité kopie a přejmenování jedním krokem. App bez přesného pinu
 běží Bunem uživatele jako dřív a vlastní procesy Lazuria zůstávají na Bunu,
-na kterém běží. Co nejde mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní
-nebo spustí, a nikdy nepoužije jinou verzi: `runtime-unavailable` (registr
-neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
-`runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
+na kterém běží; příkaz `lazurio` se sám spouští na přesném Bunu
+z `lazurio/package.json` (decision 0134 s dodatkem z 2026-10-24). Co nejde
+mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní nebo spustí, a nikdy
+nepoužije jinou verzi: `runtime-unavailable` (registr neodpověděl),
+`runtime-integrity-failed`, `runtime-version-unknown`, `runtime-disk-full`
+(méně než 300 MB) nebo `runtime-unsupported-platform`.
 Doctor tyto piny jen ukazuje v kontrole `launchpad.module_runtimes`: každou
 přesnou verzi, kterou namountované App připínají, s počtem App, zda ji
 mezipaměť pro tento systém drží, a velikost mezipaměti. Kontrola je vždy
