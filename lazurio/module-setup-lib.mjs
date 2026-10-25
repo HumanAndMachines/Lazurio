@@ -432,6 +432,10 @@ export async function setupModule({
   adoptPort = null,
   failAfterWrite = null,
   beforePublish = null,
+  // MS-02 seams (evaluateModuleStandard); undefined keeps its defaults: the
+  // shipped lazurio/toolchain.json and the registry lookup.
+  toolchain = undefined,
+  isBunVersionPublished = undefined,
 } = {}) {
   const options = {
     lazurioRoot: resolve(lazurioRoot),
@@ -445,6 +449,8 @@ export async function setupModule({
     surface,
     tags,
     adoptPort,
+    toolchain,
+    isBunVersionPublished,
   };
   let plan;
   try {
@@ -709,6 +715,8 @@ async function planModuleStandard({
     organization: context.organization,
     organizations: policies.organizations,
     modules,
+    toolchain: options.toolchain,
+    isBunVersionPublished: options.isBunVersionPublished,
   });
   const nextWrites = [...writes];
   const fold = ({ path, value, expectedText }) => {

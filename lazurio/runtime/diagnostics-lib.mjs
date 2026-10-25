@@ -2,7 +2,14 @@ import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { machineOffersPersonalspace, readMachineAssignment } from "../core/machine-identity-lib.mjs";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "fs";
 import { readFile, readdir } from "fs/promises";
+import { homedir } from "os";
 import { basename, dirname, join, posix } from "path";
+import {
+  bunVersionCached,
+  exactBunPin,
+  moduleBunCacheBytes,
+  moduleBunRoot,
+} from "./bun-runtime-lib.mjs";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
@@ -63,11 +70,14 @@ import {
   classifyToolVersion,
   classifyBunRuntime,
   classifyNodeRuntime,
+  compareStableVersions,
   nodeVersionFromOutput,
   OFFICIAL_BUN_INSTALL_DOCS_URL,
   officialBunInstallCommand,
   readRequiredBunVersion,
-  readRequiredNodeVersionRange,
+  readToolchainManifest,
+  requiredNodeVersionRange,
+  requiredToolVersions,
   resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
 
@@ -455,6 +465,8 @@ export async function buildLaunchpadDoctorReport(options = {}) {
         inspectUpdates: options.inspectDeveloperToolUpdates ?? inspectDeveloperToolUpdates,
       })
     : [];
+  // Information only: the Bun the mounted Apps pin and Lazurio's runtime cache.
+  const moduleRuntimes = await moduleRuntimesCheck({ root: appsResponse.root, apps: appsResponse.apps });
   // Personalspace doctor check (CAC-0048) — METADATA ONLY (počty, validita,
   // gbrain mount stav). Nikdy nečte obsah osobních modulů ani gbrain zápisů a
   // osobní aplikace se NIKDY nemíchají do org appsResponse. Selhání personalspace
@@ -493,6 +505,7 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   return buildDoctorReportFromAppsResponse(appsResponse, {
     environmentChecks,
     extraChecks: [
+      moduleRuntimes,
       ...toolUpdateChecks,
       ...worktreeChecks,
       ...personalspaceChecks,
@@ -2408,10 +2421,12 @@ function withCodexInstallationGuidance(check, platform) {
   };
 }
 
-export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, run = runCommand }) {
+// `toolchain` (lazurio/toolchain.json) holds the minimums; without one, the
+// manifest Lazurio loaded with.
+export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, toolchain = undefined, run = runCommand }) {
   if (!pathExecutable) return requiredToolFailure({ id, title, message: `${title} není dostupné v PATH.`, pathExecutable, args: ["--version"] });
   const result = run(pathExecutable, ["--version"], { cwd, env });
-  const version = classifyToolVersion(tool, result.ok ? result.stdout : null);
+  const version = classifyToolVersion(tool, result.ok ? result.stdout : null, toolchain && requiredToolVersions(toolchain));
   const compatible = result.ok && version.status === "compatible";
   return { id, title, status: compatible ? "ok" : "fail", severity: "required",
     message: compatible ? `${title} je dostupné v PATH: ${result.stdout.trim()}`
@@ -2565,7 +2580,8 @@ export function bunRuntimeCheck({
 export function nodeRuntimeCheck({
   companiesRoot,
   command = resolveExecutableOnPath("node"),
-  requiredRange = readRequiredNodeVersionRange({ root: join(import.meta.dirname, "..") }),
+  toolchain = readToolchainManifest(),
+  requiredRange = requiredNodeVersionRange(toolchain),
   run = runCommand,
 } = {}) {
   if (!command) {
@@ -2576,7 +2592,7 @@ export function nodeRuntimeCheck({
       severity: "required",
       title: "Node.js",
       message,
-      paths: ["lazurio/package.json"],
+      paths: ["lazurio/toolchain.json"],
       links: [{
         label: "Oficiální Node.js LTS",
         kind: "external",
@@ -2598,7 +2614,7 @@ export function nodeRuntimeCheck({
       severity: "required",
       title: "Node.js",
       message: "Příkaz node je v PATH, ale jeho stabilní verzi se nepodařilo ověřit.",
-      paths: ["lazurio/package.json"],
+      paths: ["lazurio/toolchain.json"],
       links: [{
         label: "Oficiální Node.js LTS",
         kind: "external",
@@ -2625,7 +2641,7 @@ export function nodeRuntimeCheck({
     message: compatible
       ? `Node.js ${runtime.current_version} odpovídá Lazurio toolchain rozsahu ${runtime.required_range}.`
       : `Node.js ${runtime.current_version} neodpovídá požadovanému rozsahu ${runtime.required_range}; Agent musí nejdřív požádat uživatele o souhlas s instalací aktuálního oficiálního Node.js LTS.`,
-    paths: ["lazurio/package.json"],
+    paths: ["lazurio/toolchain.json"],
     links: compatible
       ? []
       : [{
@@ -3666,6 +3682,79 @@ export function runtimeAppStatus(app) {
   if (runtime.status === "unhealthy") return "warn";
   if (runtime.status === "starting" || runtime.status === "unknown") return "warn";
   return "ok";
+}
+
+/**
+ * The Bun versions the mounted Apps pin (decision 0171, addendum of
+ * 2026-10-24), as information only: never a warning or a failure. Each exact
+ * pin (`packageManager: bun@x.y.z`) with the number of Apps on it and where its
+ * Bun comes from: the user's Bun when its version is the pin (the resolver's
+ * first choice, no cache needed), otherwise Lazurio's runtime cache for this
+ * system, or a fetch on the first start. Then the cache's size. A pin that is
+ * not exact is MS-02's finding and is not listed here. The user's own Bun
+ * stays measured exactly by `platform.bun_path`.
+ */
+export async function moduleRuntimesCheck({
+  root,
+  apps = [],
+  cacheRoot = moduleBunRoot(homedir()),
+  system = undefined,
+  userBunVersion = userBunVersionOf(resolveBunExecutable()),
+}) {
+  const appsByVersion = new Map();
+  const packagePaths = new Set(apps
+    .map((app) => app?.package_path)
+    .filter((path) => typeof path === "string" && path !== ""));
+  for (const packagePath of packagePaths) {
+    const packageJson = await readFile(join(root, ...packagePath.split("/")), "utf8")
+      .then((text) => JSON.parse(text))
+      .catch(() => null);
+    const pin = exactBunPin(packageJson?.packageManager);
+    if (pin === null) continue;
+    const version = pin.slice("bun@".length);
+    appsByVersion.set(version, (appsByVersion.get(version) ?? 0) + 1);
+  }
+  const versions = [...appsByVersion.keys()].sort(compareStableVersions);
+  const cached = new Map();
+  for (const version of versions) cached.set(version, await bunVersionCached(version, { cacheRoot, system }));
+  const bytes = await moduleBunCacheBytes({ cacheRoot });
+  const source = (version) => version === userBunVersion
+    ? "Bun uživatele"
+    : cached.get(version) ? "v mezipaměti" : "stáhne se při prvním startu";
+  const pins = versions.map((version) =>
+    `${version} (${formatCount(appsByVersion.get(version), "aplikace", "aplikace", "aplikací")}, ${source(version)})`);
+  const cache = bytes === 0 ? "mezipaměť Bunu Lazuria je prázdná" : `mezipaměť Bunu Lazuria zabírá ${formatBytes(bytes)}`;
+  return {
+    id: "launchpad.module_runtimes",
+    status: "ok",
+    severity: "runtime",
+    title: "Bun aplikací",
+    message: pins.length === 0
+      ? `Žádná aplikace nepřipíná přesnou verzi Bunu; ${cache}.`
+      : `Aplikace připínají Bun ${pins.length === 1 ? pins[0] : `${pins.slice(0, -1).join(", ")} a ${pins.at(-1)}`}; ${cache}.`,
+    paths: [],
+    links: [],
+    details: [
+      ...versions.map((version) => `bun@${version}: apps ${appsByVersion.get(version)}, cached ${cached.get(version) ? "yes" : "no"}`),
+      `cache: ${cacheRoot}`,
+      `cache_bytes: ${bytes}`,
+      `user_bun: ${userBunVersion ?? "unknown"}`,
+    ],
+  };
+}
+
+// The version of the user's Bun, which the resolver tries first for each pin;
+// null when it does not answer with an exact version.
+function userBunVersionOf(executable, run = runCommand) {
+  const result = run(executable, ["--version"]);
+  const version = result.ok ? result.stdout.trim() : "";
+  return /^\d+\.\d+\.\d+$/u.test(version) ? version : null;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} kB`;
+  return `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
 // Souhrn se odvozuje JEDINOU funkcí surfacu (`buildSummary`/`summarizeStatus`

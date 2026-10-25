@@ -23,8 +23,10 @@ nedostává workaround.
 Zkrácený kontrakt, který drží každá App Modulu:
 
 - `lazurio.module.json` (`id` = slot, lease v poolu Organizace, `apps` +
-  `default_app`), v každé App `packageManager: bun@<přesná verze>`,
-  `lazurio.runtime` (listenery + health), `lazurio.preparation`
+  `default_app`), v každé App `packageManager: bun@<přesná vydaná verze>`
+  (výchozí `tools.bun.default` z `lazurio/toolchain.json`; jinou vydanou
+  verzi jen vědomě v PR Modulu, novější než výchozí nebo pod minimem hlásí
+  `MS-02` jako `warn`), `lazurio.runtime` (listenery + health), `lazurio.preparation`
   (`owner_package`, `prepare_script`, `check_script`; klíč `runtime` jen
   pro `uv` — Bun App ho vynechá, Platforma dnes neznámá pole odmítá), commitnutý
   `bun.lock` / `uv.lock`, `tsconfig` strict, biome, skripty `dev`, `check`,
@@ -205,6 +207,8 @@ ani pro productionspace repa (decision 0041).
 - `lazurio module setup <module-root> --root <lazurio-root> --json` →
   `status: current` a `standard.checks[]` se všemi `pass` (je-li klíč
   `standard` přítomný; jinak ruční kontrola kapitol 2–9 zapsaná v PR).
+  Vědomý pin jiné vydané verze Bunu než výchozí nechává `MS-02` ve `warn`;
+  PR Modulu ho zdůvodní.
 - `bun run check` a `bun test` v každé App: 0 selhání.
 - Skutečný start přes Launchpad: `lazurio module start <Org>/<slug> --json`
   → `running`, `result.runtime.url` odpoví 200 pod vlastním hostname a 403

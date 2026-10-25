@@ -1,8 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, moduleRuntimesCheck, nodeRuntimeCheck, runtimeAppStatus, toolVersionCheck } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import {
   createLaunchpadGitFixture,
   createRepositoryDbWorktreeFixture,
@@ -168,6 +168,122 @@ test("Node.js Doctor shares the Install Core version authority", () => {
   });
   expect(shadowed).toMatchObject({ id: "platform.node", status: "ok" });
 
+});
+
+// A synthetic lazurio/toolchain.json (decision 0171, addendum of 2026-10-24,
+// point 5) with every minimum raised above what the probes below report.
+const raisedToolchain = Object.freeze({
+  schema_version: "lazurio.toolchain.v1",
+  tools: Object.freeze({
+    bun: Object.freeze({ default: "1.4.2", minimum: "1.4.2" }),
+    node: Object.freeze({ minimum: "24.0.0" }),
+    uv: Object.freeze({ default: "0.11.6" }),
+    gh: Object.freeze({ minimum: "2.80.0" }),
+    git: Object.freeze({ minimum: "2.45.0" }),
+  }),
+});
+
+test("Doctor measures Git, GitHub CLI and Node.js against the toolchain manifest's minimums", () => {
+  const probe = (stdout) => () => ({ ok: true, exitCode: 0, stdout, stderr: "" });
+  const git = (toolchain) => toolVersionCheck({
+    id: "platform.git",
+    tool: "git",
+    title: "Git",
+    pathExecutable: "/trusted/git",
+    cwd: "/fixture",
+    ...(toolchain ? { toolchain } : {}),
+    run: probe("git version 2.44.0\n"),
+  });
+  const githubCli = (toolchain) => toolVersionCheck({
+    id: "platform.github_cli",
+    tool: "github_cli",
+    title: "GitHub CLI",
+    pathExecutable: "/trusted/gh",
+    cwd: "/fixture",
+    ...(toolchain ? { toolchain } : {}),
+    run: probe("gh version 2.79.1 (2025-10-01)\n"),
+  });
+  const node = (toolchain) => nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    ...(toolchain ? { toolchain } : {}),
+    run: probe("v22.12.0\n"),
+  });
+
+  // The shipped manifest accepts these versions…
+  expect(git().status).toBe("ok");
+  expect(githubCli().status).toBe("ok");
+  expect(node().status).toBe("ok");
+  // …and a manifest with higher minimums turns them incompatible.
+  expect(git(raisedToolchain)).toMatchObject({ id: "platform.git", status: "fail" });
+  expect(git(raisedToolchain).message).toContain("minimum je 2.45.0");
+  expect(git(raisedToolchain).details).toContain("minimum: 2.45.0");
+  expect(githubCli(raisedToolchain)).toMatchObject({ id: "platform.github_cli", status: "fail" });
+  expect(githubCli(raisedToolchain).details).toContain("minimum: 2.80.0");
+  expect(node(raisedToolchain)).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(node(raisedToolchain).message).toContain(">=24.0.0");
+});
+
+test("Doctor lists the exact Bun pins of the mounted Apps with their App counts, the runtime cache and its size, as information only", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-module-runtimes-"));
+  tempRoots.push(root);
+  const app = async (packagePath, packageManager) => {
+    await mkdir(join(root, dirname(packagePath)), { recursive: true });
+    await writeJson(join(root, packagePath), {
+      name: "fixture-app",
+      private: true,
+      ...(packageManager === undefined ? {} : { packageManager }),
+    });
+    return { id: packagePath, package_path: packagePath };
+  };
+  const apps = [
+    await app("organizations/Alpha/workspace/notes/app/v1/package.json", "bun@1.4.2"),
+    await app("organizations/Alpha/workspace/board/app/v2/package.json", "bun@1.4.3"),
+    // Not exact pins: MS-02 reports them, the runtime section does not.
+    await app("organizations/Alpha/workspace/legacy/package.json", "bun@^1.4.2"),
+    await app("organizations/Alpha/workspace/plain/package.json", undefined),
+  ];
+  const cacheRoot = join(root, "runtimes", "bun");
+  const program = join(cacheRoot, "1.4.3", "node_modules", "@oven", "bun-linux-x64", "bin", "bun");
+  await mkdir(dirname(program), { recursive: true });
+  await writeFile(program, "x".repeat(2048));
+  const system = async () => ({ platform: "linux", arch: "x64", libc: "glibc", avx2: true });
+
+  // The user's Bun runs a matching pin with no cache at all, so the pin says so
+  // instead of a cache state that would read as missing.
+  const check = await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.2" });
+  expect(check).toMatchObject({ id: "launchpad.module_runtimes", status: "ok", severity: "runtime", title: "Bun aplikací" });
+  expect(check.message).toBe(
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, Bun uživatele) a 1.4.3 (1 aplikace, v mezipaměti); mezipaměť Bunu Lazuria zabírá 2 kB.",
+  );
+  expect(check.details).toEqual([
+    "bun@1.4.2: apps 1, cached no",
+    "bun@1.4.3: apps 1, cached yes",
+    `cache: ${cacheRoot}`,
+    "cache_bytes: 2048",
+    "user_bun: 1.4.2",
+  ]);
+
+  // Another uncached pin is fetched on its first start; an unknown user Bun
+  // leaves only the cache state.
+  expect((await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.3" })).message).toBe(
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, stáhne se při prvním startu) a 1.4.3 (1 aplikace, Bun uživatele); mezipaměť Bunu Lazuria zabírá 2 kB.",
+  );
+  const unknownUser = await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: null });
+  expect(unknownUser.message).toBe(
+    "Aplikace připínají Bun 1.4.2 (1 aplikace, stáhne se při prvním startu) a 1.4.3 (1 aplikace, v mezipaměti); mezipaměť Bunu Lazuria zabírá 2 kB.",
+  );
+  expect(unknownUser.details.at(-1)).toBe("user_bun: unknown");
+
+  // Several Apps on one pin count once each; nothing pinned and no cache is still information.
+  apps.push(await app("organizations/Beta/workspace/wiki/app/v1/package.json", "bun@1.4.3"));
+  expect((await moduleRuntimesCheck({ root, apps, cacheRoot, system, userBunVersion: "1.4.2" })).details.slice(0, 2)).toEqual([
+    "bun@1.4.2: apps 1, cached no",
+    "bun@1.4.3: apps 2, cached yes",
+  ]);
+  const empty = await moduleRuntimesCheck({ root, apps: [], cacheRoot: join(root, "absent"), system, userBunVersion: "1.4.2" });
+  expect(empty).toMatchObject({ id: "launchpad.module_runtimes", status: "ok" });
+  expect(empty.message).toBe("Žádná aplikace nepřipíná přesnou verzi Bunu; mezipaměť Bunu Lazuria je prázdná.");
 });
 
 test("Bun package runner Doctor proves `bun x` and only reports a standalone bunx as optional", () => {
@@ -1057,6 +1173,8 @@ test("doctor report obsahuje platform, git a gitignore checks", async () => {
   expect(checks.get("git.worktree")?.status).toBe("ok");
   expect(checks.get("gitignore.protection")?.status).toBe("ok");
   expect(checks.get("launchpad.discovery")?.status).toBe("ok");
+  // Information only, whatever the Apps pin and the cache holds.
+  expect(checks.get("launchpad.module_runtimes")?.status).toBe("ok");
 });
 
 test("CLI Doctor na sdílené týmové Mašině Personalspace lane nespouští a hlásí not_applicable", async () => {

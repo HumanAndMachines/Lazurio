@@ -2,21 +2,24 @@
 
 // Lazurio Module Standard conformance (manual/module-standard.md kap. 11,
 // decision 0171). Read-only and cheap: file reads, JSON and regex over App
-// sources plus one local `git ls-files`. It never executes Module scripts and
-// never touches the network. `lazurio module setup` owns orchestration and
-// writes; this module only measures and proposes the few mechanical repairs
-// the standard allows.
+// sources plus one local `git ls-files`. It never executes Module scripts. The
+// network answers only one question: whether a pinned Bun other than the
+// toolchain manifest's default, and not in the runtime cache, is published
+// (MS-02, one bounded registry lookup; offline is a warning). `lazurio module
+// setup` owns orchestration and writes; this module only measures and
+// proposes the few mechanical repairs the standard allows.
 
 import { lstat, readFile, readdir, readlink, realpath } from "fs/promises";
 import { extname, isAbsolute, join, posix, relative as relativePath, resolve, sep } from "path";
-import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
+import { compareStableVersions, readToolchainManifest } from "./core/toolchain-lib.mjs";
 import { findModuleStandardPortFindings } from "./core/organization-port-policy-lib.mjs";
+import { bunVersionPublished, exactBunPin } from "./runtime/bun-runtime-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit } from "./runtime/git-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
 
 export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-01", summary: "lazurio.module.json platné, id odpovídá slotu, lease v poolu Organizace, pooly disjunktní" },
-  { id: "MS-02", summary: "packageManager je přesný Bun a lockfile je commitnutý a čerstvý" },
+  { id: "MS-02", summary: "packageManager je přesná a vydaná verze Bunu a lockfile je commitnutý a čerstvý" },
   { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script existuje" },
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
   { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
@@ -32,7 +35,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
 
 const CHECK_ACTIONS = Object.freeze({
   "MS-01": "Přepište port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověřte start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
-  "MS-02": "Doplňte packageManager na přesnou verzi Bunu z Lazuria a commitněte čerstvý bun.lock z bun install.",
+  // MS-02 names the toolchain manifest's default Bun (ms02Action).
   "MS-03": "Doplňte lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
   "MS-04": "Doplňte lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
@@ -45,6 +48,8 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-12": "Sjednoťte apps[] s adresáři app/*/package.json a smažte starší generace App (historie zůstává v Gitu).",
   "MS-13": "Doplňte do každé App skripty check (typecheck + biome) a test (bun test).",
 });
+const ms02Action = (bunDefault) =>
+  `Nastavte packageManager na přesnou vydanou verzi Bunu (výchozí bun@${bunDefault}) a commitněte čerstvý bun.lock.`;
 
 const SKIPPED_DIRECTORIES = new Set([
   ".git",
@@ -86,7 +91,10 @@ let preparationSchemaPromise = null;
  * values setup is about to leave on disk (planned writes overlaid on the
  * checkout), so a dry-run reports the state `--apply` would produce for the
  * contract layer. Returns the 13 checks and repaired values for the
- * mechanical items only.
+ * mechanical items only. MS-02 measures the pinned Bun against `toolchain`
+ * (lazurio/toolchain.json) and asks `isBunVersionPublished(version)` (true,
+ * false, or null when it cannot tell) only for a version other than its
+ * default.
  */
 export async function evaluateModuleStandard({
   moduleRoot,
@@ -96,7 +104,8 @@ export async function evaluateModuleStandard({
   organization,
   organizations = [],
   modules = [],
-  requiredBunVersion = readRequiredBunVersion(),
+  toolchain = readToolchainManifest(),
+  isBunVersionPublished = bunVersionPublished,
 }) {
   const root = resolve(moduleRoot);
   const results = new Map(MODULE_STANDARD_CHECKS.map(({ id }) => [id, { status: "pass", details: [], repairs: [] }]));
@@ -145,13 +154,21 @@ export async function evaluateModuleStandard({
       const lockPath = joinPosix(app.appDirectory, "uv.lock");
       checkLockTracked({ record, label, lockPath, files, tracked, name: "uv.lock" });
     } else {
-      const expected = `bun@${requiredBunVersion}`;
       if (packageJson.packageManager === undefined) {
+        const expected = `bun@${toolchain.tools.bun.default}`;
         record("MS-02", "fail", `${label}: packageManager chybí (očekáváno ${expected})`);
         insertKeyAfter(ensureNextPackage(), "packageManager", expected, ["type", "private", "version", "name"]);
         results.get("MS-02").repairs.push(`${label}: doplnit packageManager ${expected}`);
-      } else if (packageJson.packageManager !== expected) {
-        record("MS-02", "fail", `${label}: packageManager ${String(packageJson.packageManager)} neodpovídá ${expected}`);
+      } else {
+        const pin = exactBunPin(packageJson.packageManager);
+        if (pin === null) {
+          record("MS-02", "fail", `${label}: packageManager ${String(packageJson.packageManager)} není přesná verze Bunu (bun@x.y.z)`);
+        } else {
+          const version = pin.slice("bun@".length);
+          for (const [status, detail] of await bunPinFindings(version, { toolchain, isBunVersionPublished })) {
+            record("MS-02", status, `${label}: ${detail}`);
+          }
+        }
       }
       const lockPath = joinPosix(app.appDirectory, "bun.lock");
       if (files.some((file) => file.path === joinPosix(app.appDirectory, "bun.lockb"))) {
@@ -506,6 +523,7 @@ export async function evaluateModuleStandard({
     record("MS-12", "fail", `výchozí App v${defaultGeneration} není mezi generacemi ${generations.map((value) => `v${value}`).join(", ")}`);
   }
 
+  const actions = { ...CHECK_ACTIONS, "MS-02": ms02Action(toolchain.tools.bun.default) };
   const checks = MODULE_STANDARD_CHECKS.map(({ id, summary }) => {
     const result = results.get(id);
     return {
@@ -513,7 +531,7 @@ export async function evaluateModuleStandard({
       status: result.status,
       summary,
       details: [...new Set(result.details)],
-      ...(result.status === "pass" ? {} : { action: CHECK_ACTIONS[id] }),
+      ...(result.status === "pass" ? {} : { action: actions[id] }),
       ...(result.repairs.length > 0 ? { repairs: result.repairs } : {}),
     };
   });
@@ -998,6 +1016,33 @@ function checkLockTracked({ record, label, lockPath, files, tracked, name }) {
     record("MS-02", "fail", `${label}: ${lockPath} není commitnutý`);
   }
   return true;
+}
+
+// MS-02 for an exact pin (decision 0171, addendum of 2026-10-24, point 4).
+// The toolchain manifest's default needs nothing more: Lazurio itself runs on
+// it. Any other version must be published; one newer than the default warns,
+// since every Environment downloads it on its first start, and so does one
+// below the minimum. A registry that cannot answer is a warning, never a
+// failure.
+async function bunPinFindings(version, { toolchain, isBunVersionPublished }) {
+  const { default: bunDefault, minimum } = toolchain.tools.bun;
+  if (version === bunDefault) return [];
+  let published;
+  try {
+    published = await isBunVersionPublished(version);
+  } catch {
+    published = null;
+  }
+  if (published === false) return [["fail", `verze Bunu ${version} není vydaná`]];
+  const findings = [];
+  if (published !== true) findings.push(["warn", `vydání Bunu ${version} nejde ověřit (offline)`]);
+  if (compareStableVersions(version, bunDefault) > 0) {
+    findings.push(["warn", `verze Bunu ${version} je novější než výchozí ${bunDefault}; každé Prostředí ji při prvním startu stáhne`]);
+  }
+  if (compareStableVersions(version, minimum) < 0) {
+    findings.push(["warn", `verze Bunu ${version} je pod minimem ${minimum}`]);
+  }
+  return findings;
 }
 
 async function bunLockDrift(path, packageJson) {

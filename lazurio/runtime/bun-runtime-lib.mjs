@@ -71,6 +71,7 @@ const probeTimeoutMs = 10_000;
  * process ended, never one under way. */
 const leftoverAgeMs = 60 * 60_000;
 const exactPin = /^bun@(\d+\.\d+\.\d+)$/;
+const exactVersion = /^\d+\.\d+\.\d+$/;
 
 /** The exact Bun a package pins (`bun@x.y.z`), or null when its
  * `packageManager` names none exactly: only an exact version is a pin. */
@@ -236,6 +237,102 @@ export async function hostBunSystem(platform = process.platform, arch = process.
 /** Bun's official npm distribution. */
 export const officialRegistry = "https://registry.npmjs.org/";
 
+// Where a version's directory keeps the program of one of Bun's npm packages.
+function bunProgram(directory, target) {
+  return join(directory, "node_modules", "@oven", `bun-${target.name}`, "bin", target.executable);
+}
+
+// This system as the seams below take it: a function, as the resolver's.
+const hostSystem = (platform) => () => hostBunSystem(platform);
+
+/** Whether the runtime cache holds Bun `version` for this system: the program
+ * of one of its targets in the version's directory. A directory is placed
+ * there only after its program reported the version, in one rename, so the
+ * file is the proof; nothing is run. */
+export async function bunVersionCached(version, {
+  home = homedir(),
+  platform = process.platform,
+  env = process.env,
+  cacheRoot = moduleBunRoot(home, { platform, env }),
+  system = hostSystem(platform),
+} = {}) {
+  if (!exactVersion.test(String(version))) throw new TypeError(`Not an exact Bun version: ${String(version)}`);
+  const targets = bunTargets(await system(), version);
+  for (const target of targets ?? []) {
+    const file = await lstat(bunProgram(join(cacheRoot, version), target)).catch(() => null);
+    if (file?.isFile()) return true;
+  }
+  return false;
+}
+
+/** How long the registry may take to say whether a Bun version is published. */
+export const bunPublishedCheckTimeoutMs = 5_000;
+
+/** Whether Bun `version` is published (MS-02, decision 0171 with its addendum
+ * of 2026-10-24): true when the runtime cache already holds it, otherwise as
+ * Bun's npm distribution answers for this system's package: 200 true, 404
+ * false. Anything else (offline, no answer within `timeoutMs`, another
+ * status, a system Bun publishes no build for) is null, unknown: never an
+ * error. */
+export async function bunVersionPublished(version, {
+  home = homedir(),
+  platform = process.platform,
+  env = process.env,
+  cacheRoot = moduleBunRoot(home, { platform, env }),
+  system = hostSystem(platform),
+  fetchFn = fetch,
+  registry = officialRegistry,
+  timeoutMs = bunPublishedCheckTimeoutMs,
+} = {}) {
+  const host = await system();
+  if (await bunVersionCached(version, { cacheRoot, system: async () => host })) return true;
+  const targets = bunTargets(host, version);
+  if (targets === null) return null;
+  const ask = async () => {
+    try {
+      const response = await fetchFn(`${registry}@oven/bun-${targets[0].name}/${version}`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      // Release the body without waiting for it: its cancellation is not bounded.
+      Promise.resolve().then(() => response.body?.cancel()).catch(() => undefined);
+      if (response.status === 200) return true;
+      if (response.status === 404) return false;
+      return null;
+    } catch {
+      return null;
+    }
+  };
+  // The bound covers the whole question, so a fetch that ignores its signal is
+  // abandoned too.
+  let timer;
+  const bound = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+  try {
+    return await Promise.race([ask(), bound]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The bytes of the runtime cache's files (links not followed); 0 when there
+ * is none. */
+export async function moduleBunCacheBytes({
+  home = homedir(),
+  platform = process.platform,
+  env = process.env,
+  cacheRoot = moduleBunRoot(home, { platform, env }),
+} = {}) {
+  let bytes = 0;
+  const walk = async (directory) => {
+    for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile()) bytes += (await lstat(path).catch(() => null))?.size ?? 0;
+    }
+  };
+  await walk(cacheRoot);
+  return bytes;
+}
+
 // Bun's installer's own words for why it failed (Bun 1.4: "Integrity check
 // failed for tarball", "IntegrityCheckFailed extracting tarball", "No version
 // matching … found", "GET … - 404", "ConnectionRefused downloading package
@@ -399,8 +496,7 @@ export function createModuleBunResolver({
       return null;
     }
   };
-  const programOf = (directory, target) =>
-    join(directory, "node_modules", "@oven", `bun-${target.name}`, "bin", target.executable);
+  const programOf = bunProgram;
   const placed = (executable, source) => Object.freeze({ executable, binDir: dirname(executable), source });
 
   // The version's directory as it is: ready (its program reports the

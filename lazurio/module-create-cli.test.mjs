@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { createModule } from "./module-create-lib.mjs";
 import { setupModule } from "./module-setup-lib.mjs";
 
 const cliPath = join(import.meta.dirname, "cli.mjs");
@@ -176,6 +177,51 @@ test("a Bun stack without install reports exactly the missing lockfile", async (
   const stray = cli(["module", "create", "Acme/stray", "--stack", "none", "--json"], inWorktree);
   expect(stray.exitCode).toBe(2);
   expect(JSON.parse(stray.stdout)).toMatchObject({ status: "blocked", reason: "directory_exists" });
+});
+
+test("a new Module pins the toolchain manifest's default Bun and uv and is measured against the same manifest", async () => {
+  const fixture = await organizationFixture();
+  const worktree = join(fixture.organizationRoot, ".worktrees", "root", "DEV-1-toolchain");
+  git(fixture.organizationRoot, ["worktree", "add", "--quiet", "-b", "agent/DEV-1-toolchain", worktree]);
+  // A synthetic lazurio/toolchain.json whose defaults differ from the shipped one.
+  const toolchain = Object.freeze({
+    schema_version: "lazurio.toolchain.v1",
+    tools: Object.freeze({
+      bun: Object.freeze({ default: "1.4.4", minimum: "1.4.2" }),
+      node: Object.freeze({ minimum: "22.12.0" }),
+      uv: Object.freeze({ default: "0.12.3" }),
+      gh: Object.freeze({ minimum: "2.57.0" }),
+      git: Object.freeze({ minimum: "2.31.0" }),
+    }),
+  });
+  const lookups = [];
+  const create = (selector, stack) => createModule({
+    lazurioRoot: fixture.lazurioRoot,
+    selector,
+    stack,
+    cwd: worktree,
+    skipInstall: true,
+    toolchain,
+    isBunVersionPublished: async (version) => {
+      lookups.push(version);
+      return null;
+    },
+  });
+  const appPackage = async (slug) => JSON.parse(await readFile(join(worktree, "workspace", slug, "app", "v1", "package.json"), "utf8"));
+
+  const service = await create("Acme/portal", "bun-service");
+  expect((await appPackage("portal")).packageManager).toBe("bun@1.4.4");
+  // The pinned default is the manifest's own: MS-02 finds only the lockfile
+  // the skipped install did not create, and asks no registry.
+  expect(service.standard.checks.find((check) => check.id === "MS-02").details).toEqual([
+    "app/v1/package.json: bun.lock chybí vedle package.json (app/v1/bun.lock)",
+  ]);
+
+  await create("Acme/data-sync", "python-uv");
+  const python = await appPackage("data-sync");
+  expect(python.packageManager).toBe("bun@1.4.4");
+  expect(python.lazurio.preparation).toMatchObject({ runtime: "uv", uv_version: "0.12.3" });
+  expect(lookups).toEqual([]);
 });
 
 test("two Modules created in distinct task worktrees get different default ports", async () => {

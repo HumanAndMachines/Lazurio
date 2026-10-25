@@ -114,6 +114,18 @@ test("production closure rejects source imports outside the publishable package"
   })).not.toThrow();
 });
 
+test("the toolchain manifest Core reads belongs to the package's production closure", () => {
+  // Core loads lazurio/toolchain.json beside package.json (decision 0171,
+  // addendum of 2026-10-24, point 5): a packlist without it fails the gate.
+  const packageRoot = resolve(repositoryRoot, "lazurio");
+  const entry = (path) => ({ bytes: readFileSync(resolve(packageRoot, ...path.split("/"))) });
+  const entries = new Map([["core/toolchain-lib.mjs", entry("core/toolchain-lib.mjs")]]);
+  expect(() => assertProductionClosure({ packageRoot, entries }))
+    .toThrow("core/toolchain-lib.mjs references unpacked production content: toolchain.json");
+  entries.set("toolchain.json", entry("toolchain.json"));
+  expect(() => assertProductionClosure({ packageRoot, entries })).not.toThrow();
+});
+
 test("package smoke keeps canonical home Root deterministic across host prerequisite states", () => {
   const actionRequired = inspectLazurioInstallation({
     root: null,

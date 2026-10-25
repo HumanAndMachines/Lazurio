@@ -11,9 +11,83 @@ import {
   join,
   resolve,
 } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const exactStableVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
 const minimumStableVersionRangePattern = /^>=((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/u;
+
+// One manifest of the default and minimum versions of Lazurio's tools
+// (decision 0171, addendum of 2026-10-24, point 5): the scaffold, MS-02, the
+// Doctor and Install Core read it, and LazurioPlatform and the Machines tool
+// catalog hold parity tests against it. It ships beside package.json; the URL
+// reference lets the npm package gate prove that it is packed.
+// `package.json#packageManager` stays the exact Bun of Lazurio itself (0134),
+// equal to `tools.bun.default` by test.
+const toolchainManifestUrl = new URL("../toolchain.json", import.meta.url);
+export const TOOLCHAIN_SCHEMA_VERSION = "lazurio.toolchain.v1";
+// The tools and the versions each declares, every one required. Strict: an
+// unknown tool or field is an error until Organizations may declare tools of
+// their own in the same shape.
+const toolchainFields = Object.freeze({
+  bun: Object.freeze(["default", "minimum"]),
+  node: Object.freeze(["minimum"]),
+  uv: Object.freeze(["default"]),
+  gh: Object.freeze(["minimum"]),
+  git: Object.freeze(["minimum"]),
+});
+
+/** The toolchain manifest, validated and deeply frozen; `root` is the
+ * directory of its `toolchain.json` (default: beside lazurio/package.json). */
+export function readToolchainManifest({
+  root = undefined,
+  readText = (path) => readFileSync(path, "utf8"),
+} = {}) {
+  const path = root === undefined ? fileURLToPath(toolchainManifestUrl) : resolve(root, "toolchain.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(readText(path));
+  } catch (error) {
+    throw new Error(
+      `Lazurio toolchain manifest cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return validToolchainManifest(manifest);
+}
+
+function validToolchainManifest(manifest) {
+  const invalid = (detail) => new Error(`Lazurio toolchain manifest is invalid: ${detail}`);
+  const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  if (!isObject(manifest)) throw invalid("it must be a JSON object");
+  for (const key of Object.keys(manifest)) {
+    if (key !== "schema_version" && key !== "tools") throw invalid(`unknown field ${key}`);
+  }
+  if (manifest.schema_version !== TOOLCHAIN_SCHEMA_VERSION) {
+    throw invalid(`unknown schema_version ${JSON.stringify(manifest.schema_version)}`);
+  }
+  if (!isObject(manifest.tools)) throw invalid("tools must be an object");
+  for (const tool of Object.keys(manifest.tools)) {
+    if (!Object.hasOwn(toolchainFields, tool)) throw invalid(`unknown tool ${tool}`);
+  }
+  const tools = {};
+  for (const [tool, fields] of Object.entries(toolchainFields)) {
+    const entry = manifest.tools[tool];
+    if (!isObject(entry)) throw invalid(`tools.${tool} is missing`);
+    for (const key of Object.keys(entry)) {
+      if (!fields.includes(key)) throw invalid(`tools.${tool}.${key} is not a field of ${tool}`);
+    }
+    for (const field of fields) {
+      if (typeof entry[field] !== "string" || !exactStableVersionPattern.test(entry[field])) {
+        throw invalid(`tools.${tool}.${field} must be an exact x.y.z version`);
+      }
+    }
+    if (fields.includes("default") && fields.includes("minimum")
+      && compareStableVersions(entry.minimum, entry.default) > 0) {
+      throw invalid(`tools.${tool}.minimum ${entry.minimum} is above its default ${entry.default}`);
+    }
+    tools[tool] = Object.freeze(Object.fromEntries(fields.map((field) => [field, entry[field]])));
+  }
+  return Object.freeze({ schema_version: manifest.schema_version, tools: Object.freeze(tools) });
+}
 
 export function bunVersionFromPackageManager(packageManager) {
   const match = /^bun@(.+)$/u.exec(packageManager ?? "");
@@ -46,19 +120,15 @@ export function nodeVersionRangeFromEngines(engines) {
   return range;
 }
 
-export function readRequiredNodeVersionRange({
-  root = resolve(import.meta.dirname, ".."),
-  readText = (path) => readFileSync(path, "utf8"),
-} = {}) {
-  let sourcePackage;
-  try {
-    sourcePackage = JSON.parse(readText(resolve(root, "package.json")));
-  } catch (error) {
-    throw new Error(
-      `Lazurio Node.js version authority cannot be read: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  return nodeVersionRangeFromEngines(sourcePackage.engines);
+/** The supported Node.js range of a toolchain manifest: its minimum and up. */
+export function requiredNodeVersionRange(toolchain) {
+  return `>=${toolchain.tools.node.minimum}`;
+}
+
+// The toolchain manifest owns the Node.js minimum; `package.json#engines.node`
+// is the same range for npm, held equal by test.
+export function readRequiredNodeVersionRange(options = {}) {
+  return requiredNodeVersionRange(readToolchainManifest(options));
 }
 
 export function classifyBunRuntime({ currentVersion, requiredVersion }) {
@@ -161,7 +231,7 @@ function environmentPathValue(environment, platform) {
   return entry?.[1] ?? "";
 }
 
-function compareStableVersions(left, right) {
+export function compareStableVersions(left, right) {
   const leftParts = left.split(".").map(Number);
   const rightParts = right.split(".").map(Number);
   for (let index = 0; index < 3; index += 1) {
@@ -211,10 +281,14 @@ export function resolveNodeExecutableOnPath(options = {}) {
   return resolveExecutableOnPath("node", options);
 }
 
-// Capability floors, independent of the optional latest-release lookup.
-// Git: rev-parse --path-format; gh: auth status --active.
-export const REQUIRED_TOOL_VERSIONS = Object.freeze({ git: "2.31.0", github_cli: "2.57.0" });
-export function classifyToolVersion(tool, output) {
+// Capability floors, independent of the optional latest-release lookup, from
+// the toolchain manifest. Git: rev-parse --path-format; gh: auth status
+// --active.
+export function requiredToolVersions(toolchain) {
+  return Object.freeze({ git: toolchain.tools.git.minimum, github_cli: toolchain.tools.gh.minimum });
+}
+export const REQUIRED_TOOL_VERSIONS = requiredToolVersions(readToolchainManifest());
+export function classifyToolVersion(tool, output, minimums = REQUIRED_TOOL_VERSIONS) {
   const pattern = {
     git: /^git version (\d+\.\d+\.\d+)(?:[. -]|$)/u,
     github_cli: /^gh version (\d+\.\d+\.\d+)(?:[ (\r\n]|$)/u,
@@ -222,7 +296,7 @@ export function classifyToolVersion(tool, output) {
   }[tool];
   if (!pattern) throw new Error(`Unknown tool: ${tool}`);
   const current = pattern.exec(String(output ?? "").trim())?.[1] ?? null;
-  const minimum = REQUIRED_TOOL_VERSIONS[tool] ?? null;
+  const minimum = minimums[tool] ?? null;
   return { current_version: current, minimum_version: minimum,
     status: !current ? "unusable" : minimum && compareStableVersions(current, minimum) < 0 ? "incompatible" : "compatible" };
 }

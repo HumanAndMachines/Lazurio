@@ -114,33 +114,158 @@ test("MS-01 warns without an Organization pool and fails on overlapping pools or
   ]));
 });
 
-test("MS-02 adds a missing packageManager but only reports wrong versions and lockfile problems", async () => {
+// MS-02 "exact and published" (decision 0171, addendum of 2026-10-24, point
+// 4): each case measures a fixture App against a synthetic toolchain manifest
+// (default and minimum Bun 1.4.2) with an injected registry answer, so no
+// case depends on Lazurio's own Bun or touches the network.
+const ms02Summary = "packageManager je přesná a vydaná verze Bunu a lockfile je commitnutý a čerstvý";
+
+test("MS-02 adds a missing packageManager as the toolchain manifest's default Bun", async () => {
+  const toolchain = bunToolchain({ default: "1.4.4", minimum: "1.4.2" });
   const missing = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.packageManager; } });
-  const applied = await setupModule({ ...missing, apply: true });
+  const registry = registryAnswers({});
+
+  const planned = await setupModule({ ...missing, toolchain, isBunVersionPublished: registry.check });
+  expect(planned).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
+  expect(check(planned, "MS-02")).toEqual({
+    id: "MS-02",
+    status: "fail",
+    summary: ms02Summary,
+    details: ["app/v1/package.json: packageManager chybí (očekáváno bun@1.4.4)"],
+    action: "Nastavte packageManager na přesnou vydanou verzi Bunu (výchozí bun@1.4.4) a commitněte čerstvý bun.lock.",
+    repairs: ["app/v1/package.json: doplnit packageManager bun@1.4.4"],
+  });
+
+  const applied = await setupModule({ ...missing, apply: true, toolchain, isBunVersionPublished: registry.check });
   expect(applied.status).toBe("completed");
   const written = await readJson(join(missing.appRoot, "package.json"));
-  expect(written.packageManager).toBe(`bun@${bunVersion}`);
+  expect(written.packageManager).toBe("bun@1.4.4");
   expect(Object.keys(written).indexOf("packageManager")).toBe(Object.keys(written).indexOf("type") + 1);
+  // The default needs no registry lookup, before or after the repair.
+  expect(registry.asked).toEqual([]);
+});
 
-  const wrong = await conformantFixture({ mutatePackage: (pkg) => { pkg.packageManager = "bun@1.0.0"; } });
-  const wrongReport = await setupModule({ ...wrong, apply: true });
-  expect(wrongReport).toMatchObject({ status: "action_required", changes: [] });
-  expect(check(wrongReport, "MS-02").details).toEqual([
-    `app/v1/package.json: packageManager bun@1.0.0 neodpovídá bun@${bunVersion}`,
-  ]);
+test("MS-02 fails a packageManager that is not an exact Bun version and never rewrites it", async () => {
+  for (const packageManager of ["bun@1.4", "bun@^1.4.2", "bun@1.4.3+sha512.abc", "npm@10.0.0"]) {
+    const { report, registry } = await measureBunPin(packageManager, { apply: true });
+    expect(report).toMatchObject({ status: "action_required", changes: [] });
+    expect(check(report, "MS-02")).toMatchObject({
+      status: "fail",
+      summary: ms02Summary,
+      details: [`app/v1/package.json: packageManager ${packageManager} není přesná verze Bunu (bun@x.y.z)`],
+      action: "Nastavte packageManager na přesnou vydanou verzi Bunu (výchozí bun@1.4.2) a commitněte čerstvý bun.lock.",
+    });
+    expect(check(report, "MS-02").repairs).toBeUndefined();
+    expect(registry.asked).toEqual([]);
+  }
+});
 
-  const stale = await conformantFixture({ mutatePackage: (pkg) => { pkg.dependencies.zod = "^4.0.0"; } });
-  expect(check(await setupModule(stale), "MS-02").details).toEqual([
+test("MS-02 passes the default Bun without asking the registry", async () => {
+  const { report, registry } = await measureBunPin("bun@1.4.2");
+  expect(report).toMatchObject({ status: "current", issues: [] });
+  expect(check(report, "MS-02")).toEqual({ id: "MS-02", status: "pass", summary: ms02Summary, details: [] });
+  expect(registry.asked).toEqual([]);
+});
+
+test("MS-02 warns on a published Bun newer than the default", async () => {
+  const { report, registry } = await measureBunPin("bun@1.4.3", { published: { "1.4.3": true } });
+  expect(check(report, "MS-02")).toMatchObject({
+    status: "warn",
+    details: ["app/v1/package.json: verze Bunu 1.4.3 je novější než výchozí 1.4.2; každé Prostředí ji při prvním startu stáhne"],
+  });
+  expect(registry.asked).toEqual(["1.4.3"]);
+});
+
+test("MS-02 warns on a published Bun below the minimum", async () => {
+  const { report, registry } = await measureBunPin("bun@1.4.1", { published: { "1.4.1": true } });
+  expect(check(report, "MS-02")).toMatchObject({
+    status: "warn",
+    details: ["app/v1/package.json: verze Bunu 1.4.1 je pod minimem 1.4.2"],
+  });
+  expect(registry.asked).toEqual(["1.4.1"]);
+});
+
+test("MS-02 fails a Bun version the registry does not know", async () => {
+  const { report, registry } = await measureBunPin("bun@1.4.99", { published: { "1.4.99": false } });
+  expect(check(report, "MS-02")).toMatchObject({
+    status: "fail",
+    details: ["app/v1/package.json: verze Bunu 1.4.99 není vydaná"],
+  });
+  expect(registry.asked).toEqual(["1.4.99"]);
+});
+
+test("MS-02 only warns when the release cannot be verified offline, and never throws", async () => {
+  const offline = await measureBunPin("bun@1.4.3", { published: { "1.4.3": null } });
+  expect(check(offline.report, "MS-02")).toMatchObject({
+    status: "warn",
+    details: [
+      "app/v1/package.json: vydání Bunu 1.4.3 nejde ověřit (offline)",
+      "app/v1/package.json: verze Bunu 1.4.3 je novější než výchozí 1.4.2; každé Prostředí ji při prvním startu stáhne",
+    ],
+  });
+
+  // A check that throws (a broken injected one) counts as unverifiable.
+  const fixture = await conformantFixture({ mutatePackage: (pkg) => { pkg.packageManager = "bun@1.4.3"; } });
+  const report = await setupModule({
+    ...fixture,
+    toolchain: bunToolchain(),
+    isBunVersionPublished: async () => { throw new Error("registry exploded"); },
+  });
+  expect(check(report, "MS-02")).toMatchObject({ status: "warn" });
+  expect(check(report, "MS-02").details[0]).toBe("app/v1/package.json: vydání Bunu 1.4.3 nejde ověřit (offline)");
+});
+
+test("MS-02 treats a Bun version in the runtime cache as published without the network", async () => {
+  const { bunVersionPublished } = await import("./runtime/bun-runtime-lib.mjs");
+  const cacheRoot = await mkdtemp(join(tmpdir(), "lazurio-ms02-cache-"));
+  roots.push(cacheRoot);
+  const system = async () => ({ platform: "linux", arch: "x64", libc: "glibc", avx2: true });
+  await writeText(join(cacheRoot, "1.4.3", "node_modules", "@oven", "bun-linux-x64", "bin", "bun"), "#!/bin/sh\n");
+  const fetches = [];
+  const fixture = await conformantFixture({ mutatePackage: (pkg) => { pkg.packageManager = "bun@1.4.3"; } });
+  const report = await setupModule({
+    ...fixture,
+    toolchain: bunToolchain(),
+    isBunVersionPublished: (version) => bunVersionPublished(version, {
+      cacheRoot,
+      system,
+      fetchFn: async (url) => {
+        fetches.push(String(url));
+        throw new Error("the cached version must not reach the registry");
+      },
+    }),
+  });
+  expect(check(report, "MS-02")).toMatchObject({
+    status: "warn",
+    details: ["app/v1/package.json: verze Bunu 1.4.3 je novější než výchozí 1.4.2; každé Prostředí ji při prvním startu stáhne"],
+  });
+  expect(fetches).toEqual([]);
+});
+
+test("MS-02 lockfile freshness stays a static comparison for any pinned Bun", async () => {
+  const stale = await measureBunPin("bun@1.4.2", { mutatePackage: (pkg) => { pkg.dependencies.zod = "^4.0.0"; } });
+  expect(check(stale.report, "MS-02").details).toEqual([
     "app/v1/package.json: app/v1/bun.lock není čerstvý (dependencies.zod chybí v lockfilu)",
   ]);
+  const staleNewer = await measureBunPin("bun@1.4.3", {
+    published: { "1.4.3": true },
+    mutatePackage: (pkg) => { pkg.dependencies.zod = "^4.0.0"; },
+  });
+  expect(check(staleNewer.report, "MS-02")).toMatchObject({ status: "fail" });
+  expect(check(staleNewer.report, "MS-02").details).toContain(
+    "app/v1/package.json: app/v1/bun.lock není čerstvý (dependencies.zod chybí v lockfilu)",
+  );
 
-  const uncommitted = await conformantFixture({ git: "without-lock" });
-  expect(check(await setupModule(uncommitted), "MS-02").details).toEqual([
+  const uncommitted = await measureBunPin("bun@1.4.2", { git: "without-lock" });
+  expect(check(uncommitted.report, "MS-02").details).toEqual([
     "app/v1/package.json: app/v1/bun.lock není commitnutý",
   ]);
 
-  const notGit = await conformantFixture({ git: false });
-  expect(check(await setupModule(notGit), "MS-02")).toMatchObject({ status: "warn" });
+  const notGit = await measureBunPin("bun@1.4.2", { git: false });
+  expect(check(notGit.report, "MS-02")).toMatchObject({ status: "warn" });
+
+  for (const measured of [stale, uncommitted, notGit]) expect(measured.registry.asked).toEqual([]);
+  expect(staleNewer.registry.asked).toEqual(["1.4.3"]);
 });
 
 test("MS-04 adds the preparation skeleton only when it is unambiguous", async () => {
@@ -1053,6 +1178,52 @@ test("human output lists failing checks and their next step", async () => {
 
 function check(report, id) {
   return report.standard.checks.find((item) => item.id === id);
+}
+
+// A synthetic lazurio/toolchain.json as readToolchainManifest returns it.
+function bunToolchain({ default: bunDefault = "1.4.2", minimum = "1.4.2" } = {}) {
+  return Object.freeze({
+    schema_version: "lazurio.toolchain.v1",
+    tools: Object.freeze({
+      bun: Object.freeze({ default: bunDefault, minimum }),
+      node: Object.freeze({ minimum: "22.12.0" }),
+      uv: Object.freeze({ default: "0.11.6" }),
+      gh: Object.freeze({ minimum: "2.57.0" }),
+      git: Object.freeze({ minimum: "2.31.0" }),
+    }),
+  });
+}
+
+// The registry as MS-02 asks it: `answers` maps a version to true (200),
+// false (404) or null (offline); any other lookup is a test failure.
+function registryAnswers(answers) {
+  const asked = [];
+  return {
+    asked,
+    check: async (version) => {
+      asked.push(version);
+      if (!Object.hasOwn(answers, version)) throw new Error(`unexpected registry lookup for Bun ${version}`);
+      return answers[version];
+    },
+  };
+}
+
+async function measureBunPin(packageManager, { published = {}, apply = false, mutatePackage = null, git = true } = {}) {
+  const fixture = await conformantFixture({
+    git,
+    mutatePackage: (pkg) => {
+      pkg.packageManager = packageManager;
+      mutatePackage?.(pkg);
+    },
+  });
+  const registry = registryAnswers(published);
+  const report = await setupModule({
+    ...fixture,
+    apply,
+    toolchain: bunToolchain(),
+    isBunVersionPublished: registry.check,
+  });
+  return { report, registry, fixture };
 }
 
 async function conformantFixture({

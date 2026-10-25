@@ -158,6 +158,9 @@ test("Workspace build is deterministic, schema-valid, non-Git and self-verifying
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
     "lazurio/module-standard-lib.mjs",
+    // Core reads the toolchain manifest when it loads (decision 0171,
+    // addendum of 2026-10-24, point 5); the CLI runs above only with it.
+    "lazurio/toolchain.json",
     "lazurio/schemas/lazurio-preparation.schema.json",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",

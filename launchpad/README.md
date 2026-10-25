@@ -936,6 +936,10 @@ na kterém běží. Co nejde mít, Lazurio odmítne dřív, než cokoli zastaví
 nebo spustí, a nikdy nepoužije jinou verzi: `runtime-unavailable` (registr
 neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
 `runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
+Doctor tyto piny jen ukazuje v kontrole `launchpad.module_runtimes`: každou
+přesnou verzi, kterou namountované App připínají, s počtem App, zda ji
+mezipaměť pro tento systém drží, a velikost mezipaměti. Kontrola je vždy
+`ok`; nepřesný pin hlásí `MS-02` v `lazurio module setup`.
 
 Organization App může relativním `file:` specem deklarovat read-only package
 cíl v jiném checkoutu téže Organizace. Write a ancestor-resolution hranicí

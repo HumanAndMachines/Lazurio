@@ -19,10 +19,14 @@ import { basename, dirname, join } from "node:path";
 import {
   BunRuntimeRefused,
   bunInstaller,
+  bunPublishedCheckTimeoutMs,
   bunRuntimeRefusalMessage,
   bunTargets,
+  bunVersionCached,
+  bunVersionPublished,
   createModuleBunResolver,
   exactBunPin,
+  moduleBunCacheBytes,
   moduleBunLocks,
   moduleBunRoot,
   runtimeFreeBytesMin,
@@ -300,6 +304,112 @@ test("on Windows the runtime cache lives in the user's LocalAppData, and the App
     { executable: `${binDir}\\bun.exe`, binDir, source: "cache" },
     { platform: "win32" },
   )).toEqual({ Path: `${binDir};C:\\Windows\\System32;C:\\Tools`, SystemRoot: "C:\\Windows" });
+});
+
+// MS-02 asks whether a pinned Bun is published (decision 0171, addendum of
+// 2026-10-24, point 4); the Doctor asks which pins the cache holds. Both read
+// the same cache layout the resolver places, and neither runs a program.
+async function cacheWithProgram(versions) {
+  const cacheRoot = await mkdtemp(join(tmpdir(), "lazurio-bun-cache-"));
+  for (const [version, target, bytes] of versions) {
+    const program = join(cacheRoot, version, "node_modules", "@oven", `bun-${target}`, "bin", "bun");
+    await mkdir(dirname(program), { recursive: true });
+    await writeFile(program, "x".repeat(bytes));
+  }
+  return cacheRoot;
+}
+const linuxX64 = async () => ({ platform: "linux", arch: "x64", libc: "glibc", avx2: true });
+
+test("a Bun version is published when the runtime cache holds it, otherwise as Bun's npm distribution answers for this system, and unknown on any other answer", async () => {
+  const cacheRoot = await cacheWithProgram([["1.4.3", "linux-x64", 4]]);
+  try {
+    const requests = [];
+    const registry = (answer) => async (url, init) => {
+      requests.push({ url: String(url), bounded: init?.signal instanceof AbortSignal });
+      if (answer instanceof Error) throw answer;
+      return new Response(answer === 404 ? "\"version not found\"" : "{}", { status: answer });
+    };
+    const published = (version, answer) => bunVersionPublished(version, { cacheRoot, system: linuxX64, fetchFn: registry(answer) });
+
+    // In the cache: published, and the registry is never asked.
+    expect(await published("1.4.3", new Error("the registry must not be asked"))).toBe(true);
+    expect(requests).toEqual([]);
+
+    expect(await published("1.4.4", 200)).toBe(true);
+    expect(await published("1.4.99", 404)).toBe(false);
+    for (const status of [500, 503, 429, 403]) expect(await published("1.4.5", status)).toBeNull();
+    // Offline, and a registry that does not answer within the bound.
+    expect(await published("1.4.5", new TypeError("fetch failed"))).toBeNull();
+    expect(await published("1.4.5", new DOMException("The operation timed out.", "TimeoutError"))).toBeNull();
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://registry.npmjs.org/@oven/bun-linux-x64/1.4.4",
+      "https://registry.npmjs.org/@oven/bun-linux-x64/1.4.99",
+      ...Array(6).fill("https://registry.npmjs.org/@oven/bun-linux-x64/1.4.5"),
+    ]);
+    expect(requests.every((request) => request.bounded)).toBe(true);
+
+    // The bound is real: a registry that hangs is abandoned, never awaited.
+    const hanging = async (_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason));
+    });
+    expect(await bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: hanging, timeoutMs: 20 })).toBeNull();
+    expect(bunPublishedCheckTimeoutMs).toBe(5_000);
+
+    // The bound covers the whole question, not only the headers: a body whose
+    // cancellation never settles still answers at once, and a fetch that
+    // ignores its signal is abandoned at the bound.
+    const unbounded = async (promise) => {
+      let timer;
+      const guard = new Promise((resolve) => { timer = setTimeout(() => resolve("unbounded"), 500); });
+      try {
+        return await Promise.race([promise, guard]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const stalledBody = async () => ({ status: 200, body: { cancel: () => new Promise(() => {}) } });
+    expect(await unbounded(bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: stalledBody, timeoutMs: 20 })))
+      .toBe(true);
+    const deaf = async () => new Promise(() => {});
+    expect(await unbounded(bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: deaf, timeoutMs: 20 })))
+      .toBeNull();
+
+    // A system Bun publishes no build for cannot tell.
+    expect(await bunVersionPublished("1.4.4", {
+      cacheRoot,
+      system: async () => ({ platform: "freebsd", arch: "x64", libc: null, avx2: null }),
+      fetchFn: registry(200),
+    })).toBeNull();
+    expect(requests).toHaveLength(8);
+    await expect(bunVersionPublished("../1.4.3", { cacheRoot, system: linuxX64, fetchFn: registry(200) }))
+      .rejects.toThrow(TypeError);
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
+});
+
+test("the runtime cache tells which pinned Bun versions it holds for this system and how much space it takes", async () => {
+  const cacheRoot = await cacheWithProgram([
+    ["1.4.3", "linux-x64-baseline", 1000],
+    ["1.4.4", "linux-aarch64", 300],
+  ]);
+  try {
+    await writeFile(join(cacheRoot, "1.4.3", "package.json"), "{}");
+    // Without AVX2 known, the plain build and its baseline both count.
+    const linuxUnknownAvx2 = async () => ({ platform: "linux", arch: "x64", libc: "glibc", avx2: null });
+    expect(await bunVersionCached("1.4.3", { cacheRoot, system: linuxUnknownAvx2 })).toBe(true);
+    expect(await bunVersionCached("1.4.2", { cacheRoot, system: linuxUnknownAvx2 })).toBe(false);
+    // Another system's build is not this system's runtime.
+    expect(await bunVersionCached("1.4.4", { cacheRoot, system: linuxUnknownAvx2 })).toBe(false);
+    // A directory where the program belongs is not a program.
+    await mkdir(join(cacheRoot, "1.4.5", "node_modules", "@oven", "bun-linux-x64", "bin", "bun"), { recursive: true });
+    expect(await bunVersionCached("1.4.5", { cacheRoot, system: linuxUnknownAvx2 })).toBe(false);
+
+    expect(await moduleBunCacheBytes({ cacheRoot })).toBe(1302);
+    expect(await moduleBunCacheBytes({ cacheRoot: join(cacheRoot, "absent") })).toBe(0);
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
 });
 
 posixTest("an unsupported system is refused before anything is downloaded; a plain x64 build that does not run is replaced by its baseline once, and on Linux without AVX2 only the baseline is fetched", async () => {

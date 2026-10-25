@@ -84,8 +84,8 @@ sada zahrnuje i explicitní user-scope cesty odvozené z home právě běžící
 účtu, včetně WinGet user command linku pro Node; ambientní `USERPROFILE`,
 `LOCALAPPDATA` ani libovolná dřívější položka `PATH` tuto autoritu nemění. Běžný Doctor
 navíc spouští z aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i
-nastavený SSH protokol, Node v rozsahu z `lazurio/package.json#engines.node` a
-`codex`.
+nastavený SSH protokol, Node v rozsahu z `lazurio/toolchain.json`
+(`tools.node.minimum`) a `codex`.
 Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
 aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
 required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
