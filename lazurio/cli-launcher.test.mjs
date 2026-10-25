@@ -23,7 +23,7 @@ import { compareStableVersions } from "./core/toolchain-lib.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 
 // The `lazurio` command runs the CLI on Lazurio's exact Bun (decision 0134
-// with its addendum of 2026-10-24): in its own process when it already runs
+// with its addendum of 2026-10-25): in its own process when it already runs
 // on it, otherwise re-executed on it from Lazurio's runtime cache, and on the
 // user's Bun with one line only offline. First the launcher with every seam
 // a fake, then real processes: copies of this package with their own pin, a

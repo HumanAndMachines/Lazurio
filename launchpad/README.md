@@ -934,7 +934,7 @@ tutéž rozbitou verzi se nevylučují, zůstává jen kontrola identity před
 odsunutím rozbité kopie a přejmenování jedním krokem. App bez přesného pinu
 běží Bunem uživatele jako dřív a vlastní procesy Lazuria zůstávají na Bunu,
 na kterém běží; příkaz `lazurio` se sám spouští na přesném Bunu
-z `lazurio/package.json` (decision 0134 s dodatkem z 2026-10-24). Co nejde
+z `lazurio/package.json` (decision 0134 s dodatkem z 2026-10-25). Co nejde
 mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní nebo spustí, a nikdy
 nepoužije jinou verzi: `runtime-unavailable` (registr neodpověděl),
 `runtime-integrity-failed`, `runtime-version-unknown`, `runtime-disk-full`

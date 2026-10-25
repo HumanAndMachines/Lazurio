@@ -150,7 +150,7 @@ test("Workspace build is deterministic, schema-valid, non-Git and self-verifying
   expect(paths).toEqual(expect.arrayContaining([
     "THIRD_PARTY_NOTICES.md",
     // `lazurio/cli.mjs` is the launcher; the CLI it runs is cli-main.mjs
-    // (decision 0134, addendum of 2026-10-24).
+    // (decision 0134, addendum of 2026-10-25).
     "lazurio/cli.mjs",
     "lazurio/cli-main.mjs",
     "lazurio/runtime/cli-runtime-lib.mjs",

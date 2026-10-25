@@ -2437,7 +2437,7 @@ export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, to
 
 /**
  * The Bun Lazurio itself runs on (decision 0134 with its addendum of
- * 2026-10-24): exactly `lazurio/package.json#packageManager`. The `lazurio`
+ * 2026-10-25): exactly `lazurio/package.json#packageManager`. The `lazurio`
  * command re-executes itself on that Bun from Lazurio's runtime cache when the
  * user's Bun differs, so this fails only in its degraded mode, offline without
  * that Bun cached (or in a process that does not start through `lazurio`), and

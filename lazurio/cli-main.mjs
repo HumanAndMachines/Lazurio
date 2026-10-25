@@ -1,5 +1,5 @@
 // The Lazurio CLI. The `lazurio` command (cli.mjs) runs it on Lazurio's exact
-// Bun (decision 0134 with its addendum of 2026-10-24): `main` in its own
+// Bun (decision 0134 with its addendum of 2026-10-25): `main` in its own
 // process, or this file re-executed on that Bun (`<exact bun> cli-main.mjs
 // …`). `bun cli-main.mjs …` runs it directly, on the Bun it is given.
 import { existsSync, realpathSync } from "node:fs";

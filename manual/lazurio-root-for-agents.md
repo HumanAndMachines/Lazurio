@@ -120,7 +120,7 @@ existující Bun v minimu nebo nad ním zůstává, jak je. Svůj přesný Bun
 z `lazurio/package.json#packageManager` si příkaz `lazurio` spouští sám
 z mezipaměti runtime Lazuria; offline bez něj běží na Bunu uživatele
 s jedním řádkem na stderr, dokud ho `lazurio update` s připojením k
-internetu nedoplní (decision 0134 s dodatkem z 2026-10-24). Výsledek
+internetu nedoplní (decision 0134 s dodatkem z 2026-10-25). Výsledek
 se na Windows ověří až po úplném ukončení a novém spuštění Codexu, v čistém
 procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
 `export` nebo `$env:Path`. Před ukončením Agent zapíše do chatu přesný resume

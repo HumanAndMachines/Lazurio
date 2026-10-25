@@ -41,7 +41,7 @@ neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutra
 Samotné CLI běží na přesném Bunu z `package.json#packageManager`: příkaz
 `lazurio` (`cli.mjs`) je tenký launcher, který CLI z `cli-main.mjs` spustí ve
 svém procesu, nebo se na jiném Bunu znovu spustí na přesném Bunu z mezipaměti
-runtime Lazuria (decision 0134 s dodatkem z 2026-10-24). Kolega tak
+runtime Lazuria (decision 0134 s dodatkem z 2026-10-25). Kolega tak
 nedostane neotestovaný runtime CLI jen proto, že vyšel, a jeho vlastní Bun
 v minimu nebo nad ním je v pořádku (decision 0161). Offline bez přesného Bunu
 CLI běží na Bunu uživatele s jedním řádkem na stderr a Doctor failne

@@ -1,5 +1,5 @@
 // The Bun the Lazurio CLI runs on (decision 0134 with its addendum of
-// 2026-10-24): exactly the version `lazurio/package.json#packageManager`
+// 2026-10-25): exactly the version `lazurio/package.json#packageManager`
 // pins, like an App's pinned Bun (decision 0171, addendum of 2026-10-24),
 // while the user's own Bun only needs `tools.bun.minimum` of
 // lazurio/toolchain.json. The `lazurio` command (cli.mjs) decides here:

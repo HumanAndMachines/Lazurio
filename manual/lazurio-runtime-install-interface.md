@@ -67,7 +67,7 @@ identity verification a rollback provést jako jednu samostatnou transakci.
 Pro localhost source, npm CLI a jeho CI je jedinou autoritou exact testovaného
 Bun runtime `package.json#packageManager`; novější patch se nestává
 podporovaným automaticky. `setup-bun` tuto hodnotu čte přímo a příkaz `lazurio`
-se na ní spouští sám (decision 0134 s dodatkem z 2026-10-24): když běží na jiném
+se na ní spouští sám (decision 0134 s dodatkem z 2026-10-25): když běží na jiném
 Bunu, znovu se spustí na přesném Bunu z mezipaměti runtime Lazuria
 (`~/.local/share/lazurio/runtimes/bun`, na Windows
 `%LOCALAPPDATA%\Lazurio\runtimes\bun`) stejným resolverem jako aplikace

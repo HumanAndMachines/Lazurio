@@ -59,7 +59,7 @@ Při publikačním mandátu pro instalační vady přečti také
    výchozí verzi `tools.bun.default`. Upstream latest ani canary není autorita.
    Přesný Bun samotného CLI z `lazurio/package.json#packageManager`
    neinstaluj: příkaz `lazurio` se na něm spouští sám z mezipaměti runtime
-   Lazuria (decision 0134 s dodatkem z 2026-10-24). Po dostupnosti Bunu
+   Lazuria (decision 0134 s dodatkem z 2026-10-25). Po dostupnosti Bunu
    registruj source CLI jen podporovaným `bun run lazurio -- cli install`.
    Claude Code je volitelný a kontroluje se jen tam, kde je instalovaný.
 5. **Měň jen autorizovanou PATH vrstvu.** Obecný nejmenší mandát dovoluje User

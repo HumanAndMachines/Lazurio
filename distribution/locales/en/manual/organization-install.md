@@ -305,7 +305,7 @@ must meet `tools.bun.minimum` of `lazurio/toolchain.json`, and a fresh install
 gets exactly the default `tools.bun.default`; the CLI's own exact Bun stays
 owned by `lazurio/package.json#packageManager`, and the `lazurio` command runs
 itself on it from Lazurio's runtime cache (decision 0134 with its addendum of
-2026-10-24). The supported Node range is owned solely by `tools.node.minimum` in
+2026-10-25). The supported Node range is owned solely by `tools.node.minimum` in
 `lazurio/toolchain.json` (`engines.node` in `lazurio/package.json` is the
 same value for npm); currently it is `>=22.12.0`. For a new
 Machine, after explicit consent, use the current

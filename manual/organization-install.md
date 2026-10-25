@@ -277,7 +277,7 @@ od stavu `*_not_on_path`. Bun uživatele musí splnit `tools.bun.minimum`
 z `lazurio/toolchain.json` a čerstvá instalace dostane přesně výchozí
 `tools.bun.default`; přesný Bun samotného CLI dál vlastní
 `lazurio/package.json#packageManager` a příkaz `lazurio` se na něm spouští sám
-z mezipaměti runtime Lazuria (decision 0134 s dodatkem z 2026-10-24).
+z mezipaměti runtime Lazuria (decision 0134 s dodatkem z 2026-10-25).
 Podporovaný Node rozsah vlastní jedině
 `tools.node.minimum` v `lazurio/toolchain.json` (`engines.node`
 v `lazurio/package.json` je tatáž hodnota pro npm); aktuálně je to
