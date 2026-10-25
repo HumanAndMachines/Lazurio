@@ -1,5 +1,6 @@
 import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { machineOffersPersonalspace, readMachineAssignment } from "../core/machine-identity-lib.mjs";
+import { residentManifestPresent } from "../core/resident-manifest-lib.mjs";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { homedir } from "os";
@@ -2446,14 +2447,18 @@ export function cliRuntimeCheck({
   runningVersion = process.versions.bun ?? null,
   executable = process.execPath,
   requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
+  // A Resident artifact pins its own toolchain (decision 0134).
+  resident = residentManifestPresent(join(import.meta.dirname, "..", "..")),
 } = {}) {
   const exact = runningVersion === requiredVersion;
   return {
     id: "platform.cli_runtime",
-    status: exact ? "ok" : "fail",
+    status: exact || resident ? "ok" : "fail",
     severity: "required",
     title: "Bun Lazuria",
-    message: exact
+    message: resident
+      ? `Lazurio běží z artefaktu Resident na Bunu ${runningVersion ?? "neznámé verze"}; Bun artefaktu drží jeho vlastní toolchain, ne přesná verze ${requiredVersion} pro localhost.`
+      : exact
       ? `Lazurio běží na svém přesném Bunu ${requiredVersion}.`
       : `Lazurio běží na Bunu ${runningVersion ?? "neznámé verze"} místo svého přesného Bunu ${requiredVersion}. Příkaz lazurio se na přesném Bunu spouští sám z mezipaměti runtime Lazuria; když ho tam nemá a stáhnout ho nejde, běží na vašem Bunu. Spusťte lazurio update s připojením k internetu.`,
     paths: ["lazurio/package.json"],
@@ -2462,7 +2467,7 @@ export function cliRuntimeCheck({
       `running: ${runningVersion ?? "<unknown>"}`,
       `required: ${requiredVersion}`,
       `executable: ${executable}`,
-      ...(exact ? [] : ["remedy_command: lazurio update"]),
+      ...(resident ? ["resident: yes"] : exact ? [] : ["remedy_command: lazurio update"]),
     ],
   };
 }

@@ -7,19 +7,28 @@
 //   1. on that Bun already, the CLI (cli-main.mjs) runs in this process;
 //   2. otherwise the Apps' resolver gives that Bun, from Lazurio's runtime
 //      cache or fetched into it with the user's Bun, and the CLI runs
-//      re-executed on it (`<exact bun> cli-main.mjs …`) with the loop guard
+//      re-executed on it (`<exact bun> cli-main.mjs …`) with
 //      LAZURIO_CLI_BUN=<pin>, stdio, signals and exit code passed through;
 //   3. only when that Bun cannot be had offline (`runtime-unavailable`) does
 //      the CLI run on the user's Bun, with one line on stderr: a visible
 //      degraded mode, so that `lazurio update` and the Doctor that repair it
 //      still run; the Doctor fails `platform.cli_runtime` meanwhile;
-//   4. every other refusal, and a guard that still sees another Bun, stops
-//      with exit 2.
+//   4. every other refusal stops with exit 2, and so does a re-executed CLI
+//      that LAZURIO_CLI_BUN shows on another Bun than the one it was given.
+//
+// A CLI in a Resident artifact runs in this process on the artifact's own
+// Bun: the artifact pins its toolchain with its own lifecycle, which the
+// localhost pin does not override (decision 0134).
 //
 // This module loads the toolchain and the resolver only when it needs them:
 // whatever it imports, the `lazurio` command imports before it can decide.
 
-/** The loop guard: the exact Bun a re-executed CLI must run on. */
+import { join } from "node:path";
+
+/** The exact Bun a re-executed CLI must run on, set by the launcher for its
+ * child. The launcher itself never reads it: it starts cli-main.mjs, never
+ * itself, so it cannot loop, and a variable a process inherited from an
+ * earlier re-execution must not stop a later `lazurio` on another Bun. */
 export const CLI_BUN_ENV = "LAZURIO_CLI_BUN";
 
 // The signals a re-executed CLI receives from its launcher, as the Launchpad
@@ -38,14 +47,23 @@ function cliBunLoopLine({ pin, running }) {
   return `lazurio: Lazurio se mělo znovu spustit na svém přesném Bunu ${pin} (${CLI_BUN_ENV}=${pin}), ale běží na Bunu ${running ?? "neznámé verze"}, takže se znovu nespustí. Požádejte agenta, ať zkontroluje mezipaměť runtime Lazuria.`;
 }
 
-/** The re-executed CLI's side of the loop guard: it consumes the guard, so
- * nothing the CLI starts inherits it, and answers the line to stop with when
- * this process does not run on the Bun the guard names; null otherwise. */
+/** The re-executed CLI's check of its Bun: it removes the variable from
+ * process.env and answers the line to stop with when this process does not
+ * run on the Bun the variable names; null otherwise. (Bun.spawn without an
+ * env option still hands its children the variables this process started
+ * with; only a re-executed CLI reads it, and its launcher sets it afresh.) */
 export function cliBunMarkerRefusal({ env = process.env, runningVersion = process.versions.bun } = {}) {
   if (!Object.hasOwn(env, CLI_BUN_ENV)) return null;
   const pin = env[CLI_BUN_ENV];
   delete env[CLI_BUN_ENV];
   return pin === runningVersion ? null : cliBunLoopLine({ pin, running: runningVersion });
+}
+
+/** Whether the CLI of `packageRoot` (the `lazurio` package) runs from a
+ * Resident artifact: its code root, one level up, holds the Resident manifest. */
+export async function isResidentArtifact(packageRoot) {
+  const { residentManifestPresent } = await import("../core/resident-manifest-lib.mjs");
+  return residentManifestPresent(join(packageRoot, ".."));
 }
 
 // The CLI's exact Bun version, by the one authority of decision 0134.
@@ -88,6 +106,7 @@ export async function launchLazurioCli({
   platform = process.platform,
   // Seams of the tests: the pin, the resolution, the child and this process.
   readPin = readCliBunPin,
+  residentArtifact = isResidentArtifact,
   resolveBun = resolveCliBun,
   spawnProcess = (command, options) => Bun.spawn(command, options),
   processObject = process,
@@ -100,14 +119,9 @@ export async function launchLazurioCli({
     writeError(`lazurio: ${error.message}`);
     return { code: 2 };
   }
-  if (runningVersion === pin) {
-    // Nothing this CLI starts carries a guard of an earlier launch.
+  if (runningVersion === pin || await residentArtifact(packageRoot)) {
     delete env[CLI_BUN_ENV];
     return { code: await (await loadMain())(argv) };
-  }
-  if (env[CLI_BUN_ENV] === pin) {
-    writeError(cliBunLoopLine({ pin, running: runningVersion }));
-    return { code: 2 };
   }
 
   let bun;

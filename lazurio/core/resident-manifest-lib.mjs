@@ -1,6 +1,17 @@
-import { isAbsolute, posix } from "node:path";
+import { lstatSync } from "node:fs";
+import { isAbsolute, join, posix } from "node:path";
 
 export const RESIDENT_MANIFEST_PATH = "lazurio.resident.json";
+
+/** Whether `codeRoot` is a Resident artifact: it holds the Resident manifest
+ * as a regular file, the marker CLI provenance reads. */
+export function residentManifestPresent(codeRoot) {
+  try {
+    return lstatSync(join(codeRoot, RESIDENT_MANIFEST_PATH)).isFile();
+  } catch {
+    return false;
+  }
+}
 export const RESIDENT_CHANNELS = Object.freeze(["candidate", "stable"]);
 
 const ALLOWED_MUTABLE_MOUNTS = new Set(["organizations", "personalspace"]);

@@ -16,6 +16,7 @@ import {
   cliBunMarkerRefusal,
   cliRuntimeFallbackLine,
   finishLazurioCli,
+  isResidentArtifact,
   launchLazurioCli,
 } from "./runtime/cli-runtime-lib.mjs";
 import { compareStableVersions } from "./core/toolchain-lib.mjs";
@@ -195,26 +196,47 @@ test("on Windows the same spawn path runs the .exe the resolver gives, without P
   expect(ended.exitCode).toBe(1);
 });
 
-test("the loop guard: under LAZURIO_CLI_BUN=<pin> on another Bun the launcher stops with exit 2 and never resolves or respawns", async () => {
-  const launch = seams({ env: { [CLI_BUN_ENV]: "1.4.2" } });
-  launch.options.resolveBun = () => { throw new Error("the loop guard never resolves"); };
-  launch.options.spawnProcess = () => { throw new Error("the loop guard never respawns"); };
+test("a guard inherited from an earlier re-execution never stops a launcher on another Bun: it re-executes with a fresh guard", async () => {
+  // Bun.spawn without an env option hands a child the variables of its own
+  // start, so a process a re-executed CLI starts can carry LAZURIO_CLI_BUN into
+  // a later `lazurio` on another Bun (an App's binDir first on PATH, say). The
+  // launcher starts cli-main.mjs, never itself, so it cannot loop; the guard
+  // is only the re-executed CLI's check of the Bun it was given.
+  for (const inherited of ["1.4.2", "1.3.10"]) {
+    const launch = seams({ env: { PATH: "/usr/bin:/bin", [CLI_BUN_ENV]: inherited } });
+    const outcome = launchLazurioCli(launch.options);
+    await Bun.sleep(0);
+    launch.end({ code: 0 });
+    expect(await outcome).toEqual({ code: 0 });
+    expect(launch.calls.resolve).toHaveLength(1);
+    expect(launch.calls.spawn[0].options.env[CLI_BUN_ENV]).toBe("1.4.2");
+    expect(launch.calls.stderr).toEqual([]);
+  }
+});
 
-  expect(await launchLazurioCli(launch.options)).toEqual({ code: 2 });
-  expect(launch.calls.stderr).toHaveLength(1);
-  expect(launch.calls.stderr[0]).toStartWith("lazurio: ");
-  expect(launch.calls.stderr[0]).toContain("1.4.2");
-  expect(launch.calls.stderr[0]).toContain("1.4.4");
-  expect(launch.calls.stderr[0]).toContain(CLI_BUN_ENV);
-  expect(launch.calls.main).toEqual([]);
+test("a CLI in a Resident artifact runs on the artifact's own Bun: no resolution, no child, no line (decision 0134)", async () => {
+  const launch = seams({ running: "1.3.10", env: { PATH: "/usr/bin:/bin", [CLI_BUN_ENV]: "1.4.2" } });
+  launch.options.residentArtifact = () => true;
+  launch.options.resolveBun = () => { throw new Error("a Resident artifact is never resolved"); };
+  launch.options.spawnProcess = () => { throw new Error("a Resident artifact is never re-executed"); };
 
-  // A guard naming another pin (an older Lazurio's) is not this one's loop.
-  const other = seams({ env: { [CLI_BUN_ENV]: "1.3.10" } });
-  const outcome = launchLazurioCli(other.options);
-  await Bun.sleep(0);
-  other.end({ code: 0 });
-  expect(await outcome).toEqual({ code: 0 });
-  expect(other.calls.spawn[0].options.env[CLI_BUN_ENV]).toBe("1.4.2");
+  expect(await launchLazurioCli(launch.options)).toEqual({ code: 0 });
+  expect(launch.calls.main).toEqual([["doctor", "--json"]]);
+  expect(launch.calls.stderr).toEqual([]);
+  expect(launch.options.env[CLI_BUN_ENV]).toBeUndefined();
+});
+
+test("a Resident artifact is a code root whose lazurio.resident.json is a regular file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-resident-"));
+  tempRoots.push(root);
+  const packageRoot = join(root, "lazurio");
+  await mkdir(packageRoot, { recursive: true });
+  expect(await isResidentArtifact(packageRoot)).toBe(false);
+  await mkdir(join(root, "lazurio.resident.json"));
+  expect(await isResidentArtifact(packageRoot)).toBe(false);
+  await rm(join(root, "lazurio.resident.json"), { recursive: true });
+  await writeFile(join(root, "lazurio.resident.json"), "{}");
+  expect(await isResidentArtifact(packageRoot)).toBe(true);
 });
 
 test("offline, without its exact Bun, the CLI runs on the user's Bun with exactly one line", async () => {
@@ -458,20 +480,20 @@ posixTest("through the runtime cache the launcher runs its exact Bun on cli-main
   ]);
 }, platformTestTimeout(20_000));
 
-posixTest("the launcher's loop guard: under LAZURIO_CLI_BUN=<pin> on another Bun nothing is resolved or spawned", async () => {
+posixTest("an inherited LAZURIO_CLI_BUN does not stop the launcher: it resolves and re-executes the CLI", async () => {
   const copy = await lazurioCopy("9.9.9");
   const homeDirectory = await home();
   const fake = await cachedFakeBun({ homeDirectory, version: "9.9.9" });
-  const result = run([process.execPath, join(copy.packageRoot, "cli.mjs"), "--help"], {
+  run([process.execPath, join(copy.packageRoot, "cli.mjs"), "--help"], {
     cwd: copy.root,
     homeDirectory,
     env: { [CLI_BUN_ENV]: "9.9.9" },
   });
 
-  expect(result.code).toBe(2);
-  expect(result.stdout).toBe("");
-  expect(result.stderr).toContain(CLI_BUN_ENV);
-  expect(await fake.calls()).toEqual([]);
+  // The fake answers its version and then runs the real Bun, so the
+  // re-executed CLI refuses by itself; what matters here is that the
+  // launcher got that far.
+  expect((await fake.calls()).at(-1)).toBe(`9.9.9|${join(copy.packageRoot, "cli-main.mjs")} --help`);
 }, platformTestTimeout(20_000));
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

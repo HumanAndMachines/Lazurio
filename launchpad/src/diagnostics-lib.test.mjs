@@ -146,6 +146,24 @@ test("platform.cli_runtime fails when Lazurio runs on another Bun than its pin a
 
   // Without a version: not a Bun Lazurio can name.
   expect(cliRuntimeCheck({ runningVersion: null, executable: "/usr/bin/node", requiredVersion: "1.4.2" }).status).toBe("fail");
+
+  // A Resident artifact pins its own toolchain (decision 0134), so its Bun is
+  // not a failure of the localhost pin.
+  const resident = cliRuntimeCheck({
+    runningVersion: "1.3.10",
+    executable: "/opt/lazurio/toolchain/bun/bin/bun",
+    requiredVersion: "1.4.2",
+    resident: true,
+  });
+  expect(resident).toMatchObject({ id: "platform.cli_runtime", status: "ok", links: [] });
+  expect(resident.message).toContain("Resident");
+  expect(resident.message).toContain("1.3.10");
+  expect(resident.details).toEqual([
+    "running: 1.3.10",
+    "required: 1.4.2",
+    "executable: /opt/lazurio/toolchain/bun/bin/bun",
+    "resident: yes",
+  ]);
 });
 
 test("Node.js Doctor shares the Install Core version authority", () => {

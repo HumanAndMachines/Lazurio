@@ -71,7 +71,7 @@ se na ní spouští sám (decision 0134 s dodatkem z 2026-10-24): když běží 
 Bunu, znovu se spustí na přesném Bunu z mezipaměti runtime Lazuria
 (`~/.local/share/lazurio/runtimes/bun`, na Windows
 `%LOCALAPPDATA%\Lazurio\runtimes\bun`) stejným resolverem jako aplikace
-Modulů, s pojistkou `LAZURIO_CLI_BUN` proti smyčce. Offline bez tohoto Bunu
+Modulů; znovu spuštěné CLI si podle `LAZURIO_CLI_BUN` ověří svůj Bun. Offline bez tohoto Bunu
 běží na Bunu uživatele s jedním řádkem na stderr a Doctor selže
 v `platform.cli_runtime`, dokud ho `lazurio update` s připojením k internetu
 nedoplní; ostatní odmítnutí resolveru CLI zastaví. Bun uživatele v PATH
