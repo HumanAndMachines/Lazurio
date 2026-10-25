@@ -43,6 +43,9 @@ Zkrácený kontrakt, který drží každá App Modulu:
 - TypeScript strict; stack Vite + React (UI/data), Astro (web/KB), Bun
   (služby), `uv` (Python). Nejvýše dvě generace App: výchozí a jedna
   předchozí nebo kandidátní.
+- Z `main` běží sestavená verze: statická App deklaruje `build_output`
+  (kap. 4.5), App s vlastním serverem `start_script` (kap. 4.6). Náhled
+  z worktree zůstává `dev`.
 
 ## Co platí dnes a co je cílový stav
 
@@ -56,6 +59,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 | Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
 | `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |
 | Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
+| Platform Launchpad: `start_script` (kap. 4.6) a uspávání nepoužívané App | od LazurioPlatform v0.1.11 (Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573, z předběžných vydání od v0.1.11-rc.3); starší vydání neznámý klíč `lazurio.runtime` odmítá | `start_script` deklaruj až tehdy, když všechna Prostředí Organizace Modulu běží na v0.1.11 nebo novější (předběžné vydání od v0.1.11-rc.3 se počítá); kterékoli z nich Modul objeví a z `main` spustí (referenční Organizace napřed, 0204). |
 
 ## Kdy použít
 
@@ -181,8 +185,33 @@ ani pro productionspace repa (decision 0041).
       od commitu s kapitolou 4.5 (dřívější `lazurio module setup` je odmítne
       jako nepovolená) a Launchpad je čte od vydání Platformy s F58; převod
       Modulu proto mergni až po obojím. App s API ve vývojovém serveru
-      (Vite pluginy) nebo vlastním Bun serverem `build_output` nedeklaruje;
-      v PR uveď, že čeká na druhou fázi (`start_script`).
+      (Vite pluginy) nebo vlastním Bun serverem statický `build_output`
+      nedeklaruje; převádí se podle kroku 8.
+   8. **Serverová App** (kap. 4.6, rozhodnutí 0195 bod 24): App s vlastním
+      serverem deklaruje v `lazurio.runtime` `start_script`, skript, který
+      spustí produkční server jako jeden proces (smí být totožný
+      s `dev_script`, je-li ten už produkčním serverem; nikdy `vite`,
+      `astro dev`, `--hot` ani `--watch`, hlídá `MS-05`). Má-li App klienta,
+      deklaruje i `build_script`, který sestaví **jen klienta** (`vite build`;
+      server se nesestavuje a běží z checkoutu), a `build_output` (`dist`);
+      `static_fallback` ne. Server klienta servíruje z
+      `process.env.LAZURIO_RUNTIME_BUILD_OUTPUT ?? "./dist"`: proměnnou předá
+      Launchpad při startu z `main` (výstup sestavení mimo checkout),
+      ve vývojové verzi chybí. Produkční režim pozná z `NODE_ENV=production`.
+      API, které žilo jen ve vývojovém serveru (Vite pluginy), přesuň do
+      vlastního serveru App (`Bun.serve`). Listenery, tajemství a sousedy
+      server dostane jako vývojová verze; sestavení klienta je nedostane, takže
+      konfigurace je při `build` nečte. Klíčem sestavení je jen commit Modulu,
+      data server čte za běhu. Ověř `bun run build`, pak start produkčního
+      serveru s `NODE_ENV=production` a `LAZURIO_RUNTIME_BUILD_OUTPUT`
+      ukazujícím na výstup (health 200, klient se načte) a vývojovou verzi
+      bez proměnné. Převod mergni až tehdy, když všechna Prostředí Organizace
+      Modulu běží na LazurioPlatform v0.1.11 nebo novější (předběžné vydání od
+      v0.1.11-rc.3 se počítá; tabulka výše);
+      Launchpad tohoto repa klíč přijme, ale App dál spouští přes `dev`.
+      Nepoužívaná App z `main` po 20 minutách usne a další otevření ji
+      spustí znovu: stav, který má přežít, nedrž jen v paměti; souseda, kterého
+      App volá, deklaruj v `required_module_slots`, jinak usne i on.
 2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom
    `bun run check && bun test` a skutečný start přes Launchpad
    (`lazurio module start`, otevři URL, `lazurio module stop`).
