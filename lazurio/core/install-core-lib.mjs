@@ -14,9 +14,11 @@ import {
   classifyToolVersion,
   classifyBunRuntime,
   classifyNodeRuntime,
+  compareStableVersions,
   nodeVersionFromOutput,
   readRequiredBunVersion,
   readRequiredNodeVersionRange,
+  readToolchainManifest,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
@@ -112,6 +114,7 @@ export function inspectLazurioInstallation({
   bunVersion = process.versions.bun ?? null,
   bunExecutable = process.execPath,
   requiredBunVersion = readRequiredBunVersion(),
+  minimumBunVersion = readToolchainManifest().tools.bun.minimum,
   requiredNodeVersionRange = readRequiredNodeVersionRange(),
   environment = process.env,
   homeDirectory = homedir(),
@@ -129,40 +132,44 @@ export function inspectLazurioInstallation({
       : actionRequired("platform_unsupported")
   )));
 
+  // `machine.bun` is the Bun this CLI runs on against its exact pin (decision
+  // 0134): the `lazurio` launcher re-executes it on that Bun, so it differs
+  // only offline, which the Doctor reports (`platform.cli_runtime`). The step
+  // is the user's Bun on PATH (decision 0171, addendum of 2026-10-24, point
+  // 4): at or above the minimum it is theirs and stays as it is (decision
+  // 0161); missing or below it, the consented install gets the exact default.
   const bunRuntime = classifyBunRuntime({
     currentVersion: bunVersion,
     requiredVersion: requiredBunVersion,
   });
   steps.push(boundedProbe("bun", () => {
-    if (bunRuntime.status === "current") {
-      const pathExecutable = resolvePathCommand("bun", { environment, platform, cwd: commandCwd });
-      if (!pathExecutable) return actionRequired("bun_runtime_not_on_path");
-      const result = runCommand({
-        executable: pathExecutable,
-        args: ["--version"],
-        environment,
-        cwd: commandCwd,
-      });
-      const observedVersion = result?.stdout?.trim();
-      if (result?.status !== 0 || observedVersion !== requiredBunVersion) return failed("bun_path_unusable");
-      // Versioned repository scripts execute packages through `bun x`; the
-      // exact Bun on PATH must provide it. A standalone `bunx` is not required.
-      const packageRunner = runCommand({
-        executable: pathExecutable,
-        args: [...BUN_PACKAGE_RUNNER_PROBE_ARGS],
-        environment,
-        cwd: commandCwd,
-      });
-      return classifyBunPackageRunnerProbe({
-        exitCode: packageRunner?.status ?? null,
-        stdout: packageRunner?.stdout,
-        stderr: packageRunner?.stderr,
-      }) === "ready"
-        ? completed("bun_runtime_current")
-        : failed("bun_package_runner_unusable");
-    }
-    if (bunRuntime.status === "mismatch") return actionRequired("bun_runtime_mismatch");
-    return failed("bun_runtime_unavailable");
+    if (bunRuntime.status === "unavailable") return failed("bun_runtime_unavailable");
+    const pathExecutable = resolvePathCommand("bun", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("bun_runtime_not_on_path");
+    const result = runCommand({
+      executable: pathExecutable,
+      args: ["--version"],
+      environment,
+      cwd: commandCwd,
+    });
+    const observedVersion = result?.status === 0 ? result.stdout?.trim() : null;
+    if (!/^\d+\.\d+\.\d+$/u.test(observedVersion ?? "")) return failed("bun_path_unusable");
+    if (compareStableVersions(observedVersion, minimumBunVersion) < 0) return actionRequired("bun_runtime_mismatch");
+    // Versioned repository scripts execute packages through `bun x`; the
+    // user's Bun on PATH must provide it. A standalone `bunx` is not required.
+    const packageRunner = runCommand({
+      executable: pathExecutable,
+      args: [...BUN_PACKAGE_RUNNER_PROBE_ARGS],
+      environment,
+      cwd: commandCwd,
+    });
+    return classifyBunPackageRunnerProbe({
+      exitCode: packageRunner?.status ?? null,
+      stdout: packageRunner?.stdout,
+      stderr: packageRunner?.stderr,
+    }) === "ready"
+      ? completed("bun_runtime_current")
+      : failed("bun_package_runner_unusable");
   }));
 
   let gitExecutable = null;
