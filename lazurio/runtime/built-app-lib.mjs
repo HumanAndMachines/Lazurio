@@ -15,9 +15,9 @@
 //     logs/<key>.log  the output of the build of that key
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, posix, relative, sep, win32 } from "node:path";
+import { isAbsolute, join, posix, relative, sep, win32 } from "node:path";
 import { runGit } from "./git-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { resolveStaticRequest } from "./static-build-server.mjs";
@@ -307,6 +307,13 @@ function stateBase(app, cwd, checkoutRoot, latest) {
 
 async function runBuild({ app, mode, cwd, checkoutRoot, logPath, bunExecutable, env, spawnProcess, timeoutMs, platform }) {
   const outputPath = join(cwd, ...app.build_output.split("/"));
+  // The output and the way to it stay inside the App's package, or Lazurio
+  // neither removes, builds nor copies anything.
+  const before = await outputBoundary(cwd, app.build_output);
+  if (!before.ok) {
+    await writeFile(logPath, `${outsidePackageLog(app.build_output, before.detail)}\n`, "utf8");
+    return { ok: false, reason: "build-output-unservable" };
+  }
   // Fail closed on a stale output: whatever is there now was not built from
   // this key, so the build must write it again.
   await rm(outputPath, { recursive: true, force: true });
@@ -344,6 +351,13 @@ async function runBuild({ app, mode, cwd, checkoutRoot, logPath, bunExecutable, 
   );
   if (timedOut) return { ok: false, reason: "build-timed-out" };
   if (exitCode !== 0) return { ok: false, reason: "build-script-failed" };
+  // The build script may have linked a directory on the way out of the
+  // package: then its output is never copied into the cache.
+  const after = await outputBoundary(cwd, app.build_output);
+  if (!after.ok) {
+    await appendFile(logPath, `${outsidePackageLog(app.build_output, after.detail)}\n`, "utf8");
+    return { ok: false, reason: "build-output-unservable" };
+  }
   if (!await isDirectory(outputPath)) return { ok: false, reason: "build-output-missing" };
   if (mode === "static") {
     const healthPath = String(app.entrypoint_listener?.health?.path ?? "/").split("?")[0] || "/";
@@ -351,6 +365,58 @@ async function runBuild({ app, mode, cwd, checkoutRoot, logPath, bunExecutable, 
     if (answer.kind !== "file" || answer.status !== 200) return { ok: false, reason: "build-output-unservable" };
   }
   return { ok: true, outputPath, dirty };
+}
+
+// The build output inside the App's package. `build_output` is a relative
+// path of plain segments (the runtime contract refuses `..` and absolute
+// paths), so it can leave the package only through a link on the way: a
+// symlink, or on Windows a junction, which Node reports as a symbolic link.
+// Every existing entry on the way must be a real directory (the output
+// itself may also be a file, which stays inside), and what exists of the path
+// must resolve inside the package. Removing or copying anything else would
+// touch files outside the checkout.
+async function outputBoundary(cwd, buildOutput) {
+  const segments = String(buildOutput).split("/");
+  let root;
+  try {
+    root = await realpath(cwd);
+  } catch (error) {
+    return { ok: false, detail: `balíček App nejde přečíst (${error?.code ?? "error"})` };
+  }
+  let current = cwd;
+  let deepest = cwd;
+  for (let index = 0; index < segments.length; index += 1) {
+    current = join(current, segments[index]);
+    const name = segments.slice(0, index + 1).join("/");
+    let entry;
+    try {
+      entry = await lstat(current);
+    } catch (error) {
+      if (error?.code === "ENOENT") break;
+      return { ok: false, detail: `${name} nejde přečíst (${error?.code ?? "error"})` };
+    }
+    if (entry.isSymbolicLink()) return { ok: false, detail: `${name} je odkaz (symlink nebo junction)` };
+    if (!entry.isDirectory()) {
+      if (index === segments.length - 1) break;
+      return { ok: false, detail: `${name} není adresář` };
+    }
+    deepest = current;
+  }
+  let resolved;
+  try {
+    resolved = await realpath(deepest);
+  } catch (error) {
+    return { ok: false, detail: `cestu k výstupu nejde přečíst (${error?.code ?? "error"})` };
+  }
+  const inside = relative(root, resolved);
+  if (inside.startsWith("..") || isAbsolute(inside)) {
+    return { ok: false, detail: "cesta k výstupu vede mimo balíček App" };
+  }
+  return { ok: true };
+}
+
+function outsidePackageLog(buildOutput, detail) {
+  return `[lazurio] build_output ${buildOutput}: ${detail}. Výstup i cesta k němu musí ležet v balíčku App; Lazurio nic mimo něj nemaže ani nekopíruje a toto sestavení nepoužije.`;
 }
 
 async function endProcessTree(child, platform, env) {

@@ -349,6 +349,47 @@ test("a build that writes no output, or one that cannot answer its health path, 
   expect((await fixture.build()).finding.reason).toBe("build-output-unservable");
 });
 
+// A directory link: a symlink, or on Windows a junction (no privilege needed).
+const directoryLink = (target, path) => symlink(target, path, process.platform === "win32" ? "junction" : "dir");
+
+test("a nested build_output whose way leaves the package through a link is never removed, built or copied", async () => {
+  // Before the build: app/generated links to a directory outside the checkout
+  // whose dist holds someone else's file.
+  const fixture = await createBuildCheckout();
+  fixture.app.build_output = "generated/dist";
+  const outside = await temporary("lazurio-outside-");
+  await writeBuild(outside, { "dist/sentinel.txt": "not Lazurio's" });
+  await directoryLink(outside, join(fixture.cwd, "generated"));
+  const refused = await fixture.build();
+  expect(refused).toMatchObject({ ok: false, finding: { reason: "build-output-unservable" } });
+  expect(await readFile(join(outside, "dist", "sentinel.txt"), "utf8")).toBe("not Lazurio's");
+  // The build script never ran, and the log names the link.
+  expect(await readFile(join(fixture.cwd, "runs", "builds.txt"), "utf8").catch(() => null)).toBeNull();
+  expect(await readFile(refused.finding.log_path, "utf8")).toContain("generated je odkaz");
+  await rm(join(fixture.cwd, "generated"), { recursive: false, force: true });
+
+  // After the build: the build script itself links app/generated outside the
+  // checkout and writes a servable output there; nothing of it is copied in.
+  const linking = await createBuildCheckout();
+  linking.app.build_output = "generated/dist";
+  const elsewhere = await temporary("lazurio-elsewhere-");
+  await writeFile(join(linking.cwd, "build.mjs"), [
+    'import { mkdir, symlink, writeFile } from "node:fs/promises";',
+    `const target = ${JSON.stringify(elsewhere)};`,
+    'await mkdir(`${target}/dist`, { recursive: true });',
+    'await writeFile(`${target}/dist/index.html`, "<h1>from outside</h1>");',
+    'await symlink(target, "generated", process.platform === "win32" ? "junction" : "dir");',
+  ].join("\n"));
+  runGit(["commit", "-am", "linking build"], linking.checkout);
+  const copied = await linking.build();
+  expect(copied).toMatchObject({ ok: false, finding: { reason: "build-output-unservable" } });
+  expect(await readFile(copied.finding.log_path, "utf8")).toContain("generated je odkaz");
+  const keys = (await readdir(copied.directory)).filter((name) => /^[0-9a-f]{40}$/.test(name));
+  expect(keys).toEqual([]);
+  expect(await readFile(join(elsewhere, "dist", "index.html"), "utf8")).toBe("<h1>from outside</h1>");
+  await rm(join(linking.cwd, "generated"), { recursive: false, force: true });
+});
+
 test("old builds are removed; the current, the previous and the served one stay", async () => {
   const fixture = await createBuildCheckout();
   const first = await fixture.build();

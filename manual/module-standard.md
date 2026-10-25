@@ -485,6 +485,10 @@ na Launchpad Platformy zanikne.
   stejné kontrole balíčků, kterou start dělá i dnes. Výstup v balíčku App
   Launchpad před sestavením smaže a po něm ho vyžaduje znovu vytvořený;
   statické sestavení musí navíc vyřešit cestu health (kap. 4.5 bod 5).
+  Výstup i cesta k němu musí ležet v balíčku App: vede-li přes odkaz
+  (symlink, na Windows junction) mimo balíček, Launchpad nic nesmaže,
+  nesestaví ani nezkopíruje a sestavení je neúspěšné
+  (`build-output-unservable`).
   Uloží ho mimo checkout do
   `${XDG_CACHE_HOME:-~/.cache}/lazurio/builds/<Organizace>/<Modul>/<id App>-<otisk adresáře App>/<klíč>/`
   (na Windows `%LOCALAPPDATA%\Lazurio\cache\builds\…`), vedle `build.json`,
