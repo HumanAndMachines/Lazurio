@@ -110,9 +110,10 @@ Add only the paragraphs whose impact the user actually approves:
 
 > Update existing Git, GitHub CLI, and Codex CLI to the
 > current official stable versions, and Node.js to the current supported LTS.
-> Always set Bun to the exact stable version declared by the current clean
-> Lazurio `lazurio/package.json#packageManager`, even when upstream offers a
-> newer release. Install and update Codex CLI using the official OpenAI standalone
+> Leave a Bun that meets `tools.bun.minimum` of the current clean Lazurio
+> `lazurio/toolchain.json` as it is; set a Bun below the minimum to the exact
+> default `tools.bun.default`, even when upstream offers a newer release.
+> Install and update Codex CLI using the official OpenAI standalone
 > installer. If I explicitly request a change of installation method, you may migrate an existing
 > Homebrew/npm/WinGet installation to standalone: first verify the new
 > installation, then remove only the previous Codex CLI package and preserve
@@ -243,8 +244,9 @@ permission on every Builder repository in the install scope.
 ## Prerequisites
 
 - the production or development-linked `lazurio` command is in `PATH`;
-- Git, the exactly pinned Bun, a supported Node.js, and the GitHub CLI are
-  available in the `PATH` of a new clean process;
+- Git, a Bun at or above the minimum of `lazurio/toolchain.json`, a supported
+  Node.js, and the GitHub CLI are available in the `PATH` of a new clean
+  process;
 - `gh auth status --hostname github.com` confirms the correct account;
 - the Organization owner has already completed the one-time activation of
   `Lazurio for GitHub`;
@@ -298,9 +300,12 @@ Git's SSH transport must also work.
 The machine toolchain is owned by the top-level installation flow, not by the
 Organization. The Agent first runs `lazurio install --json` and, when
 troubleshooting, also `lazurio doctor --tool-updates --json`. Install Core
-distinguishes a missing tool from the `*_not_on_path` state; the exact
-supported Bun version continues to be owned by `package.json#packageManager`.
-The supported Node range is owned solely by `tools.node.minimum` in
+distinguishes a missing tool from the `*_not_on_path` state. The user's Bun
+must meet `tools.bun.minimum` of `lazurio/toolchain.json`, and a fresh install
+gets exactly the default `tools.bun.default`; the CLI's own exact Bun stays
+owned by `lazurio/package.json#packageManager`, and the `lazurio` command runs
+itself on it from Lazurio's runtime cache (decision 0134 with its addendum of
+2026-10-25). The supported Node range is owned solely by `tools.node.minimum` in
 `lazurio/toolchain.json` (`engines.node` in `lazurio/package.json` is the
 same value for npm); currently it is `>=22.12.0`. For a new
 Machine, after explicit consent, use the current
@@ -327,15 +332,15 @@ Codex relaunch after a persistent `PATH` change when the harness can do so
 safely; otherwise the only fallback requested from the user is to close and
 reopen the Codex graphical application, never Terminal or PowerShell.
 
-Bun is not ready merely because `bun --version` returns the exact version.
-Versioned repository scripts execute package binaries through `bun x`, so both
-Install Core and Doctor actually run that capability (`bun x --help`) against
-the exact Bun on `PATH`. A standalone `bunx` binary is not a requirement: the
-official `Oven-sh.Bun` WinGet package may not ship it on Windows, and Doctor
-reports its presence only as information. A failure
+Bun is not ready merely because `bun --version` returns a version at the
+minimum or above. Versioned repository scripts execute package binaries through
+`bun x`, so both Install Core and Doctor actually run that capability
+(`bun x --help`) against the Bun on `PATH`. A standalone `bunx` binary is not a
+requirement: the official `Oven-sh.Bun` WinGet package may not ship it on
+Windows, and Doctor reports its presence only as information. A failure
 (`bun_package_runner_unusable`, `platform.bun_package_runner`) carries a single
-remedy — the official Bun installer pinned exactly to
-`package.json#packageManager` (Windows PowerShell:
+remedy — the official Bun installer pinned exactly to the default
+`tools.bun.default` of `lazurio/toolchain.json` (Windows PowerShell:
 `iex "& {$(irm https://bun.com/install.ps1)} -Version <version>"`; macOS/Linux:
 `curl -fsSL https://bun.com/install | bash -s "bun-v<version>"`) — and the Agent
 runs it only under a scoped mandate. A package from another registry or `bunx`
@@ -391,8 +396,9 @@ not proof of package provenance or safety.
 Git requires at least 2.31.0 (absolute rev-parse paths) and GitHub CLI 2.57.0
 (active-account checks). Their minimums live in `lazurio/toolchain.json`
 (`tools.git`, `tools.gh`), read by `lazurio/core/toolchain-lib.mjs`. The Node
-minimum lives there too (`tools.node.minimum`); Bun remains exactly pinned through
-`lazurio/package.json#packageManager`. Codex must report a recognizable stable
+and Bun minimums live there too (`tools.node.minimum`, `tools.bun.minimum`); the
+CLI's own exact Bun is pinned by `lazurio/package.json#packageManager`, and
+Doctor reports it as `platform.cli_runtime`. Codex must report a recognizable stable
 CLI version; Lazurio currently consumes no feature requiring a newer numeric
 minimum. A newer upstream release is a separate advisory in
 `doctor --tool-updates`, not an automatic ordinary Doctor failure.
@@ -498,9 +504,9 @@ If the installation prompt contains an explicit mandate for the exact tools and
 a change to the User or Machine `PATH`, the Agent does not stop at a handoff
 warning:
 
-1. it installs any missing Git, GitHub CLI, Node.js LTS, Codex CLI, or exactly
-   pinned Bun exclusively via the official procedure for the detected
-   platform;
+1. it installs any missing Git, GitHub CLI, Node.js LTS, Codex CLI, or Bun (at
+   exactly the default `tools.bun.default`) exclusively via the official
+   procedure for the detected platform;
 2. it adds only the actual installation directory of the tool to the explicitly
    authorized User or Machine `PATH`, preserves unrelated valid entries, and
    creates no binding to the task worktree;

@@ -29,6 +29,8 @@ export const testLanes = Object.freeze({
     { file: "lazurio/core/toolchain-lib.test.mjs" },
     { file: "lazurio/core/install-core-lib.test.mjs" },
     { file: "lazurio/cli-install.test.mjs" },
+    // The `lazurio` launcher re-executes the CLI on its exact Bun (`bun.exe`).
+    { file: "lazurio/cli-launcher.test.mjs" },
     { file: "launchpad/src/git-lib.test.mjs" },
     { file: "launchpad/src/git-inventory-lib.test.mjs" },
     { file: "launchpad/src/git-materialization-lib.test.mjs" },

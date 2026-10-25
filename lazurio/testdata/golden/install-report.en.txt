@@ -5,7 +5,7 @@ Machine: darwin/arm64
 Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platform — supported platform
-✓ Bun — Bun 1.4.2 matches the required version
+✓ Bun — the bun command on PATH meets Lazurio's minimum; the CLI runs on Bun 1.4.2
 ✓ Git — Git is available
 ! GitHub CLI — GitHub CLI was not found
 ✓ Node.js — Node.js 24.19.0 satisfies the supported range >=22.12.0

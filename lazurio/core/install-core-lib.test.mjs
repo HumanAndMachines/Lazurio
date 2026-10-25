@@ -17,6 +17,7 @@ import {
 import {
   resolveGitExecutableOnPath,
 } from "./toolchain-lib.mjs";
+import { renderHumanInstallReport } from "../install-output-lib.mjs";
 
 const tempRoots = [];
 
@@ -245,36 +246,82 @@ test("GitHub auth is not ready until gh config selects SSH", () => {
   expect(report.status).toBe("action_required");
 });
 
-test("Bun probe requires the exact packageManager version and reports both versions", () => {
-  const report = inspectLazurioInstallation({
+// The user's Bun on PATH answering `onPath`; the CLI itself runs on
+// `running` (its exact Bun, or the user's offline).
+function bunStepReport({ running = "1.4.2", onPath = "1.4.4", invoked = [] } = {}) {
+  return inspectLazurioInstallation({
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.4.1",
+    bunVersion: running,
     requiredBunVersion: "1.4.2",
+    minimumBunVersion: "1.4.2",
     environment: { HOME: "/Users/example" },
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
-    resolvePathCommand: fixturePathCommand,
-    runCommand: ({ executable }) => ({
-      status: 0,
-      stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "",
-    }),
+    resolvePathCommand: (command, context) => (command === "bun" ? "/Users/example/.bun/bin/bun" : fixturePathCommand(command, context)),
+    runCommand: ({ executable, args }) => {
+      if (executable === "/Users/example/.bun/bin/bun") {
+        invoked.push(args.join(" "));
+        if (args[0] === "--version") return { status: 0, stdout: `${onPath}\n` };
+        // Bun 1.4 exits 1 with the bunx usage contract when no package is given.
+        return { status: 1, stdout: "", stderr: "Usage: bunx [flags] <package><@version> [flags and arguments for the package]" };
+      }
+      return { status: 0, stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "" };
+    },
     inspectRoot: missingRootObservation,
   });
+}
 
-  expect(report.machine.bun).toEqual({
-    status: "mismatch",
-    current_version: "1.4.1",
-    required_version: "1.4.2",
-  });
+test("Install Core accepts the user's Bun at or above the minimum and leaves it as it is", () => {
+  for (const onPath of ["1.4.2", "1.4.4", "1.5.0"]) {
+    const invoked = [];
+    const report = bunStepReport({ onPath, invoked });
+
+    expect(report.steps.find((step) => step.id === "bun")).toEqual({
+      id: "bun",
+      status: "completed",
+      reason: "bun_runtime_current",
+    });
+    // The CLI runs on its exact Bun; the user's Bun is only asked.
+    expect(report.machine.bun).toEqual({ status: "current", current_version: "1.4.2", required_version: "1.4.2" });
+    expect(invoked).toEqual(["--version", "x --help"]);
+    expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+  }
+});
+
+test("a Bun on PATH below the minimum, like a missing one, needs the exact default with the user's consent", () => {
+  const report = bunStepReport({ onPath: "1.4.1" });
   expect(report.steps.find((step) => step.id === "bun")).toEqual({
     id: "bun",
     status: "action_required",
     reason: "bun_runtime_mismatch",
   });
   expect(report.status).toBe("action_required");
+  expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+  const text = renderHumanInstallReport(report, { language: "cs" });
+  expect(text).toContain("starší než minimum Lazuria");
+  expect(text).toContain("požádat uživatele o souhlas");
+  expect(text).toContain("přesně Bun 1.4.2");
+
+  for (const onPath of ["", "1.4.2-canary.3"]) {
+    expect(bunStepReport({ onPath }).steps.find((step) => step.id === "bun")).toEqual({
+      id: "bun",
+      status: "failed",
+      reason: "bun_path_unusable",
+    });
+  }
+});
+
+test("offline the CLI on the user's Bun does not fail the Bun step; the report still names the CLI's Bun", () => {
+  const report = bunStepReport({ running: "1.4.4", onPath: "1.4.4" });
+  expect(report.machine.bun).toEqual({ status: "mismatch", current_version: "1.4.4", required_version: "1.4.2" });
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "completed",
+    reason: "bun_runtime_current",
+  });
   expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
 });
 

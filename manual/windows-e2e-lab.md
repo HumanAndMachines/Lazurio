@@ -88,8 +88,10 @@ neduplikuje. Pro skutečný E2E běh navíc dodrž:
 1. Zachyť baseline a podle exact mandátu případně odstraň jen disposable
    Lazurio footprint.
 2. Instaluj nebo aktualizuj pouze jmenované nástroje z oficiálních zdrojů.
-   Git, GitHub CLI a Codex míří na stable, Node na podporované LTS a Bun vždy
-   na exact `packageManager` pin clean Lazurio source.
+   Git, GitHub CLI a Codex míří na stable, Node na podporované LTS a chybějící
+   Bun nebo Bun pod minimem na přesnou výchozí verzi `tools.bun.default`
+   z `lazurio/toolchain.json` clean Lazurio source; Bun v minimu nebo nad ním
+   zůstává.
 3. Machine `PATH` měň pouze s rozšířeným mandátem, zachovej nesouvisející
    hodnoty a přidej jen canonical instalační adresáře.
 4. Fresh Source Root ukotvi v `<home>\Lazurio`, potom spusť podporovanou CLI
