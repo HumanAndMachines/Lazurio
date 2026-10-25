@@ -1,8 +1,11 @@
-#!/usr/bin/env bun
-
+// The Lazurio CLI. The `lazurio` command (cli.mjs) runs it on Lazurio's exact
+// Bun (decision 0134 with its addendum of 2026-10-24): `main` in its own
+// process, or this file re-executed on that Bun (`<exact bun> cli-main.mjs
+// …`). `bun cli-main.mjs …` runs it directly, on the Bun it is given.
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import { cliBunMarkerRefusal } from "./runtime/cli-runtime-lib.mjs";
 import { renderHumanDoctorReport } from "./runtime/doctor-output-lib.mjs";
 import { DOCTOR_EXIT_CODES } from "./runtime/doctor-surface-lib.mjs";
 import { hostedWorkspaceConfigurationFromEnvironment } from "./runtime/hosted-app-url-lib.mjs";
@@ -66,11 +69,24 @@ import {
 } from "./search-lib.mjs";
 
 if (import.meta.main) {
+  // Re-executed by the launcher, it runs only on the Bun its loop guard names.
+  const refusal = cliBunMarkerRefusal();
+  if (refusal === null) {
+    process.exitCode = await main(Bun.argv.slice(2));
+  } else {
+    console.error(refusal);
+    process.exitCode = 2;
+  }
+}
+
+/** One CLI invocation and its exit code; an error is reported on stderr and
+ * ends with the code it carries, otherwise 3 for `module` and 2 for the rest. */
+export async function main(argv) {
   try {
-    process.exitCode = await run(Bun.argv.slice(2));
+    return await run(argv);
   } catch (error) {
     console.error(`lazurio: ${error.message}`);
-    process.exitCode = error.lazurioExitCode ?? (Bun.argv[2] === "module" ? 3 : 2);
+    return error.lazurioExitCode ?? (argv[0] === "module" ? 3 : 2);
   }
 }
 
