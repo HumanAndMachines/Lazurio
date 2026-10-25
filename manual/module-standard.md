@@ -439,11 +439,14 @@ klienta nic tajného nezapeče.
 - **Náhled z worktree** zůstává vývojový server (`dev` skript, rozhodnutí
   0195 bod 6).
 
-**Mezikrok.** `start_script` zná LazurioPlatform od vydání s
-Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573; starší vydání
-neznámé klíče `lazurio.runtime` odmítá a App by nespustilo. Modul ho proto deklaruje až
-tam, kde takové vydání běží na všech Prostředích, která ho spouštějí,
-s referenční Organizací (0204) napřed. Launchpad tohoto repa
+**Mezikrok.** `start_script` zná LazurioPlatform od verze v0.1.11
+(Lazurio/LazurioPlatform#579 a Lazurio/LazurioPlatform#573, z předběžných
+vydání od v0.1.11-rc.3); starší vydání neznámé klíče `lazurio.runtime` odmítá
+a App by nespustilo. Modul ho proto deklaruje až tehdy, když všechna Prostředí
+jeho Organizace běží na v0.1.11 nebo novější (předběžné vydání od
+v0.1.11-rc.3 se počítá), s referenční Organizací (0204) napřed. Rozhoduje
+celá Organizace, ne jen Prostředí, kde se s Modulem právě pracuje: kterékoli
+Prostředí Organizace Modul objeví a z `main` spustí. Launchpad tohoto repa
 (`lazurio launchpad serve`, `lazurio module start`) klíč přijme, ale App
 dál spouští přes `dev` skript.
 
