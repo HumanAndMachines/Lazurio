@@ -447,8 +447,77 @@ jeho Organizace běží na v0.1.11 nebo novější (předběžné vydání od
 v0.1.11-rc.3 se počítá), s referenční Organizací (0204) napřed. Rozhoduje
 celá Organizace, ne jen Prostředí, kde se s Modulem právě pracuje: kterékoli
 Prostředí Organizace Modul objeví a z `main` spustí. Launchpad tohoto repa
-(`lazurio launchpad serve`, `lazurio module start`) klíč přijme, ale App
-dál spouští přes `dev` skript.
+(`lazurio launchpad serve`, `lazurio module start`) ji na počítači uživatele
+spouští podle kap. 4.7.
+
+### 4.7 Z `main` na počítači uživatele (Launchpad tohoto repa)
+
+Dokud počítače nedostanou Launchpad LazurioPlatform (plán DEV-6628), spouští
+App z `main` na počítači uživatele Launchpad tohoto repa (`lazurio launchpad
+serve`, `lazurio module open|start`), a to se **stejnou deklarací a do
+stejného umístění sestavení** jako Platforma (rozhodnutí 0212 bod 9). Je to
+malá podpora bez hlídání na pozadí a bez výměny za běhu; s přechodem počítačů
+na Launchpad Platformy zanikne.
+
+- **Otevření nebo start z `main`** App s `build_output` nebo `start_script`
+  použije sestavení aktuálního klíče (kap. 4.5; u App s vlastním serverem jen
+  commit Modulu, kap. 4.6). Když pro klíč sestavení ještě není, nejdřív ho
+  sestaví a uživatel počká. Statickou App pak servíruje malý statický server
+  tohoto repa na jejím listeneru se stejnými pravidly jako server Platformy
+  (přesný soubor, `<cesta>.html`, `<cesta>/index.html` a přesměrování
+  adresáře, `static_fallback`, `/_astro/` a `/assets/` na rok, HTML
+  `no-cache` s ETag, jen GET a HEAD, nic mimo sestavení). App s vlastním
+  serverem spustí `bun --no-env-file run <start_script>` s
+  `NODE_ENV=production` a s klientem v `LAZURIO_RUNTIME_BUILD_OUTPUT`.
+- **Bun.** Sestavení i `start_script` spouští přesně Bun, který App připíná
+  v `packageManager`, s jeho adresářem první v PATH, stejně jako ostatní kód
+  App (dodatek 0171 z 2026-10-24). Statický server je kód Lazuria, běží na
+  Bunu, na kterém běží Launchpad, a Bun App nepotřebuje; statická App si
+  o svůj Bun řekne, až když se má sestavovat. Pin nového commitu, který nejde
+  mít, je neúspěšné sestavení nového klíče (rozhodnutí 0212 bod 6) s důvodem
+  `runtime-*`: běžící App dál běží s nálezem a otevření nic nezastaví,
+  zastavená statická App se spustí z předchozího sestavení s nálezem a bez
+  sestavení se nespustí. App s vlastním serverem spouští `start_script`
+  z checkoutu, tedy kód nového commitu, a ten Lazurio jiným Bunem než
+  připnutým nespustí; zastavená se proto nespustí a Launchpad řekne proč.
+- **Sestavení** běží jako `bun --no-env-file run <build_script>` v adresáři
+  balíčku App s `NODE_ENV=production` a bez listenerů, adres a tajemství, po
+  stejné kontrole balíčků, kterou start dělá i dnes. Výstup v balíčku App
+  Launchpad před sestavením smaže a po něm ho vyžaduje znovu vytvořený;
+  statické sestavení musí navíc vyřešit cestu health (kap. 4.5 bod 5).
+  Výstup i cesta k němu musí ležet v balíčku App: vede-li přes odkaz
+  (symlink, na Windows junction) mimo balíček, Launchpad nic nesmaže,
+  nesestaví ani nezkopíruje a sestavení je neúspěšné
+  (`build-output-unservable`).
+  Uloží ho mimo checkout do
+  `${XDG_CACHE_HOME:-~/.cache}/lazurio/builds/<Organizace>/<Modul>/<id App>-<otisk adresáře App>/<klíč>/`
+  (na Windows `%LOCALAPPDATA%\Lazurio\cache\builds\…`), vedle `build.json`,
+  `served.json` a `logs/<klíč>.log`. Drží aktuální a předchozí sestavení
+  a to, které právě běží; starší maže.
+- **`lazurio update`**, který Modul posunul, po obnově balíčků hned sestaví
+  nový klíč každé takové App jejím připnutým Bunem, takže další otevření je
+  okamžité. Výsledek hlásí po Apps a běžící App nerestartuje. Pin, který nejde
+  mít, je nález té App, ne zablokovaný update.
+- **Otevření běžící App**, jejíž klíč se mezitím změnil, ji restartuje na
+  nové sestavení: nejdřív sestaví, pak App zastaví a spustí. Jinou výměnu
+  tento Launchpad nemá.
+- **Selhání.** Neúspěšné sestavení nechá běžet předchozí sestavení
+  s nálezem „Nejnovější verzi se nepodařilo sestavit. Dál běží předchozí
+  verze.“ Další otevření běžící App stejný klíč znovu nesestavuje, start
+  zastavené App ano. Bez jakéhokoli sestavení se App nespustí a Launchpad to
+  řekne. Vývojový server z `main` nespustí nikdy; opravu dělá agent ve
+  worktree.
+- **Beze změny** zůstává náhled z worktree (`dev` skript), App bez
+  `build_output` i `start_script` (z `main` do cutoveru `dev` skript),
+  Personalspace a hostovaný profil tohoto Launchpadu.
+- Přípravu (kap. 3) Launchpad tohoto repa zatím nespouští ani před
+  sestavením (přidává ji Lazurio#522); sestavení proto nesmí stát na
+  artefaktu, který vyrábí jen `prepare_script`.
+
+Klíč a rozložení cache odpovídají Platformě, takže Launchpad Platformy po
+přechodu najde hotová sestavení. Rozdíl: otisk adresáře App se počítá
+z kanonické cesty balíčku a datové repo se do klíče počítá, jen když je
+`<Modul>/db` checkout, ne podle deklarace v manifestu Organizace.
 
 ## 5. Hranice a závislosti
 
@@ -618,6 +687,10 @@ nepíše tajemství do logů ani souborů, nespouští souseda kvůli volání j
 a volání mezi Moduly neproxuje,
 nespouští build ani supervizory za App (jedinou výjimkou je sestavení App s `build_output` podle kap. 4.5 a 4.6), nepřebírá porty, nenabízí legacy
 `LAZURIO_RUNTIME_HOST/PORT` (odstraní jedno vydání po dokončení W2 migrace).
+
+Launchpad tohoto repa na počítači uživatele z této politiky přebírá jen
+sestavenou verzi z `main` podle kap. 4.7, bez přestavění na pozadí a bez
+uspávání.
 
 ## 11. Konformance: `lazurio module setup`
 

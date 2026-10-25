@@ -43,6 +43,13 @@ import {
   runtimeRefusalMayPass,
   withModuleBun,
 } from "./bun-runtime-lib.mjs";
+import {
+  BUILD_FINDING_MESSAGES,
+  buildCacheRoot as defaultBuildCacheRoot,
+  builtAppMode,
+  ensureAppBuild,
+  recordServedBuild,
+} from "./built-app-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -247,6 +254,9 @@ export function createRuntimeManager({
   nowFn = null,
   sleepFn = null,
   buildWorktreeIndexFn = buildWorktreeIndex,
+  // Where the built versions of Apps from main live (decision 0212 point 9);
+  // the account's cache unless a test isolates it.
+  buildCacheRoot = null,
 }) {
   if (!supportedLifecycleProfiles.has(lifecycleProfile)) {
     throw new Error(`Unsupported Launchpad lifecycle profile: ${String(lifecycleProfile)}.`);
@@ -620,6 +630,13 @@ export function createRuntimeManager({
     return bun;
   }
 
+  // One of bunForApp's two refusals: the pinned Bun cannot be had, or the pin
+  // changed while it was being had.
+  function isBunRefusal(error) {
+    return error instanceof RuntimeActionError
+      && (error.code === "app_runtime_refused" || error.code === "app_runtime_changed");
+  }
+
   async function portOwnerIdentity(pid) {
     if (!requireTakeoverIdentity) return "injected-signaler";
     if (platform === "win32") return processIdentityResolver(pid);
@@ -733,6 +750,105 @@ export function createRuntimeManager({
     };
   }
 
+  // Decision 0212 point 9: on a computer, an App from main that declares its
+  // built version runs as that build (a static App through the root's static
+  // server, an App with its own server through its start_script). Worktrees,
+  // Personalspace and Apps without the declaration keep their dev script.
+  function builtRunApplies(app) {
+    return lifecycleProfile === "local"
+      && app?.personal !== true
+      && runtimeSourceForApp(app).type === "main"
+      && builtAppMode(app) !== null;
+  }
+
+  function buildCacheRootPath() {
+    return buildCacheRoot ?? defaultBuildCacheRoot({ env: systemEnvironment });
+  }
+
+  // The build runs with the Bun the App pins (decision 0171, addendum of
+  // 2026-10-24): `bun` when the caller resolved it already, otherwise
+  // bunForApp, asked only when a build is about to run. A Bun that cannot be
+  // had is that key's failed build (decision 0212 point 6): the previous build
+  // with the finding, or nothing to run. The result carries the Bun it
+  // resolved (`bun`), so the process that serves the build runs the same one,
+  // and the refusal it met (`refusal`).
+  async function buildForApp(app, { bun = null, retryFailed = true } = {}) {
+    let resolved = bun;
+    let refusal = null;
+    // The App's identity, as `lazurio update` builds it; nothing of where it
+    // is served (the build library removes the listeners).
+    const env = runtimeProcessEnv(app, {
+      COMPANIES_WORKSPACE_ROOT: filesystemRootForApp(app),
+      COMPANYASCODE_APP_ID: app.id,
+      COMPANYASCODE_RUNTIME_SOURCE: "main",
+    });
+    const result = await ensureAppBuild({
+      app,
+      cwd: runtimeCwdForApp(app),
+      checkoutRoot: checkoutRootForApp(app),
+      organizationRoot: app?.[APP_RUNTIME_OWNER_ROOT] ?? null,
+      cacheRoot: buildCacheRootPath(),
+      resolveBun: async () => {
+        if (resolved === null) {
+          try {
+            resolved = await bunForApp(app);
+          } catch (error) {
+            if (!isBunRefusal(error)) throw error;
+            refusal = error;
+            return { ok: false, reason: error.metadata?.failure_kind ?? error.code };
+          }
+        }
+        return { ok: true, executable: resolved.executable, env: withModuleBun(env, resolved, { platform }) };
+      },
+      retryFailed,
+      instanceId,
+      spawnProcess,
+      platform,
+    });
+    return { ...result, bun: resolved, refusal };
+  }
+
+  // A running App keeps serving its build when the Bun its new commit pins
+  // cannot be had for the restart: the new key failed, as a build fails.
+  function bunRefusalFinding(refusal, build) {
+    return {
+      reason: refusal.metadata?.failure_kind ?? refusal.code,
+      key: build.key ?? null,
+      commit: build.commit ?? null,
+      log_path: null,
+      message: BUILD_FINDING_MESSAGES.previous,
+    };
+  }
+
+  function buildSummary(build) {
+    return {
+      mode: build.mode,
+      key: build.key,
+      commit: build.commit,
+      ...(build.finding ? { finding: build.finding } : {}),
+    };
+  }
+
+  // The static server is the root's own code: it runs on the Bun the root
+  // runs on, never the one the App pins, and reads no Bun configuration of the
+  // App's package (an App's bunfig.toml could preload its code into it).
+  async function staticServerCommand(app, build) {
+    const cacheRoot = buildCacheRootPath();
+    const emptyConfig = join(cacheRoot, "static-server.bunfig.toml");
+    await mkdir(cacheRoot, { recursive: true });
+    await appendFile(emptyConfig, "", "utf8");
+    return [
+      runtimeBunExecutable,
+      "--no-env-file",
+      `--config=${emptyConfig}`,
+      join(import.meta.dirname, "static-build-server.mjs"),
+      "--root",
+      build.output,
+      "--fallback",
+      app.static_fallback ?? "404",
+    ];
+  }
+
   async function startRuntimeApp(app, takeover = {}) {
     return withModuleLeaseLock(app, async () => {
       assertMaintainedAppAction(app);
@@ -742,7 +858,7 @@ export function createRuntimeManager({
     });
   }
 
-  async function startRuntimeAppUnlocked(app, { trigger = "user", takeover = {} } = {}) {
+  async function startRuntimeAppUnlocked(app, { trigger = "user", takeover = {}, build: plannedBuild = null, bun: plannedBun = null } = {}) {
     assertRuntimeManagerAcceptingStarts();
     if (isRetiredKnowledgeEditorPath(app.package_path)) {
       throw new RuntimeActionError(409, "knowledge_editor_retired", "Samostatný Knowledgebase Editor je vyřazený. Upravte obsah přes chat s Agentem.");
@@ -770,16 +886,55 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
-    // Before any listener is reclaimed: a refusal changes nothing, and a
-    // shutdown during a fetch starts nothing.
-    const bun = await bunForApp(app);
+    const builtRun = builtRunApplies(app);
+    // The dev script and a start_script run the checkout's code at its pin, so
+    // they need that Bun before any listener is reclaimed: a refusal changes
+    // nothing, and a shutdown during a fetch starts nothing. The root's static
+    // server runs none of the App's code: a static App asks for its Bun only
+    // when its build runs, and one that cannot be had is that key's failed
+    // build (decision 0212 point 6). An Open that rebuilt the App resolved its
+    // Bun before it stopped the old build, and built with it.
+    const bun = plannedBun ?? (builtRun && builtAppMode(app) === "static" ? null : await bunForApp(app));
     assertRuntimeManagerAcceptingStarts();
 
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
+    // From main, a built App starts as its build or not at all: never as its
+    // dev script (decision 0212 point 6).
+    const build = builtRun ? plannedBuild ?? await buildForApp(app, { bun }) : null;
+    // Nothing to run because the App's Bun cannot be had: that refusal, as
+    // a start refuses it everywhere else.
+    if (build && !build.ok && build.refusal) throw build.refusal;
+    if (build && !build.ok) {
+      const message = `${app.title}: Aplikaci se nepodařilo sestavit. Na vašem počítači zatím není žádná předchozí sestavená verze, a tak se aplikace nespustí. Vývojový server z hlavní větve Lazurio nespouští; opravu udělá agent ve worktree.`;
+      await appendLog(logPath, `\n[launchpad] ${new Date().toISOString()} build ${app.id} failed reason=${build.finding.reason}${build.finding.log_path ? ` log=${build.finding.log_path}` : ""}\n`);
+      await writeState(runtimeKey, {
+        status: "unhealthy",
+        app_id: app.id,
+        runtime_key: runtimeKey,
+        runtime_source: runtimeSource,
+        port: app.port,
+        instance_id: instanceId,
+        updated_at: new Date().toISOString(),
+        log_path: relativeRuntimePath(logPath),
+        last_error: message,
+        failure_kind: "build_unavailable",
+        build: { mode: build.mode, finding: build.finding },
+      });
+      throw new RuntimeActionError(409, "app_build_unavailable", message, [
+        `reason: ${build.finding.reason}`,
+        ...(build.finding.commit ? [`commit: ${build.finding.commit}`] : []),
+        ...(build.finding.log_path ? [`build_log: ${build.finding.log_path}`] : []),
+      ], {
+        failure_kind: "build_unavailable",
+        build: { mode: build.mode, finding: build.finding },
+      });
+    }
+    // A build can take minutes; a shutdown meanwhile starts nothing.
+    if (build) assertRuntimeManagerAcceptingStarts();
     const startedAtMs = clock.now();
     const startedAt = new Date(startedAtMs).toISOString();
-    await appendLog(logPath, `\n[launchpad] ${startedAt} start ${app.id} source=${runtimeSource.type} key=${runtimeKey}\n`);
+    await appendLog(logPath, `\n[launchpad] ${startedAt} start ${app.id} source=${runtimeSource.type} key=${runtimeKey}${build ? ` build=${build.mode}:${build.key}` : ""}\n`);
     const reclaimedListeners = await prepareDeclaredListeners(app, {
       runtimeKey,
       logPath,
@@ -787,9 +942,13 @@ export function createRuntimeManager({
     });
     const appFilesystemRoot = filesystemRootForApp(app);
     const childEnv = runtimeProcessEnv(app, {
-      // Launchpad always starts the declared development task. Do not let the
-      // parent process select a different Bun/framework env mode per Machine.
-      NODE_ENV: "development",
+      // Launchpad starts the declared development task, or from main the
+      // built version in production mode. Do not let the parent process
+      // select a different Bun/framework env mode per Machine.
+      NODE_ENV: build ? "production" : "development",
+      // An App with its own server serves its client from the build that
+      // never changes while it runs (Module Standard 4.6).
+      ...(build?.mode === "server" && build.output ? { LAZURIO_RUNTIME_BUILD_OUTPUT: build.output } : {}),
       // Astro 7 auto-backgrounds dev/preview servers when it detects an AI
       // agent. Launchpad is already the process supervisor, so its child must
       // take Astro's supervised-child path and remain attached to this PID.
@@ -807,11 +966,20 @@ export function createRuntimeManager({
       ...(runtimeSource.slug ? { COMPANYASCODE_WORKTREE_SLUG: runtimeSource.slug } : {}),
     });
 
+    // The App's own code (its dev script or its start_script) runs with the
+    // Bun it pins and that Bun first on its PATH; the root's static server
+    // runs none of it.
+    const servedByRoot = build?.mode === "static";
+    const command = build === null
+      ? [bun.executable, "run", app.dev_script]
+      : servedByRoot
+        ? await staticServerCommand(app, build)
+        : [bun.executable, "--no-env-file", "run", app.start_script];
     let child;
     try {
-      child = spawnProcess([bun.executable, "run", app.dev_script], {
+      child = spawnProcess(command, {
         cwd: runtimeCwdForApp(app),
-        env: withModuleBun(childEnv, bun, { platform }),
+        env: servedByRoot ? childEnv : withModuleBun(childEnv, bun, { platform }),
         stdout: "pipe",
         stderr: "pipe",
         windowsHide: true,
@@ -867,8 +1035,13 @@ export function createRuntimeManager({
       ownerProofCapturePromise: null,
       startTrigger: trigger,
       outputPipes: [],
+      build: build ? buildSummary(build) : null,
     };
     managedProcesses.set(runtimeKey, record);
+    if (build?.directory) {
+      // A later build keeps the output this process serves.
+      await recordServedBuild(build.directory, build).catch(() => {});
+    }
     record.outputPipes = [
       pipeOutput(child.stdout, logPath, "stdout"),
       pipeOutput(child.stderr, logPath, "stderr"),
@@ -1110,6 +1283,7 @@ export function createRuntimeManager({
       runtime_source: runtimeSource,
       pid: child.pid,
       reclaimed_listeners: reclaimedListeners,
+      ...(record.build ? { build: record.build } : {}),
       runtime: await healthForApp(app),
     };
   }
@@ -1327,7 +1501,44 @@ export function createRuntimeManager({
       });
     }
 
-    // 2) Ensure start — idempotentní jen pro runtime vlastněný touto instancí.
+    // 2) A built App from main that runs an older build than the checkout's
+    //    current key is restarted onto the new build: built first while the
+    //    old one serves, then stopped and started. It is the only swap, with
+    //    no watcher (decision 0212 point 9). A key that failed before is not
+    //    built again here; the App keeps running with the finding. A Bun the
+    //    new commit pins that cannot be had is the new key's failed build
+    //    (decision 0212 point 6): nothing stops, the old build keeps serving
+    //    and the Open answers with the finding.
+    let plannedBuild = null;
+    let plannedBun = null;
+    let buildFinding = null;
+    const running = managedProcesses.get(runtimeKey);
+    if (running && !running.stopping && builtRunApplies(app)) {
+      const current = appWithRuntimeAuthority(app, dependencies);
+      const next = await buildForApp(current, { retryFailed: false });
+      let bun = next.bun;
+      let refusal = next.refusal;
+      const newer = next.ok && next.key !== running.build?.key;
+      // A start_script runs the checkout's code at its pin: that Bun before
+      // anything stops. The root's static server needs none of the App's.
+      if (newer && next.mode === "server" && bun === null && refusal === null) {
+        try {
+          bun = await bunForApp(current);
+        } catch (error) {
+          if (!isBunRefusal(error)) throw error;
+          refusal = error;
+        }
+      }
+      buildFinding = next.finding ?? (refusal ? bunRefusalFinding(refusal, next) : null);
+      if (newer && (next.mode === "static" || bun !== null)) {
+        await stopRuntimeAppUnlocked(running.runtimeApp ?? app);
+        steps.push({ step: "rebuilt", key: next.key });
+        plannedBuild = next;
+        plannedBun = bun;
+      }
+    }
+
+    // 3) Ensure start — idempotentní jen pro runtime vlastněný touto instancí.
     // Cizí/adoptovaný proces na static lease se při explicitním Open reclaimne
     // a nahradí deklarovaným modulem. Stejně se řízeně zastaví starší managed
     // verze nebo worktree téhož modulu.
@@ -1345,13 +1556,13 @@ export function createRuntimeManager({
       steps.push({ step: "reuse", status: runtime.status });
       shouldConfirmStability = true;
     } else {
-      const startResult = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
+      const startResult = await startRuntimeAppUnlocked(app, { trigger: "user", takeover, build: plannedBuild, bun: plannedBun });
       steps.push({ step: "start", status: startResult.runtime?.status ?? "starting" });
       shouldConfirmStability = true;
       runtime = startResult.runtime ?? (await healthForApp(app));
     }
 
-    // 3) Počkej, až port poslouchá, než vrátíme URL. start() se vrací už po
+    // 4) Počkej, až port poslouchá, než vrátíme URL. start() se vrací už po
     //    startEarlyExitProbeMs (1 s) se stavem 'starting'; pomalejší dev servery
     //    (vite/next, běžně 2–5 s) v tu chvíli ještě neposlouchají a neprogramátor
     //    by v rezervovaném tabu skončil na „connection refused". Pollujeme health
@@ -1391,6 +1602,10 @@ export function createRuntimeManager({
     // ještě startuje, vrať status 'starting' bez URL — frontend zavře rezervovaný
     // tab a zobrazí průběh místo „connection refused".
     const ready = runtime.status === "healthy";
+    // What runs, and the finding when the newest key could not be built.
+    const build = runtime.build || buildFinding
+      ? { ...(runtime.build ?? {}), ...(buildFinding ? { finding: buildFinding } : {}) }
+      : null;
     return {
       action: "open",
       app_id: app.id,
@@ -1400,6 +1615,7 @@ export function createRuntimeManager({
       status: runtime.status,
       steps,
       runtime,
+      ...(build ? { build } : {}),
       ...(maintenance ? { maintenance } : {}),
     };
   }
@@ -3600,6 +3816,8 @@ export function createRuntimeManager({
       port_owner: portOwner,
       listeners: runtimeListenerState(app),
       listener_reconciliation: listenerReconciliation,
+      // A run from main of a built App: its mode and key (decision 0212).
+      ...(record?.build ? { build: record.build } : {}),
       ...(maintenance
         ? {
             maintenance,

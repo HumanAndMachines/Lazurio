@@ -583,9 +583,12 @@ Konkrétní verze aplikace ve svém `package.json` popíše, jak se spouští, a
 #### Pravidla aplikace
 
 Runtime má právě jeden `entrypoint` listener a může mít `auxiliary` listenery.
-Všechny patří k procesu spuštěnému přes `dev_script`; to je jediný lifecycle
-skript, který Launchpad spouští. `preview_script` a `build_script` jsou jen
-metadata.
+Všechny patří k jednomu procesu App. Z worktree je to vždy `dev_script`. Z
+`main` na localhostu App s `build_output` běží jako sestavení
+(`build_script`) servírované statickým serverem Launchpadu a App se
+`start_script` jako tento skript v produkčním režimu; ostatní Apps z `main`
+spouští dál `dev_script` (decision 0212 bod 9, Module Standard kap. 4.7).
+`preview_script` je jen metadata.
 
 Každý listener odkazuje na lease Modulu. Main, verze a worktrees jedné
 aplikace tím používají přesně stejné lease; číselný port, `allocation`, `host`
@@ -912,7 +915,8 @@ nepřijme. Čistá oprava starý `node_modules` neuchovává: je to odvozený ca
 který lze z autoritativního lockfilu znovu vytvořit. Source ani jiná Git data
 nepřepisuje odhadem.
 
-Kód App (`Install`, `Repair`, start i obnovu balíčků po `lazurio update`)
+Kód App (`Install`, `Repair`, start, sestavení App z `main` a její
+`start_script`, obnovu balíčků i sestavení po `lazurio update`)
 spouští přesně Bun, který App připíná v `package.json#packageManager`
 (`bun@x.y.z`, decision 0171 s dodatkem z 2026-10-24). Je to runtime App, ne
 nástroj uživatele: použije se Bun uživatele, když hlásí přesně tuto verzi
@@ -931,11 +935,15 @@ v `%LOCALAPPDATA%\Lazurio\runtimes\bun\<verze>\` a zámek mezi procesy tam není
 stejně jako v Platformě bez kvalifikovaného `flock`: dva procesy opravující
 tutéž rozbitou verzi se nevylučují, zůstává jen kontrola identity před
 odsunutím rozbité kopie a přejmenování jedním krokem. App bez přesného pinu
-běží Bunem uživatele jako dřív a vlastní procesy Lazuria zůstávají na Bunu,
-na kterém běží. Co nejde mít, Lazurio odmítne dřív, než cokoli zastaví, uvolní
-nebo spustí, a nikdy nepoužije jinou verzi: `runtime-unavailable` (registr
+běží Bunem uživatele jako dřív a vlastní procesy Lazuria, včetně statického
+serveru sestavení, zůstávají na Bunu, na kterém běží. Co nejde mít, Lazurio
+odmítne dřív, než cokoli zastaví, uvolní nebo spustí, a nikdy nepoužije
+jinou verzi: `runtime-unavailable` (registr
 neodpověděl), `runtime-integrity-failed`, `runtime-version-unknown`,
 `runtime-disk-full` (méně než 300 MB) nebo `runtime-unsupported-platform`.
+U App z `main`, která běží sestavená, je pin nového commitu, který nejde mít,
+neúspěšné sestavení nového klíče: běžící App i předchozí statické sestavení
+běží dál s nálezem (rozhodnutí 0212 bod 6, Module Standard kap. 4.7).
 Doctor tyto piny jen ukazuje v kontrole `launchpad.module_runtimes`: každou
 přesnou verzi, kterou namountované App připínají, s počtem App, zda ji
 mezipaměť pro tento systém drží, a velikost mezipaměti. Kontrola je vždy

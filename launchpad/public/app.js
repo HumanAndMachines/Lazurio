@@ -3647,6 +3647,8 @@ async function openAppChain(app, { feedback } = {}) {
     if (payload.url) {
       writeCardProgress(feedback, "");
       toast(`${appBaseTitle(app)}: ${translateOpenStatus(payload)}`, "success");
+      // The newest commit did not build; the previous build runs (decision 0212).
+      if (payload.build?.finding) toast(`${appBaseTitle(app)}: ${t("action.outcome.buildKept")}`, "warning", 8000);
       openResultUrl(payload.url, reservedTab, app);
     } else if (payload.status === "starting") {
       toast(t("action.startingOpening", { app: appBaseTitle(app) }), "info", 6000);

@@ -44,6 +44,10 @@ export const testLanes = Object.freeze({
     { file: "distribution/updater.test.mjs" },
     { file: "launchpad/src/worktree-actions-lib.test.mjs", namePattern: "Windows" },
     { file: "launchpad/src/runtime-lib.test.mjs", namePattern: "Windows" },
+    // The built version from main on a computer (decision 0212 point 9):
+    // cache path, static server and real builds, and the real lifecycle.
+    { file: "launchpad/src/built-app-lib.test.mjs" },
+    { file: "launchpad/src/built-app-runtime.test.mjs" },
   ]),
   docs: Object.freeze([
     { file: "scripts/task-agent-terminology.test.mjs" },
