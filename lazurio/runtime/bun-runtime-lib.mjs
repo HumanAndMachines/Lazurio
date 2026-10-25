@@ -288,16 +288,28 @@ export async function bunVersionPublished(version, {
   if (await bunVersionCached(version, { cacheRoot, system: async () => host })) return true;
   const targets = bunTargets(host, version);
   if (targets === null) return null;
+  const ask = async () => {
+    try {
+      const response = await fetchFn(`${registry}@oven/bun-${targets[0].name}/${version}`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      // Release the body without waiting for it: its cancellation is not bounded.
+      Promise.resolve().then(() => response.body?.cancel()).catch(() => undefined);
+      if (response.status === 200) return true;
+      if (response.status === 404) return false;
+      return null;
+    } catch {
+      return null;
+    }
+  };
+  // The bound covers the whole question, so a fetch that ignores its signal is
+  // abandoned too.
+  let timer;
+  const bound = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
   try {
-    const response = await fetchFn(`${registry}@oven/bun-${targets[0].name}/${version}`, {
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    await response.body?.cancel().catch(() => undefined);
-    if (response.status === 200) return true;
-    if (response.status === 404) return false;
-    return null;
-  } catch {
-    return null;
+    return await Promise.race([ask(), bound]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

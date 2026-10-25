@@ -355,6 +355,25 @@ test("a Bun version is published when the runtime cache holds it, otherwise as B
     expect(await bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: hanging, timeoutMs: 20 })).toBeNull();
     expect(bunPublishedCheckTimeoutMs).toBe(5_000);
 
+    // The bound covers the whole question, not only the headers: a body whose
+    // cancellation never settles still answers at once, and a fetch that
+    // ignores its signal is abandoned at the bound.
+    const unbounded = async (promise) => {
+      let timer;
+      const guard = new Promise((resolve) => { timer = setTimeout(() => resolve("unbounded"), 500); });
+      try {
+        return await Promise.race([promise, guard]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const stalledBody = async () => ({ status: 200, body: { cancel: () => new Promise(() => {}) } });
+    expect(await unbounded(bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: stalledBody, timeoutMs: 20 })))
+      .toBe(true);
+    const deaf = async () => new Promise(() => {});
+    expect(await unbounded(bunVersionPublished("1.4.6", { cacheRoot, system: linuxX64, fetchFn: deaf, timeoutMs: 20 })))
+      .toBeNull();
+
     // A system Bun publishes no build for cannot tell.
     expect(await bunVersionPublished("1.4.4", {
       cacheRoot,
