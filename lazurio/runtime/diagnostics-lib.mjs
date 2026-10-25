@@ -68,7 +68,6 @@ import {
   BUN_PACKAGE_RUNNER_PROBE_ARGS,
   classifyBunPackageRunnerProbe,
   classifyToolVersion,
-  classifyBunRuntime,
   classifyNodeRuntime,
   compareStableVersions,
   nodeVersionFromOutput,
@@ -2293,6 +2292,7 @@ function platformChecks(companiesRoot) {
     },
     bunRuntimeCheck({ companiesRoot, bunExecutable }),
     bunPathCheck({ pathExecutable: bunOnPath, cwd: companiesRoot }),
+    cliRuntimeCheck(),
     bunPackageRunnerCheck({
       command: bunOnPath,
       cwd: companiesRoot,
@@ -2434,20 +2434,90 @@ export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, to
     paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${version.current_version ?? "<unknown>"}`, `minimum: ${version.minimum_version ?? "parseable stable CLI"}`, ...(result.ok ? [] : [result.stderr || result.error || "Version probe failed"])] };
 }
 
-export function bunPathCheck({ pathExecutable, cwd, platform = process.platform, requiredVersion = readRequiredBunVersion(), run = runCommand }) {
+/**
+ * The Bun Lazurio itself runs on (decision 0134 with its addendum of
+ * 2026-10-24): exactly `lazurio/package.json#packageManager`. The `lazurio`
+ * command re-executes itself on that Bun from Lazurio's runtime cache when the
+ * user's Bun differs, so this fails only in its degraded mode, offline without
+ * that Bun cached (or in a process that does not start through `lazurio`), and
+ * names the repair: `lazurio update` online.
+ */
+export function cliRuntimeCheck({
+  runningVersion = process.versions.bun ?? null,
+  executable = process.execPath,
+  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
+} = {}) {
+  const exact = runningVersion === requiredVersion;
+  return {
+    id: "platform.cli_runtime",
+    status: exact ? "ok" : "fail",
+    severity: "required",
+    title: "Bun Lazuria",
+    message: exact
+      ? `Lazurio běží na svém přesném Bunu ${requiredVersion}.`
+      : `Lazurio běží na Bunu ${runningVersion ?? "neznámé verze"} místo svého přesného Bunu ${requiredVersion}. Příkaz lazurio se na přesném Bunu spouští sám z mezipaměti runtime Lazuria; když ho tam nemá a stáhnout ho nejde, běží na vašem Bunu. Spusťte lazurio update s připojením k internetu.`,
+    paths: ["lazurio/package.json"],
+    links: [],
+    details: [
+      `running: ${runningVersion ?? "<unknown>"}`,
+      `required: ${requiredVersion}`,
+      `executable: ${executable}`,
+      ...(exact ? [] : ["remedy_command: lazurio update"]),
+    ],
+  };
+}
+
+// The user's Bun against `tools.bun` of lazurio/toolchain.json (decision 0171,
+// addendum of 2026-10-24, point 4): any stable version at or above the
+// minimum is theirs to keep and reported as a fact (decision 0161); below it,
+// or unknown, it fails with the official installer pinned on the default, the
+// version a fresh install gets. Lazurio's own exact Bun is
+// `platform.cli_runtime`.
+function userBunVersionCheck({ id, title, command, result, platform, toolchain, where }) {
+  const { minimum, default: defaultVersion } = toolchain.tools.bun;
+  const current = result.ok ? result.stdout.trim() : "";
+  const stable = /^\d+\.\d+\.\d+$/u.test(current);
+  const enough = stable && compareStableVersions(current, minimum) >= 0;
+  const check = {
+    id,
+    title,
+    status: enough ? "ok" : "fail",
+    severity: "required",
+    message: enough
+      ? `Bun ${current}${where} splňuje minimum Lazuria ${minimum}.`
+      : stable
+        ? `Bun ${current}${where} je starší než minimum Lazuria ${minimum}.`
+        : `Bun${where} nevrátil stabilní verzi; Lazurio potřebuje alespoň ${minimum}.`,
+    paths: ["lazurio/toolchain.json"],
+    links: [],
+    details: [
+      `command: ${command} --version`,
+      `current: ${stable ? current : "<unknown>"}`,
+      `minimum: ${minimum}`,
+      `default: ${defaultVersion}`,
+      ...(result.ok ? [] : [result.stderr || result.error || "Version probe failed"]),
+    ],
+  };
+  return enough ? check : withBunInstallationGuidance(check, { platform, toolchain });
+}
+
+export function bunPathCheck({ pathExecutable, cwd, platform = process.platform, toolchain = readToolchainManifest(), run = runCommand }) {
   const id = "platform.bun_path", title = "Bun v PATH";
   if (!pathExecutable) {
     return withBunInstallationGuidance(
       requiredToolFailure({ id, title, message: "Příkaz bun není dostupný v PATH.", pathExecutable, args: ["--version"] }),
-      { platform, requiredVersion },
+      { platform, toolchain },
     );
   }
-  const result = run(pathExecutable, ["--version"], { cwd });
-  const current = result.ok ? result.stdout.trim() : null;
-  const check = { id, title, status: current === requiredVersion ? "ok" : "fail", severity: "required",
-    message: current === requiredVersion ? `Bun ${current} v PATH odpovídá požadované verzi.` : `Bun v PATH musí fungovat ve verzi ${requiredVersion}.`,
-    paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${current ?? "<unknown>"}`, `required: ${requiredVersion}`] };
-  return check.status === "ok" ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
+  return userBunVersionCheck({
+    id,
+    title,
+    command: pathExecutable,
+    result: run(pathExecutable, ["--version"], { cwd }),
+    platform,
+    toolchain,
+    where: " v PATH",
+  });
 }
 
 function requiredToolFailure({ id, title, message, pathExecutable, args }) {
@@ -2534,7 +2604,7 @@ export function bunRuntimeCheck({
   companiesRoot,
   bunExecutable = resolveBunExecutable(),
   platform = process.platform,
-  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
+  toolchain = readToolchainManifest(),
   run = runCommand,
 } = {}) {
   const result = bunExecutable
@@ -2547,34 +2617,20 @@ export function bunRuntimeCheck({
       severity: "required",
       title: "Bun runtime",
       message: "Bun nebyl nalezen ani neprošel validací executable kandidáta.",
-      paths: ["package.json"],
+      paths: ["lazurio/toolchain.json"],
       links: [],
-      details: [`required: ${requiredVersion}`, result.error ?? result.stderr ?? "unknown failure"],
-    }, { platform, requiredVersion });
+      details: [`minimum: ${toolchain.tools.bun.minimum}`, result.error ?? result.stderr ?? "unknown failure"],
+    }, { platform, toolchain });
   }
-
-  const runtime = classifyBunRuntime({
-    currentVersion: result.stdout.trim(),
-    requiredVersion,
-  });
-  const current = runtime.status === "current";
-  const check = {
+  return userBunVersionCheck({
     id: "platform.bun",
-    status: current ? "ok" : "fail",
-    severity: "required",
     title: "Bun runtime",
-    message: current
-      ? `Bun ${runtime.current_version} odpovídá Lazurio toolchain autoritě.`
-      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; Agent musí nejdřív požádat uživatele o souhlas s aktualizací.`,
-    paths: ["package.json"],
-    links: [],
-    details: [
-      `command: ${bunExecutable} --version`,
-      `current: ${runtime.current_version}`,
-      `required: ${runtime.required_version}`,
-    ],
-  };
-  return current ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
+    command: bunExecutable,
+    result,
+    platform,
+    toolchain,
+    where: "",
+  });
 }
 
 export function nodeRuntimeCheck({
@@ -2790,7 +2846,7 @@ export function bunPackageRunnerCheck({
   cwd,
   platform = process.platform,
   environment = process.env,
-  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
+  toolchain = readToolchainManifest(),
   resolvePathCommand = resolveExecutableOnPath,
   run = runCommand,
 } = {}) {
@@ -2824,16 +2880,18 @@ export function bunPackageRunnerCheck({
       `standalone_bunx: ${standaloneBunx ?? "absent"} (optional, not required)`,
     ],
   };
-  return ready ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
+  return ready ? check : withBunInstallationGuidance(check, { platform, toolchain });
 }
 
-// Guidance only: Doctor quotes the official, version-pinned Bun installer and
-// never runs it. A package from another registry is not a remedy for Bun.
-function withBunInstallationGuidance(check, { platform, requiredVersion }) {
-  const installCommand = officialBunInstallCommand({ platform, version: requiredVersion });
+// Guidance only: Doctor quotes the official Bun installer pinned on the
+// toolchain manifest's default, the version a fresh install gets, and never
+// runs it. A package from another registry is not a remedy for Bun.
+function withBunInstallationGuidance(check, { platform, toolchain }) {
+  const version = toolchain.tools.bun.default;
+  const installCommand = officialBunInstallCommand({ platform, version });
   return {
     ...check,
-    message: `${check.message} Agent musí nejdřív požádat uživatele o výslovný souhlas; potom použijte oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakujte z nového čistého procesu.`,
+    message: `${check.message} Agent musí nejdřív požádat uživatele o výslovný souhlas; potom použijte oficiální Bun instalátor připnutý přesně na výchozí verzi Lazuria ${version}; balíček z jiného registru není náprava. Potom kontrolu zopakujte z nového čistého procesu.`,
     links: [...check.links, {
       label: "Oficiální instalace Bun",
       kind: "external",
@@ -2841,7 +2899,7 @@ function withBunInstallationGuidance(check, { platform, requiredVersion }) {
     }],
     details: [
       ...check.details,
-      `required: ${requiredVersion}`,
+      `install_version: ${version}`,
       "remedy_source: official_bun_installer_pinned",
       ...(installCommand ? [`install_or_update_command: ${installCommand}`] : []),
       "installation_policy: use_existing_explicit_mandate_or_ask_principal",
@@ -3692,7 +3750,8 @@ export function runtimeAppStatus(app) {
  * first choice, no cache needed), otherwise Lazurio's runtime cache for this
  * system, or a fetch on the first start. Then the cache's size. A pin that is
  * not exact is MS-02's finding and is not listed here. The user's own Bun
- * stays measured exactly by `platform.bun_path`.
+ * is measured against the toolchain minimum by `platform.bun_path`, and
+ * Lazurio's own exact Bun by `platform.cli_runtime`.
  */
 export async function moduleRuntimesCheck({
   root,

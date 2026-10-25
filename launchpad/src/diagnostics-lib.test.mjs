@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, moduleRuntimesCheck, nodeRuntimeCheck, runtimeAppStatus, toolVersionCheck } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, cliRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, moduleRuntimesCheck, nodeRuntimeCheck, runtimeAppStatus, toolVersionCheck } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import {
   createLaunchpadGitFixture,
   createRepositoryDbWorktreeFixture,
@@ -79,24 +79,73 @@ afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("Bun Doctor check enforces the exact authority and gives an Agent handoff", () => {
-  const current = bunRuntimeCheck({
+// lazurio/toolchain.json as the Doctor reads it: the user's Bun needs the
+// minimum, a fresh install gets the default.
+const bunToolchain = (minimum, defaultVersion = minimum) => ({
+  schema_version: "lazurio.toolchain.v1",
+  tools: {
+    bun: { default: defaultVersion, minimum },
+    node: { minimum: "22.12.0" },
+    uv: { default: "0.11.6" },
+    gh: { minimum: "2.57.0" },
+    git: { minimum: "2.31.0" },
+  },
+});
+
+test("the user's Bun meets the toolchain minimum: another version above it is a fact, below it a consented update", () => {
+  const check = (stdout) => bunRuntimeCheck({
     companiesRoot: "/fixture",
     bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.1",
-    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
-  });
-  const mismatch = bunRuntimeCheck({
-    companiesRoot: "/fixture",
-    bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.1",
-    run: () => ({ ok: true, stdout: "1.4.2", stderr: "" }),
+    toolchain: bunToolchain("1.4.1"),
+    run: () => ({ ok: true, stdout, stderr: "" }),
   });
 
-  expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
-  expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
-  expect(mismatch.message).toContain("uživatele");
-  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.2", "required: 1.4.1"]));
+  for (const version of ["1.4.1", "1.4.4", "2.0.0"]) {
+    const accepted = check(version);
+    expect(accepted).toMatchObject({ id: "platform.bun", status: "ok", links: [] });
+    expect(accepted.message).toContain(version);
+    expect(accepted.details).toEqual(expect.arrayContaining([`current: ${version}`, "minimum: 1.4.1"]));
+  }
+  const below = check("1.4.0");
+  expect(below).toMatchObject({ id: "platform.bun", status: "fail", severity: "required" });
+  expect(below.message).toContain("1.4.0");
+  expect(below.message).toContain("1.4.1");
+  expect(below.message).toContain("uživatele");
+  expect(below.details).toEqual(expect.arrayContaining(["current: 1.4.0", "minimum: 1.4.1", "install_version: 1.4.1"]));
+  expect(check("").status).toBe("fail");
+  expect(check("1.4.2-canary.1").status).toBe("fail");
+});
+
+test("platform.cli_runtime fails when Lazurio runs on another Bun than its pin and names lazurio update online", () => {
+  const degraded = cliRuntimeCheck({
+    runningVersion: "1.4.4",
+    executable: "/Users/builder/.bun/bin/bun",
+    requiredVersion: "1.4.2",
+  });
+  expect(degraded).toMatchObject({ id: "platform.cli_runtime", status: "fail", severity: "required" });
+  expect(degraded.message).toContain("1.4.4");
+  expect(degraded.message).toContain("1.4.2");
+  expect(degraded.message).toContain("lazurio update");
+  expect(degraded.message).toContain("internetu");
+  expect(degraded.paths).toEqual(["lazurio/package.json"]);
+  expect(degraded.details).toEqual([
+    "running: 1.4.4",
+    "required: 1.4.2",
+    "executable: /Users/builder/.bun/bin/bun",
+    "remedy_command: lazurio update",
+  ]);
+
+  // On its exact Bun, also re-executed on it from the runtime cache.
+  const cached = "/Users/builder/.local/share/lazurio/runtimes/bun/1.4.2/node_modules/@oven/bun-darwin-aarch64/bin/bun";
+  for (const executable of ["/Users/builder/.bun/bin/bun", cached]) {
+    const exact = cliRuntimeCheck({ runningVersion: "1.4.2", executable, requiredVersion: "1.4.2" });
+    expect(exact).toMatchObject({ id: "platform.cli_runtime", status: "ok", links: [] });
+    expect(exact.message).toContain("1.4.2");
+    expect(exact.details).toEqual(["running: 1.4.2", "required: 1.4.2", `executable: ${executable}`]);
+  }
+
+  // Without a version: not a Bun Lazurio can name.
+  expect(cliRuntimeCheck({ runningVersion: null, executable: "/usr/bin/node", requiredVersion: "1.4.2" }).status).toBe("fail");
 });
 
 test("Node.js Doctor shares the Install Core version authority", () => {
@@ -292,7 +341,7 @@ test("Bun package runner Doctor proves `bun x` and only reports a standalone bun
     command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
     cwd: "C:\\Users\\Builder\\Lazurio",
     platform: "win32",
-    requiredVersion: "1.4.2",
+    toolchain: bunToolchain("1.4.2"),
     resolvePathCommand: () => null,
     run: (command, args) => {
       calls.push([command, ...args]);
@@ -312,7 +361,7 @@ test("Bun package runner Doctor proves `bun x` and only reports a standalone bun
     command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
     cwd: "C:\\Users\\Builder\\Lazurio",
     platform: "win32",
-    requiredVersion: "1.4.2",
+    toolchain: bunToolchain("1.4.2"),
     resolvePathCommand: (command) => (command === "bunx" ? "C:\\Users\\Builder\\.bun\\bin\\bunx.exe" : null),
     run: () => ({ ok: true, exitCode: 0, stdout: "Usage: bunx [flags] <package>", stderr: "" }),
   });
@@ -325,14 +374,14 @@ test("Bun package runner failure carries the official version-pinned remedy and 
     command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
     cwd: "C:\\Users\\Builder\\Lazurio",
     platform: "win32",
-    requiredVersion: "1.4.2",
+    toolchain: bunToolchain("1.4.2"),
     resolvePathCommand: () => null,
     run: () => ({ ok: false, exitCode: 1, stdout: "", stderr: "error: unknown subcommand" }),
   });
 
   expect(failing).toMatchObject({ id: "platform.bun_package_runner", status: "fail", severity: "required" });
   expect(failing.message).toContain("`bun x`");
-  expect(failing.message).toContain("připnutý přesně na 1.4.2");
+  expect(failing.message).toContain("připnutý přesně na výchozí verzi Lazuria 1.4.2");
   expect(failing.message).toContain("balíček z jiného registru není náprava");
   expect(failing.links).toEqual([
     { label: "Oficiální instalace Bun", kind: "external", url: "https://bun.com/docs/installation" },
@@ -341,7 +390,7 @@ test("Bun package runner failure carries the official version-pinned remedy and 
     "command: C:\\Users\\Builder\\.bun\\bin\\bun.exe x --help",
     "error: unknown subcommand",
     "standalone_bunx: absent (optional, not required)",
-    "required: 1.4.2",
+    "install_version: 1.4.2",
     "remedy_source: official_bun_installer_pinned",
     'install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"',
     "installation_policy: use_existing_explicit_mandate_or_ask_principal",
@@ -352,7 +401,7 @@ test("Bun package runner failure carries the official version-pinned remedy and 
     command: null,
     cwd: "/Users/builder/Lazurio",
     platform: "darwin",
-    requiredVersion: "1.4.2",
+    toolchain: bunToolchain("1.4.2"),
     resolvePathCommand: () => null,
     run: () => {
       throw new Error("missing Bun must not be executed");
@@ -362,49 +411,65 @@ test("Bun package runner failure carries the official version-pinned remedy and 
   expect(missing.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
 });
 
-test("Bun runtime and PATH Doctor failures point to the official pinned installer", () => {
+test("Bun runtime and PATH Doctor failures point to the official installer pinned on the default", () => {
+  // A minimum below the default: a missing Bun and one below the minimum get
+  // the default, as a fresh install does.
+  const toolchain = bunToolchain("1.4.2", "1.4.4");
   const notOnPath = bunPathCheck({
     pathExecutable: null,
     cwd: "C:\\Users\\Builder\\Lazurio",
     platform: "win32",
-    requiredVersion: "1.4.2",
+    toolchain,
     run: () => {
       throw new Error("missing bun must not be executed");
     },
   });
   expect(notOnPath).toMatchObject({ id: "platform.bun_path", status: "fail" });
   expect(notOnPath.links.map((link) => link.url)).toEqual(["https://bun.com/docs/installation"]);
-  expect(notOnPath.details).toContain('install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"');
+  expect(notOnPath.details).toContain('install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.4"');
+  expect(notOnPath.details).toContain("install_version: 1.4.4");
 
-  const wrongVersion = bunPathCheck({
+  const belowMinimum = bunPathCheck({
     pathExecutable: "/usr/local/bin/bun",
     cwd: "/Users/builder/Lazurio",
     platform: "darwin",
-    requiredVersion: "1.4.2",
+    toolchain,
     run: () => ({ ok: true, exitCode: 0, stdout: "1.4.0", stderr: "" }),
   });
-  expect(wrongVersion.status).toBe("fail");
-  expect(wrongVersion.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+  expect(belowMinimum.status).toBe("fail");
+  expect(belowMinimum.message).toContain("1.4.0");
+  expect(belowMinimum.message).toContain("1.4.2");
+  expect(belowMinimum.details).toEqual(expect.arrayContaining([
+    "current: 1.4.0",
+    "minimum: 1.4.2",
+    'install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.4"',
+  ]));
 
-  const exact = bunPathCheck({
-    pathExecutable: "/usr/local/bin/bun",
-    cwd: "/Users/builder/Lazurio",
-    platform: "darwin",
-    requiredVersion: "1.4.2",
-    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.2", stderr: "" }),
-  });
-  expect(exact).toMatchObject({ status: "ok", links: [] });
+  // At or above the minimum the user's Bun stays as it is (decision 0161).
+  for (const version of ["1.4.2", "1.4.3", "1.4.4", "1.5.0"]) {
+    const accepted = bunPathCheck({
+      pathExecutable: "/usr/local/bin/bun",
+      cwd: "/Users/builder/Lazurio",
+      platform: "darwin",
+      toolchain,
+      run: () => ({ ok: true, exitCode: 0, stdout: version, stderr: "" }),
+    });
+    expect(accepted).toMatchObject({ id: "platform.bun_path", status: "ok", links: [] });
+    expect(accepted.message).toContain(version);
+    expect(accepted.details).toEqual(expect.arrayContaining([`current: ${version}`, "minimum: 1.4.2", "default: 1.4.4"]));
+  }
 
-  const mismatch = bunRuntimeCheck({
+  const belowRuntime = bunRuntimeCheck({
     companiesRoot: "/tmp/test-root",
     bunExecutable: "/usr/local/bin/bun",
     platform: "linux",
-    requiredVersion: "1.4.2",
+    toolchain,
     run: () => ({ ok: true, exitCode: 0, stdout: "1.4.1", stderr: "" }),
   });
-  expect(mismatch.status).toBe("fail");
-  expect(mismatch.message).toContain("uživatele");
-  expect(mismatch.details).toContain("remedy_source: official_bun_installer_pinned");
+  expect(belowRuntime.status).toBe("fail");
+  expect(belowRuntime.message).toContain("uživatele");
+  expect(belowRuntime.details).toContain("remedy_source: official_bun_installer_pinned");
+  expect(belowRuntime.details).toContain("install_version: 1.4.4");
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {
@@ -1175,6 +1240,48 @@ test("doctor report obsahuje platform, git a gitignore checks", async () => {
   expect(checks.get("launchpad.discovery")?.status).toBe("ok");
   // Information only, whatever the Apps pin and the cache holds.
   expect(checks.get("launchpad.module_runtimes")?.status).toBe("ok");
+  expect(checks.has("platform.cli_runtime")).toBe(true);
+});
+
+test.skipIf(process.platform === "win32")("doctor accepts a user's Bun on PATH above the toolchain minimum and reports its version", async () => {
+  // The same report as above, in a process whose PATH starts with another
+  // Bun: it answers --version above the minimum and runs the real Bun
+  // otherwise (`bun x`).
+  const root = await createCompaniesWorkspaceFixture();
+  const { minimum } = JSON.parse(await readFile(join(import.meta.dir, "..", "..", "lazurio", "toolchain.json"), "utf8")).tools.bun;
+  const [major, minor, patch] = minimum.split(".").map(Number);
+  const above = `${major}.${minor}.${patch + 2}`;
+  const bin = join(root, "user-bun");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "bun"), [
+    "#!/bin/sh",
+    `if [ "$1" = "--version" ]; then echo '${above}'; exit 0; fi`,
+    `exec '${process.execPath}' "$@"`,
+    "",
+  ].join("\n"), { mode: 0o755 });
+  const script = join(root, "doctor-with-user-bun.mjs");
+  await writeFile(script, [
+    `import { buildLaunchpadDoctorReport } from ${JSON.stringify(new URL("../../lazurio/runtime/diagnostics-lib.mjs", import.meta.url).href)};`,
+    `const report = await buildLaunchpadDoctorReport({ companiesRoot: ${JSON.stringify(root)}, launchpadRoot: ${JSON.stringify(join(root, "launchpad"))} });`,
+    "console.log(JSON.stringify(report.checks.filter((check) => check.id.startsWith(\"platform.bun\") || check.id === \"platform.cli_runtime\")));",
+    "",
+  ].join("\n"));
+  const result = Bun.spawnSync([process.execPath, script], {
+    cwd: root,
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  const checks = new Map(JSON.parse(result.stdout.toString()).map((check) => [check.id, check]));
+
+  for (const id of ["platform.bun", "platform.bun_path"]) {
+    expect(checks.get(id)).toMatchObject({ status: "ok", links: [] });
+    expect(checks.get(id).message).toContain(above);
+    expect(checks.get(id).details).toEqual(expect.arrayContaining([`command: ${join(bin, "bun")} --version`, `current: ${above}`, `minimum: ${minimum}`]));
+  }
+  expect(checks.get("platform.bun_package_runner")?.status).toBe("ok");
+  expect(checks.has("platform.cli_runtime")).toBe(true);
 });
 
 test("CLI Doctor na sdílené týmové Mašině Personalspace lane nespouští a hlásí not_applicable", async () => {
@@ -3688,10 +3795,10 @@ test("Codex currency results preserve status and consent while pointing to the s
   }
 });
 
-test("Bun PATH readiness accepts a separate exact-version installation and rejects empty output", async () => {
+test("Bun PATH readiness accepts a separate installation at or above the minimum and rejects empty output", async () => {
   const { bunPathCheck } = await import("../../lazurio/runtime/diagnostics-lib.mjs");
-  for (const [stdout, status] of [["1.4.1", "ok"], ["1.4.0", "fail"], ["", "fail"]]) {
-    expect(bunPathCheck({ pathExecutable: "/custom/manager/bun", requiredVersion: "1.4.1", run: () => ({ ok: true, stdout }) }).status).toBe(status);
+  for (const [stdout, status] of [["1.4.1", "ok"], ["1.4.9", "ok"], ["1.4.0", "fail"], ["", "fail"]]) {
+    expect(bunPathCheck({ pathExecutable: "/custom/manager/bun", toolchain: bunToolchain("1.4.1"), run: () => ({ ok: true, stdout }) }).status).toBe(status);
   }
 });
 
