@@ -45,7 +45,9 @@ Nevzniká veřejná alternativní cesta k pracovnímu Environmentu ani k jeho
 aplikacím. Výjimkou je Organizace, která si podle decision 0213 zvolila
 veřejné DNS: tam síťová podmínka (bod 1) a schválení zařízení pro lidi
 neplatí, lidé vstupují bez tailnetu jen branami Environmentů s přihlášením
-Lazurio účtem a každá brána obnovuje relaci nejvýš po dvou minutách.
+Lazurio účtem a každá brána obnovuje relaci nejvýš po dvou minutách; spojení, které
+už otevřela, ukončí nejpozději pět minut po otevření, až to T3 Code zvládne (dodatek 0213
+z 2026-10-25).
 Environmenty zůstávají uzly tailnetu a trezor Organizace zůstává pro lidi jen
 v tailnetu. Ostatních Organizací se to netýká. Přihlašovací/control-plane endpoint nutný k založení požadavku na
 připojení není přístupem k pracovním datům. Síťová schválení se vážou na
