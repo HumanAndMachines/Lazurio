@@ -301,11 +301,16 @@ flowchart LR
 ```
 
 Síťová pravidla jsou odvozený nasazený výstup schválené politiky a konkrétního
-zařízení. Změny infrastruktury dál používají řízené plánování, apply a
-evidenci; Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale.
-To neznamená nutnost osobního GitHub účtu nebo dalšího kliknutí Admina pro
-každé dovolené interní sdílení. Servisní vykonavatel smí mít jen rozsah
-schválené operace a nesmí vytvářet vlastní přístupovou autoritu.
+zařízení. Výjimkou je SSH z Osobního Prostředí do Pracovních Prostředí jeho
+Ownera ve stejném tailnetu: Osobní Prostředí není zařízení a toto pravidlo se
+odvozuje z přidělení Pracovního Prostředí a živého členství, bez schválení
+zařízení (dodatek 0192 z 2026-10-26). Diagram výše ukazuje vstup lidí a jejich
+zařízení, ne úplný model zdrojů SSH. Změny infrastruktury dál používají řízené
+plánování, apply a evidenci; Dashboard nesmí obejít tyto kontroly přímým
+zápisem do Headscale. To neznamená nutnost osobního GitHub účtu nebo dalšího
+kliknutí Admina pro každé dovolené interní sdílení. Servisní vykonavatel smí
+mít jen rozsah schválené operace a nesmí vytvářet vlastní přístupovou
+autoritu.
 
 ## Přechod a ověření
 

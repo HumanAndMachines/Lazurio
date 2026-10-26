@@ -48,7 +48,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
      Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
-   téhož uživatele: SSH + HTTPS.
+   téhož uživatele: SSH + HTTPS. Z Osobního Prostředí je automatické a vždy
+   zapnuté jen SSH do Pracovních Prostředí přidělených jeho Ownerovi ve stejném
+   tailnetu, bez schválení zařízení (dodatek 0192 z 2026-10-26). HTTPS a jiný
+   dosah dál drží 0192: schválené zařízení a grant.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
    na osobní VM ani na osobní laptop. Jedinou výjimkou je zařízení vědomě
    deklarované v obou zónách podle pravidla 8.
