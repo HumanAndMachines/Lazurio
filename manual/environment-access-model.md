@@ -73,12 +73,15 @@ Conglomerate Hostu, kterou Admin ovládá v Dashboardu (Žádosti o přístup �
 Zařízení → Schválit, nebo Odebrat). Služba u každé operace ověří přes GitHub
 živou roli Owner volajícího v té Organizaci, zapíše schválení s auditem
 a přes API Headscale změní politiku bez restartu; cílem je 30–60 sekund
-od kliknutí po dosah i po jeho ztrátu. Pravidla, tedy kdo smí schvalovat
+od kliknutí po dosah i po jeho ztrátu. Své ztracené nebo ukradené zařízení
+smí odebrat i sám člověk, hned a bez Admina; schvaluje jen Admin. Pravidla, tedy kdo smí schvalovat
 a kam schválené zařízení dosáhne, zůstávají v Deployment Repu vlastníka hostu
 a mění se reviewovanou změnou (Plan, Permit, readback). Politiku vykresluje
 jeden renderer z těchto pravidel a ze schválení služby; converge Machines
-schválení čte, nikdy je nepřepíše, a jejich projekce v Deployment Repu je
-záznam, ne vstup. Při výpadku služby je záložní cestou reviewovaná změna
+schválení čte, nikdy je nepřepíše. Služba schválení a odebrání automaticky,
+bez review, promítá do Deployment Repa jako auditní záznam; projekce je
+záznam, ne vstup, a je jedinou výjimkou z pravidla, že se Deployment Repo
+mění jen pull requestem (0205 bod 2). Při výpadku služby je záložní cestou reviewovaná změna
 v Deployment Repu a služba takové schválení po obnově převezme. Přesun
 záznamu do Auth je samostatná migrace bez období dvou zapisovatelů
 (dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652).
@@ -278,7 +281,7 @@ organizačního bota samy neomezují práva takto vloženého účtu.
 |---|---|
 | Lazurio účty, propojené identity, členství a oprávnění ke vstupu | Auth na standardním identity provideru; Dashboard je spravuje, nevytváří druhý seznam ACL. |
 | Technická existence, vlastník a nasazené verze Environmentu; konfigurace a důkazy sítě | Deployment Repo vlastníka a řízený apply Machines. |
-| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Jednotlivá schválení: služba na Conglomerate Hostu jako jediný zapisovatel, ovládaná Adminem z Dashboardu, s auditem a projekcí do Deployment Repa; pravidla schvalování a dosahu: Deployment Repo vlastníka hostu a řízený apply Machines; cílově Auth spravovaný z Dashboardu (dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652). |
+| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Jednotlivá schválení: služba na Conglomerate Hostu jako jediný zapisovatel, ovládaná Adminem z Dashboardu (své zařízení smí odebrat i sám člověk), s auditem a automatickou projekcí do Deployment Repa bez review; pravidla schvalování a dosahu: Deployment Repo vlastníka hostu a řízený apply Machines; cílově Auth spravovaný z Dashboardu (dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652). |
 | Přidělení uživatele a delegované sdílení | Jeden autoritativní account/access kontrakt Auth spravovaný přes Dashboard. Dosavadní infra assignment je migrační vstup, ne druhý nezávislý writer. |
 | Repozitáře, Team capability, schválení PR a branch rules | GitHub. |
 | Tajné hodnoty | Příslušný trezor/custody; ostatní vrstvy drží reference. |
