@@ -59,7 +59,10 @@ reviewované změně jako schválení zařízení a při změně přidělení, o
 zařízení nebo konci členství se v téže změně síťového záměru přidá nebo
 odebere. Opačný směr (Environment →
 zařízení) se obecně nedává a jde o samostatné rozhodnutí (0182); jiné SSH
-vyžaduje vlastní oprávnění.
+vyžaduje vlastní oprávnění, kromě SSH z Osobního Environmentu do pracovních
+Environmentů přidělených témuž uživateli ve stejném tailnetu: i to je pravidlo
+a Osobní Environment k němu schválení jako zařízení nepotřebuje (dodatek 0192
+z 2026-10-26).
 
 **Schválení zařízení.** Schválení je vztah konkrétního zařízení, účtu jeho
 vlastníka a cílové Organizace. Na tailnetu, který obsluhuje víc Organizací,
@@ -341,7 +344,8 @@ Admin každé Organizace schválí konkrétní zařízení. Schválené zaříze
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
 dál rozhoduje brána Environmentu. SSH zůstává u přesných grantů: zařízení →
 Environment přidělený témuž uživateli vzniká spolu se schválením zařízení a sleduje
-změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně, a
+změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně (SSH z Osobního
+Environmentu upravuje dodatek 0192 z 2026-10-26), a
 stávající zařízení se převedou bez nového přihlášení. Vstupní granty brány
 (přidělení, plné a aplikační sdílení, vstup bez GitHubu) patří do
 DEV-6551/6552/6638/6645; do jejich nasazení brány pouští podle GitHub Teamu
