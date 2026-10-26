@@ -65,3 +65,28 @@ test("human output uses only Lazurio and the three public states", () => {
   expect(text).toContain("Prompt pro Codex");
   expect(text).not.toMatch(/Conglomerate|HumanAndMachine/);
 });
+
+test("human output puts the tools section after the repositories and before the warnings, and a report without one prints none", () => {
+  const text = formatUpdateLaneReport({
+    state: "current",
+    results: [{ state: "current", path: ".", message: "Repo už je aktuální." }],
+    warnings: ["Bun 1.4.90 neprošel kontrolou."],
+    tools: {
+      bun: {
+        pins: [{ version: "1.4.2", cli_pin: true, default: true, apps: 1, state: "user" }],
+        inventory: { complete: true, issues: [] },
+        prune_report: { mode: "report_only", state: "absent", versions: [], would_free_bytes: 0 },
+      },
+    },
+  });
+  expect(text.split("\n")).toEqual([
+    "Lazurio update: current",
+    "· .: current — Repo už je aktuální.",
+    "Bun pro aplikace:",
+    "· 1.4.2: váš Bun, nic se nestahuje",
+    "Mezipaměť Bunu Lazuria je prázdná.",
+    "Upozornění:",
+    "- Bun 1.4.90 neprošel kontrolou.",
+  ]);
+  expect(formatUpdateLaneReport({ state: "current", results: [], warnings: [] })).toBe("Lazurio update: current");
+});

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runPinnedCheckoutChildMode } from "../core/git-materialization-lib.mjs";
 import { runPinnedTemporaryGitChildMode } from "./git-lib.mjs";
+import { updateBunRuntimes } from "./bun-runtime-cache-lib.mjs";
 import { runLazurioUpdate } from "./lazurio-update-lib.mjs";
 
 const argv = Bun.argv.slice(2);
@@ -30,6 +31,10 @@ if (
     },
     runtimeRoot: resolve(options.runtimeRoot),
     organizations,
+    // The update of a computer fetches ahead the Bun its root and Apps pin
+    // and reports its runtime cache (decision 0171, addendum of 2026-10-24,
+    // point 5); the engine skips the step on a Remote Environment.
+    tools: updateBunRuntimes,
     ...(options.restrictedSlotPolicy ? { restrictedSlotPolicy: options.restrictedSlotPolicy } : {}),
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);

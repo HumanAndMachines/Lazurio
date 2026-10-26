@@ -12,6 +12,7 @@ import {
   readlink,
   realpath,
   rm,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -616,6 +617,135 @@ posixTest("the resolved Bun's directory goes first on the App's PATH, once, so a
   await writeFile(script, "console.log(process.env.LAZURIO_FIXTURE_BUN ?? 'unpinned');\n");
   expect(execFileSync("/bin/sh", ["-c", `bun ${script}`], { encoding: "utf8", env }).trim()).toBe("1.4.99");
   expect((await readFile(log, "utf8")).trim().split("\n")).toEqual(["--version", "x --version", script]);
+});
+
+// The use marker (#640, plan DEV-6682 M2b-2b): a resolution that answers a
+// version from the runtime cache touches `bun.used/<version>` beside the cache,
+// where the locks are, so that a later prune knows when the version was last
+// used. Never a file in the version's directory, which stays exactly as it was
+// placed (decision 0171, addendum of 2026-10-24, point 3), and never anything
+// for the user's Bun, which uses no cache entry.
+const usedMarker = (home, version) => join(home, ".local/share/lazurio/runtimes/bun.used", version);
+// Permission denials need a user the kernel holds to them.
+const permissionTest = test.skipIf(!supported || process.getuid?.() === 0);
+
+// Every entry below a directory with its kind, mode, content and time, links
+// not followed: what "unchanged" means for a placed version.
+async function treeOf(directory) {
+  const entries = [];
+  const walk = async (path) => {
+    for (const name of (await readdir(path)).sort()) {
+      const entry = join(path, name);
+      const info = await lstat(entry);
+      const kind = info.isSymbolicLink() ? "link" : info.isDirectory() ? "directory" : "file";
+      entries.push([
+        entry.slice(directory.length),
+        kind,
+        info.mode,
+        kind === "file" ? createHash("sha256").update(await readFile(entry)).digest("hex") : null,
+        kind === "link" ? await readlink(entry) : null,
+        kind === "file" ? info.mtimeMs : null,
+      ]);
+      if (kind === "directory") await walk(entry);
+    }
+  };
+  await walk(directory);
+  return entries;
+}
+
+posixTest("a fetched version is marked used beside the cache with an empty file of the user's own, and a refused one is not", async () => {
+  const { home, owner } = await place("used-fetch");
+  const fake = fakeInstaller();
+  const resolve = resolverFor(home, { install: fake.install });
+  expect((await resolve({ packageManager: "bun@1.4.99", owner })).source).toBe("fetched");
+  const marker = await lstat(usedMarker(home, "1.4.99"));
+  expect(marker.isFile()).toBe(true);
+  expect(marker.size).toBe(0);
+  expect(marker.mode & 0o777).toBe(0o600);
+  expect((await lstat(dirname(usedMarker(home, "1.4.99")))).mode & 0o777).toBe(0o700);
+  // Beside the versions and their locks; the cache root keeps listing only
+  // version directories.
+  expect((await readdir(dirname(moduleBunRoot(home)))).sort()).toEqual(["bun", "bun.locks", "bun.used"]);
+  expect(await readdir(moduleBunRoot(home))).toEqual(["1.4.99"]);
+  // What cannot be had answers no version, so nothing is marked.
+  const offline = await place("used-refused");
+  await refusalOf(resolverFor(offline.home, { install: fakeInstaller({ refuse: () => "runtime-unavailable" }).install })({
+    packageManager: "bun@1.4.98",
+    owner: offline.owner,
+  }));
+  expect(existsSync(usedMarker(offline.home, "1.4.98"))).toBe(false);
+});
+
+posixTest("a resolution from the cache marks the version used when it was not yet, and moves the mark forward when it was", async () => {
+  const { home, owner } = await place("used-cache");
+  const fake = fakeInstaller();
+  const resolve = resolverFor(home, { install: fake.install });
+  await resolve({ packageManager: "bun@1.4.99", owner });
+  // A version in the cache that was never marked, as every version placed
+  // before the marker existed.
+  await rm(usedMarker(home, "1.4.99"));
+  expect((await resolve({ packageManager: "bun@1.4.99", owner })).source).toBe("cache");
+  expect((await lstat(usedMarker(home, "1.4.99"))).isFile()).toBe(true);
+  // A later resolution moves its time forward.
+  const earlier = new Date("2026-01-02T03:04:05Z");
+  await utimes(usedMarker(home, "1.4.99"), earlier, earlier);
+  expect((await resolve({ packageManager: "bun@1.4.99", owner })).source).toBe("cache");
+  expect((await lstat(usedMarker(home, "1.4.99"))).mtimeMs).toBeGreaterThan(earlier.getTime() + 60_000);
+  // Concurrent resolutions of one version, one fetch, one marker.
+  await Promise.all(Array.from({ length: 3 }, () => resolve({ packageManager: "bun@1.4.97", owner })));
+  expect((await lstat(usedMarker(home, "1.4.97"))).isFile()).toBe(true);
+  expect(fake.calls.map((call) => call.version)).toEqual(["1.4.99", "1.4.97"]);
+});
+
+posixTest("the user's Bun and a package without an exact pin write no marker: no cache entry is used", async () => {
+  const { home, owner } = await place("used-user");
+  const fake = fakeInstaller();
+  const resolve = resolverFor(home, { install: fake.install });
+  expect((await resolve({ packageManager: `bun@${Bun.version}`, owner })).source).toBe("user");
+  expect((await resolve({ packageManager: null, owner })).source).toBe("user");
+  expect(existsSync(join(home, ".local", "share", "lazurio"))).toBe(false);
+  expect(fake.calls).toEqual([]);
+});
+
+permissionTest("a marker that cannot be written changes nothing about the resolution: a read-only marker directory, and a file where the directory belongs", async () => {
+  const { home, owner } = await place("used-read-only");
+  const fake = fakeInstaller();
+  const resolve = resolverFor(home, { install: fake.install });
+  const executable = cachedExecutable(home, "1.4.99", "linux-aarch64");
+  await resolve({ packageManager: "bun@1.4.99", owner });
+  const used = dirname(usedMarker(home, "1.4.99"));
+  await rm(usedMarker(home, "1.4.99"));
+  await chmod(used, 0o500);
+  try {
+    expect(await resolve({ packageManager: "bun@1.4.99", owner })).toEqual({
+      executable,
+      binDir: dirname(executable),
+      source: "cache",
+    });
+    expect(existsSync(usedMarker(home, "1.4.99"))).toBe(false);
+  } finally {
+    await chmod(used, 0o700);
+  }
+  await rm(used, { recursive: true, force: true });
+  await writeFile(used, "not a directory\n");
+  expect((await resolve({ packageManager: "bun@1.4.99", owner })).source).toBe("cache");
+  expect(await readFile(used, "utf8")).toBe("not a directory\n");
+  expect(fake.calls).toHaveLength(1);
+});
+
+posixTest("marking a version used never changes its directory: nothing appears in it and nothing in it changes", async () => {
+  const { home, owner } = await place("used-immutable");
+  const resolve = resolverFor(home, { install: fakeInstaller().install });
+  await resolve({ packageManager: "bun@1.4.99", owner });
+  const version = join(moduleBunRoot(home), "1.4.99");
+  const placed = await treeOf(version);
+  for (let round = 0; round < 3; round += 1) {
+    await rm(usedMarker(home, "1.4.99"), { force: true });
+    expect((await resolve({ packageManager: "bun@1.4.99", owner })).source).toBe("cache");
+    expect(existsSync(usedMarker(home, "1.4.99"))).toBe(true);
+  }
+  expect(await treeOf(version)).toEqual(placed);
+  expect(await readdir(moduleBunRoot(home))).toEqual(["1.4.99"]);
 });
 
 // A registry on the loopback interface, as npm's answers it: a package
