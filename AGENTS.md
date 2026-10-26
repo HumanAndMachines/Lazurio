@@ -174,7 +174,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   přístup a SSH do Prostředí Organizace přes Headscale mají oddělené granty.
 - Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
   `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
-  lowercase login zmrazený při založení (0153, 0154, `ARCHITECTURE.md`).
+  lowercase login zmrazený při přidělení Prostředí (0153, 0154, 0216,
+  `ARCHITECTURE.md`).
+- Prostředí vznikají předem do zásoby jako volná a lidem se přidělují
+  zápisem v Lazurio Auth; použité Prostředí se nepředává, zanikne a vznikne
+  nové (0216; cíl, zatím nenasazený, plán DEV-6688).
 
 ## Jak se tu pracuje
 

@@ -65,7 +65,7 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Local Environment (česky „váš počítač“)** | Technický pojem pro tento počítač: zařízení, u kterého uživatel právě sedí a které není hostovanou Mašinou. Uživatelům se neukazuje jako druh Prostředí; je to „váš počítač“ (decision 0207, dodatek z 2026-10-18). Listener není klasifikátor (hostovaný Launchpad také běží na loopbacku za svou bránou). Osobní laptop nikdy není Remote Environment (decisions 0155, 0160). |
 | **Conglomerate** | Pohled na graf všech Mašin uživatele napříč jeho Organizacemi. Je to diagram a orientace, ne autorita, ACL ani registr; fakta o Mašině zůstávají u jejího Ownera (decision 0144). |
 | **Conglomerate Host** | Mašina, která pro jeden Conglomerate provozuje Headscale a pro každou jeho Organizaci vlastní Lazurio Vaultwarden (decision 0203). Nehostuje checkouty ani Workspace Moduly Organizací. |
-| **`lazurio.machine.json`** | Identita Mašiny zapsaná při jejím zprovoznění: `machine_id`, Owner, Organizace, profil, custody repozitář a vyšší provider/operator hranice. Zdroj pro každou operaci, která má pojmenovat Mašinu, jejího Ownera a vyšší hranici. |
+| **`lazurio.machine.json`** | Identita Mašiny zapsaná při jejím zprovoznění: `machine_id`, Owner, Organizace, profil, custody repozitář a vyšší provider/operator hranice. U volného Prostředí (0216) doplní osobu až přidělení. Zdroj pro každou operaci, která má pojmenovat Mašinu, jejího Ownera a vyšší hranici. |
 
 **Uživatel** je člověk, pro kterého a se kterým Agenti pracují: ten, kdo
 Environment ovládá, a tím ovládá i Agenty, které v něm spouští. Agenti jednají
@@ -176,6 +176,8 @@ přístupy u poskytovatelů.
 ## Buddy a Prostředí Henry
 
 Hard pravidlo Lazuria: jeden uživatel má právě jednu vlastní hostovanou osobní Mašinu, své Osobní Prostředí. Buddy běží přímo v ní a funguje v jejím rámci (decision 0210); žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného uživatele; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+
+Prostředí vznikají předem do zásoby (decision 0216). Server dané třídy nese pevný počet dílů (díl = 4 vCPU / 8 GiB / 60 GiB; Prostředí má 1, 2 nebo 4 díly) a mimo ně jedno Prostředí služeb; paměť ani disk se nesdílí. *Volné Prostředí* je nainstalované, bez osoby a s neutrálním technickým jménem; Ownerem volného osobního Prostředí je provozovatel, volného Pracovního Prostředí Organizace. *Přidělení* je jediný zápis v Lazurio Auth (přidělený člověk a generace); vstup, adresa s osobním slugem, certifikát, síť a přehled v Dashboardu se z něj odvozují a Prostředí se samo dokončí pod účtem člověka. Osobní slug se zmrazí při přidělení a člověk se tím jednou a natrvalo stává Ownerem osobního Prostředí. Uvolněné Prostředí se nepředává: zanikne a pipeline vytvoří nové volné.
 
 Buddy a Prostředí Henry se liší vlastníkem, mandátem a správou dat. Buddy je od
 decision 0210 Hermes Agent v Osobním Prostředí svého uživatele. Automatizovanou
