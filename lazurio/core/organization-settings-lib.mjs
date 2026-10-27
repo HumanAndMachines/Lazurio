@@ -53,6 +53,12 @@ const CANONICAL_SOURCE = "lazurio.organization.json";
 // public client, so no field may name a secret, and the closed tree refuses
 // any other key.
 //
+// `chatgpt_apps` ("Aplikace z ChatGPT", decision 0162, addendum 2026-10-27):
+// whether agents in the Organization's work and Team Environments may use the
+// apps of the person's ChatGPT account for apps that Integrace do not have.
+// Unlike `composio`, an ungoverned value means off on every Environment, so an
+// Organization writes it only to allow them.
+//
 // `access_requests` ("Žádosti o přístup", decision 0204, addendum 2026-10-17
 // afternoon, point b; plan DEV-6668 M8) is the Dashboard's own setting: Core
 // validates it so an Organization that writes it keeps its other settings,
@@ -70,6 +76,7 @@ const SETTINGS_CONTRACT = objectNode({
       },
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),
+    chatgpt_apps: objectNode({ allowed: booleanLeaf() }, ["allowed"]),
   }),
   access_requests: dashboardOnly(objectNode({ enabled: booleanLeaf() }, ["enabled"])),
 });
