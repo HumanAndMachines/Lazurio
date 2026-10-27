@@ -171,6 +171,17 @@
                   "description": "Hosted Launchpad callbacks (https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback) registered as redirect URIs of the Entra app, at most 255 because Entra allows 256 and the localhost callback takes one. An Environment whose callback is listed signs in from the user's own browser; any other one uses Executor's redirect URI http://localhost/api/oauth/callback, which is always registered and never listed, in the Environment browser."
                 }
               }
+            },
+            "chatgpt_apps": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["allowed"],
+              "properties": {
+                "allowed": {
+                  "type": "boolean",
+                  "description": "Whether agents in the Organization's work and Team Environments may use the apps, plugins and connectors of the person's ChatGPT account for apps that Integrations do not have (decision 0162, addendum 2026-10-27). Absent means off on every Environment, unlike composio."
+                }
+              }
             }
           }
         },

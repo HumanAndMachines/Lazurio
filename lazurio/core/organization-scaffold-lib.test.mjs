@@ -102,7 +102,7 @@ describe("Organization scaffold", () => {
     expect(company).not.toHaveProperty("settings");
     expect(resolution.settings).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
     });
   });
 

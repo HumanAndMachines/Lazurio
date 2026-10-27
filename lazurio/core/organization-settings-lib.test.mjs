@@ -43,7 +43,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       "settings_type_invalid",
       "settings_value_invalid",
     ]);
-    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys]);
+    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys, "integrations.chatgpt_apps.allowed"]);
     expect(ORGANIZATION_SETTINGS_DASHBOARD_KEYS).toEqual(["access_requests.enabled"]);
     expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
     expect(Object.isFrozen(ORGANIZATION_SETTINGS_KEYS)).toBe(true);
@@ -56,7 +56,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: canonicalSource,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
       issues: [],
     });
   });
@@ -68,7 +68,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
         issues: [],
       });
     }
@@ -79,9 +79,34 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft],
+        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
         issues: [],
       });
+    }
+  });
+
+  test("ChatGPT apps are governed only when an Organization writes them (decision 0162, addendum 2026-10-27)", () => {
+    for (const allowed of [false, true]) {
+      const settings = { integrations: { chatgpt_apps: { allowed } } };
+      expect(settingsOf(manifest(settings))).toEqual({
+        contract_version: ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+        status: "valid",
+        source: canonicalSource,
+        values: settings,
+        effective: [
+          { key: "integrations.composio.allowed", governed: false, value: null },
+          ...ungovernedMicrosoft,
+          { key: "integrations.chatgpt_apps.allowed", governed: true, value: allowed },
+        ],
+        issues: [],
+      });
+    }
+    for (const [settings, expected] of [
+      [{ integrations: { chatgpt_apps: {} } }, [issue("settings_field_missing", "/settings/integrations/chatgpt_apps/allowed")]],
+      [{ integrations: { chatgpt_apps: { allowed: "true" } } }, [issue("settings_type_invalid", "/settings/integrations/chatgpt_apps/allowed")]],
+      [{ integrations: { chatgptApps: { allowed: true } } }, [issue("settings_field_unknown", "/settings/integrations/chatgptApps")]],
+    ]) {
+      expect(settingsOf(manifest(settings))).toMatchObject({ status: "invalid", values: null, effective: null, issues: expected });
     }
   });
 
@@ -154,7 +179,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: null,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
       issues: [],
     });
     for (const input of [
@@ -190,7 +215,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     expect(newOrganizationSettings()).toEqual({ integrations: { composio: { allowed: false } } });
     expect(settingsOf(manifest(newOrganizationSettings()))).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
     });
   });
 
@@ -207,6 +232,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null },
       ],
       issues: [],
     });
@@ -286,7 +312,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
         issues: [],
       });
     }
@@ -306,6 +332,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null },
       ],
       issues: [],
     });

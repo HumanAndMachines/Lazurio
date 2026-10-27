@@ -110,7 +110,7 @@ test("one Core call reads an Organization's settings from its checked-out root",
     status: "valid",
     source: "lazurio.organization.json",
     values: { integrations: { composio: { allowed: false } } },
-    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
     issues: [],
   });
   expect(readOrganizationRoot({ organizationRoot: root })).toMatchObject({

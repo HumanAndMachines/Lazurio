@@ -702,7 +702,7 @@ test("Organization settings ride next to the resource and never touch projection
     status: "valid",
     source: "lazurio.organization.json",
     values: { integrations: { composio: { allowed: false } } },
-    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
     issues: [],
   });
   expect(plain.settings).toMatchObject({ status: "absent", source: "lazurio.organization.json", values: {} });
