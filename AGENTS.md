@@ -419,7 +419,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   nepřihlašuješ.
 - Nové napojení: oficiální MCP poskytovatele v Executoru → oficiální CLI →
   Composio → reviewnutý pinned OSS → browser. Scraping a cookie-session
-  servery nikdy, nový ChatGPT nebo claude.ai konektor také ne. Napojená
+  servery nikdy, nový ChatGPT nebo claude.ai konektor také ne. Aplikace,
+  pluginy a konektory účtu ChatGPT v harnessu v Prostředí nepoužíváš, dokud
+  je Organizace (v Osobním Prostředí uživatel) nepovolí, a i pak jen pro
+  aplikaci mimo Integrace (0162, dodatek z 2026-10-27). Napojená
   aplikace je ve výchozím stavu ke čtení, zápisu i mazání a rozsah omezuje
   uživatel; schopnost zápisu není souhlas s Publikací. Na mašině s více
   Organizacemi použiješ nástroj té, pro kterou pracuješ, a data mezi nimi
