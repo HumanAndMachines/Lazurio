@@ -318,9 +318,10 @@ Ownera ve stejném tailnetu: Osobní Prostředí není zařízení a toto pravid
 odvozuje z přidělení Pracovního Prostředí a živého členství, bez schválení
 zařízení (dodatek 0192 z 2026-10-26). Diagram výše ukazuje vstup lidí a jejich
 zařízení, ne úplný model zdrojů SSH. Každá SSH hrana mezi Prostředími má
-kromě grantu v síti i klíč zdrojového Prostředí vyhrazený jen pro ni, uložený
-jen v cílovém účtu s omezením `from=` na adresu zdroje a odvozený ze stejného
-přidělení nebo role; chyba v síťových pravidlech tak sama SSH neotevře.
+kromě grantu v síti i klíč zdrojového Prostředí, který cíl přijímá jen
+z adresy zdroje (`from=`), jen k přidělenému účtu a bez přeposílání, a který
+se přidá a odebere se stejným přidělením nebo rolí; chyba v síťových
+pravidlech tak sama SSH neotevře.
 Změny infrastruktury dál používají řízené plánování, apply a evidenci;
 Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale. Jedinou
 výjimkou jsou jednotlivá schválení zařízení, která jdou přes službu na
