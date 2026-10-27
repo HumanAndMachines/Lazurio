@@ -179,6 +179,8 @@ Hard pravidlo Lazuria: jeden uživatel má právě jednu vlastní hostovanou oso
 
 Prostředí vznikají předem do zásoby (decision 0216). Server dané třídy nese pevný počet dílů (díl = 4 vCPU / 8 GiB / 60 GiB; Prostředí má 1, 2 nebo 4 díly) a mimo ně jedno Prostředí služeb; paměť ani disk se nesdílí. *Volné Prostředí* je nainstalované, bez osoby a s neutrálním technickým jménem; Ownerem volného osobního Prostředí je provozovatel, volného Pracovního Prostředí Organizace. *Přidělení* je jediný zápis v Lazurio Auth (přidělený člověk a generace); vstup, adresa s osobním slugem, certifikát, síť a přehled v Dashboardu se z něj odvozují a Prostředí se samo dokončí pod účtem člověka. Osobní slug se zmrazí při přidělení a člověk se tím jednou a natrvalo stává Ownerem osobního Prostředí. Uvolněné Prostředí se nepředává: zanikne a pipeline vytvoří nové volné.
 
+*Stanoviště* (decision 0217) je Pracovní Prostředí Organizace LazurioDevelopment přidělené jednomu člověku. Nese Lazurio root s Organizacemi, ve kterých má ten člověk živá práva, jako jeho počítač. Vůči ostatním Organizacím je jeho klientem: do jejich tailnetů vstupuje jen headless klienty, které schválí Admin té Organizace, a mezi tailnety nic neroutuje. Personalspace na stanovišti není. Server LazurioDevelopment se nedělí na díly 0216; nese jen stanoviště, Prostředí Henry a Prostředí služeb, rozdělené na míru.
+
 Buddy a Prostředí Henry se liší vlastníkem, mandátem a správou dat. Buddy je od
 decision 0210 Hermes Agent v Osobním Prostředí svého uživatele. Automatizovanou
 práci Organizace nese Prostředí Henry: obyčejné Pracovní Prostředí Organizace

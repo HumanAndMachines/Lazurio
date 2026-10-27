@@ -37,6 +37,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - Organizace jsou lokální gitignored nested repa v `organizations/<org>/`
   (root trackuje jen `organizations/README.md`); `personalspace/` je
   gitignored privátní kontext mimo GitHub organizace.
+- Root s více Organizacemi nese váš počítač a stanoviště Organizace
+  LazurioDevelopment. Stanoviště je Pracovní Prostředí jednoho člověka, které
+  je pro ostatní Organizace jeho klientem a nese jen jeho přihlášení;
+  Personalspace na něm není (0217; cíl, zatím nenasazený, plán DEV-6691).
 - Root upravuj jen když se mění `launchpad.gen3.json`, seznam nebo mountpoint
   Organizací, pravidla `personalspace/`, cross-organization izolace, šablony,
   sdílený Launchpad nebo Guide, root manuál, mapa, agentní pravidla nebo
