@@ -47,6 +47,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      (0202). Ke službám servisní Mašiny svého serveru (AI pool a další)
      jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
      Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
+     Druhou výjimkou jsou stanoviště Organizace LazurioDevelopment (0217).
+     Stanoviště je Pracovní Prostředí jednoho člověka a propojení do
+     Organizací, ve kterých pracuje, drží jako jeho klient, stejně jako jeho
+     počítač.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož uživatele: SSH + HTTPS. Z Osobního Prostředí je automatické a vždy
    zapnuté jen SSH do Pracovních Prostředí přidělených jeho Ownerovi ve stejném
@@ -120,7 +124,9 @@ uživatele, který se určí při jejím založení (Conglomerate Organizace, kt
 uživatel vlastní nebo pro kterou primárně pracuje) a zapíše se do jejího
 záznamu. Do cizího Conglomerate vstupuje uživatel jen svým klientem
 přihlášeným do toho tailnetu; jeho osobní VM tam grant nemá a mezi tailnety se
-nestaví žádný most.
+nestaví žádný most. Stanoviště LazurioDevelopment (0217) vstupuje do jiného
+tailnetu jen headless klientem svého člověka, kterého schválí Admin té
+Organizace, a mezi tailnety nic neroutuje.
 
 ## Identita a jména
 
