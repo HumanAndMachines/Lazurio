@@ -15,12 +15,17 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
 - **Nové napojení nikdy nezřizuj** přes ChatGPT pluginy/konektory ani
   claude.ai konektory. Jsou vázané na cloudový účet a sdílejí se přes
   všechny mašiny přihlášené tím účtem — přesný opak per-machine custody.
-- **Už nainstalovaný konektor se používat smí.** Když na účtu/mašině
-  funkční konektor existuje, agent s ním normálně pracuje — je to ale
-  dočasný, ne cílový stav: preferovaná cesta je MCP/CLI z katalogu a při
-  příležitosti navrhni uživateli řízený přechod (postup v sekci
-  „Přechod ze sdíleného integračního brokeru" Codex runbooku platí
-  obdobně).
+- **Aplikace z ChatGPT jsou v Prostředí ve výchozím stavu vypnuté.**
+  Aplikace, pluginy a konektory účtu ChatGPT, které harness agenta nabízí,
+  agenti v Prostředí nepoužívají a Lazurio je tam vypíná. Pracovním
+  a Týmovým Prostředím je smí povolit Admin Organizace nastavením
+  „Aplikace z ChatGPT“ v Dashboardu, Osobnímu Prostředí uživatel sám
+  (decision 0162, dodatek z 2026-10-27). I povolené slouží jen aplikacím,
+  které Integrace nemají; aplikace v Integracích jde dál svou jednou cestou.
+  Konektor na vlastním počítači uživatele smí běžet; preferovaná cesta je
+  MCP/CLI z katalogu a při příležitosti navrhni uživateli řízený přechod
+  (postup v sekci „Přechod ze sdíleného integračního brokeru" Codex runbooku
+  platí obdobně).
 - **Nikdy** přes sdílený cloudový integrační broker — tedy jakoukoli službu
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
   strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
