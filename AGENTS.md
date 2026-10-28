@@ -130,7 +130,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou jen
   tři: **Osobní**, **Pracovní** a **Týmové Prostředí**; o konkrétním
   Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
-  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`). Vlastní
+  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
+  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
   kde je třeba ho odlišit, „Prostředí na serveru“ a anglicky Remote
   Environment, nikdy „Vzdálené Prostředí“. Slovy Mašina, VM ani server

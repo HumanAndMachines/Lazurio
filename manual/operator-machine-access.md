@@ -76,7 +76,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    Pracovního Prostředí („Owner nebo Admin“ v 0202 je tatáž role Owner,
    v GitHub API `admin`). Ownerství jiné Organizace obsluhované tímtéž
    hostem správu nedává; telefon, jiné pracovní VM ani pracovní laptop ji
-   nedostávají.
+   nedostávají. Stanoviště LazurioDevelopment ji smí mít přes headless
+   klienta svého člověka, jen u Organizace, jejímž je živým Ownerem, a jen
+   jak to deklaruje overlay hostu (dodatek 0217 z 2026-10-28).
 
 8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
    Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
