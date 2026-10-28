@@ -67,7 +67,7 @@ Přiřazení takové omezení nepřebije.
 
 ## Trvalý mandát k pinům nástrojů
 
-Jediný trvalý publikační mandát persony drží Dodatek 0171 z 2026-10-24 v
+Trvalý publikační mandát k pinům nástrojů drží Dodatek 0171 z 2026-10-24 v
 `manual/decision-register.md`. Henry smí sám mergnout pull request,
 který sám založil ve workspace repozitáři své Organizace (včetně Mission
 Controlu a design systému, nikdy v infra ani productionspace, 0169) a
@@ -79,6 +79,46 @@ organizace přiřazením jako assignee podle tohoto kontraktu. Mandát
 neobchází branch rules ani review, nepokrývá jiný obsah, Release ani
 nasazení a Owner nebo Admin Organizace ho může zúžit nebo odvolat. Živá
 GitHub práva jsou další podmínkou, ne náhradou za tento rozsah.
+
+## Stálý mandát koordinátora vývoje
+
+Rozhodnutí 0218 dává Pablovi, koordinátorovi vývoje Lazuria, stálý mandát
+mergovat pull requesty v repozitářích, které jmenuje jeho manuál. Mandát
+nahrazuje předání u jednotlivého pull requestu, ostatní povinnosti tohoto
+kontraktu platí stejně. Odpovědnost za dotažení v jeho rozsahu nese
+jmenovitě Pablo a člověk ji může kdykoli vzít zpět.
+
+Bezprostředně před merge Pablo ověří, že:
+
+- repozitář je na seznamu a mandát nikdo nezúžil ani neodvolal;
+- pull request je Ready a nikdo ho nepodržel;
+- požadované kontroly na přesném headu jsou zelené a konverzace vyřešené;
+- čerstvé nezávislé APPROVED je odeslané po posledním commitu; staré
+  schválení, které GitHub po rebase ukáže u nového headu, se nepočítá;
+- merge jde s `--match-head-commit`, nebo přes merge queue, kde ji
+  repozitář má.
+
+Mandát nepokrývá productionspace, přístupy, secrets a billing. Z Release
+pokrývá jen finální verzi LazurioPlatform, a to jen na stejném commitu jako
+ověřený kandidát, který prošel Ringem 0, celým canary a zelenou kvalifikací.
+Kratší canary je možný jen na zapsané rozhodnutí člověka (0166). Z Deployment
+Repos pokrývá jen Ring 0 lane LazurioExampleOrganization, které po merge
+aplikuje runner, a jen když Plan-only vznikl nejvýš hodinu před merge,
+schválení Planu je odeslané po head commitu, lane nemá zámek obnovy a na lane
+neběží jiný apply. Vlastní pull request persony schvaluje člověk. Kde GitHub
+merge nedovolí nebo vyžaduje schválení člověka, Pablo pull request předá jako
+assignee podle tohoto kontraktu.
+
+| Situace | Očekávaný výsledek |
+| --- | --- |
+| Autor nebo člověk pull request podrží | Pablo ho nemerguje, dokud podržení nikdo nezruší. |
+| Matěj nebo Admin dotčené Organizace mandát zúží nebo odvolá | Platí hned, i pro rozpracované pull requesty. |
+| Po schválení přibude commit | Nové review na novém headu; dřívější schválení se nepočítá. |
+| Repozitář vyžaduje aktuální větev a merge queue nemá | Pablo merguje jeden pull request po druhém a každý před merge aktualizuje a znovu ověří. |
+| Pull request patří do jiného Deployment Repa, nebo jde o Release jiné linky | Mimo mandát: Pablo drží pořadí, merge nebo Release dělá člověk. |
+| Kandidát LazurioPlatform nemá celý canary nebo zelenou kvalifikaci, nebo by finální verze byla jiný commit | Pablo finální verzi nevydá a počká, nebo požádá člověka. |
+| Ring 0 lane: Plan-only je starší než hodina, nebo na lane běží jiný apply | Pablo nemerguje; pořídí nový Plan, nebo počká na END. |
+| Lane LazurioExampleOrganization potřebuje lokální apply operátora | Mimo mandát: merge a apply dělá operátor. |
 
 ## Consumer a důležité selhání
 
@@ -98,7 +138,8 @@ Převzetí úlohy není dokončené review ani merge.
 
 Volba assignee používá běžný GitHub a zachovává dohledatelný původ předání.
 Zvláštní publikační komentář by zdvojoval stejný pokyn; plošné automatické
-merge všech schválených PR by naopak ztratilo konkrétní předání odpovědnosti.
+merge všech schválených PR by naopak ztratilo konkrétní předání odpovědnosti
+(stálý mandát z 0218 ji zato jmenovitě svěřuje koordinátorovi vývoje).
 Proto zůstávají automatické review a assignee dotažení dvě odlišné události.
 
 Při přechodu z dosavadního významu assignee se nový automatický trigger
