@@ -67,7 +67,7 @@ Přiřazení takové omezení nepřebije.
 
 ## Trvalý mandát k pinům nástrojů
 
-Jediný trvalý publikační mandát persony drží Dodatek 0171 z 2026-10-24 v
+Trvalý publikační mandát k pinům nástrojů drží Dodatek 0171 z 2026-10-24 v
 `manual/decision-register.md`. Henry smí sám mergnout pull request,
 který sám založil ve workspace repozitáři své Organizace (včetně Mission
 Controlu a design systému, nikdy v infra ani productionspace, 0169) a
@@ -79,6 +79,37 @@ organizace přiřazením jako assignee podle tohoto kontraktu. Mandát
 neobchází branch rules ani review, nepokrývá jiný obsah, Release ani
 nasazení a Owner nebo Admin Organizace ho může zúžit nebo odvolat. Živá
 GitHub práva jsou další podmínkou, ne náhradou za tento rozsah.
+
+## Stálý mandát koordinátora vývoje
+
+Rozhodnutí 0218 dává Pablovi, koordinátorovi vývoje Lazuria, stálý mandát
+mergovat pull requesty v repozitářích, které jmenuje jeho manuál. Mandát
+nahrazuje předání u jednotlivého pull requestu, ostatní povinnosti tohoto
+kontraktu platí stejně. Odpovědnost za dotažení v jeho rozsahu nese
+jmenovitě Pablo a člověk ji může kdykoli vzít zpět.
+
+Bezprostředně před merge Pablo ověří, že:
+
+- repozitář je na seznamu a mandát nikdo nezúžil ani neodvolal;
+- pull request je Ready a nikdo ho nepodržel;
+- požadované kontroly na přesném headu jsou zelené a konverzace vyřešené;
+- čerstvé nezávislé APPROVED je odeslané po posledním commitu; staré
+  schválení, které GitHub po rebase ukáže u nového headu, se nepočítá;
+- merge jde s `--match-head-commit`, nebo přes merge queue, kde ji
+  repozitář má.
+
+Mandát nepokrývá Release, Deployment Repos ani productionspace, přístupy,
+secrets a billing. Vlastní pull request persony schvaluje člověk. Kde
+GitHub merge nedovolí, Pablo pull request předá jako assignee podle tohoto
+kontraktu.
+
+| Situace | Očekávaný výsledek |
+| --- | --- |
+| Autor nebo člověk pull request podrží | Pablo ho nemerguje, dokud podržení nikdo nezruší. |
+| Matěj nebo Admin dotčené Organizace mandát zúží nebo odvolá | Platí hned, i pro rozpracované pull requesty. |
+| Po schválení přibude commit | Nové review na novém headu; dřívější schválení se nepočítá. |
+| Repozitář vyžaduje aktuální větev a merge queue nemá | Pablo merguje jeden pull request po druhém a každý před merge aktualizuje a znovu ověří. |
+| Pull request patří do Deployment Repo nebo vede k Release | Mimo mandát: Pablo drží pořadí, merge nebo Release dělá člověk. |
 
 ## Consumer a důležité selhání
 
@@ -98,7 +129,8 @@ Převzetí úlohy není dokončené review ani merge.
 
 Volba assignee používá běžný GitHub a zachovává dohledatelný původ předání.
 Zvláštní publikační komentář by zdvojoval stejný pokyn; plošné automatické
-merge všech schválených PR by naopak ztratilo konkrétní předání odpovědnosti.
+merge všech schválených PR by naopak ztratilo konkrétní předání odpovědnosti
+(stálý mandát z 0218 ji zato jmenovitě svěřuje koordinátorovi vývoje).
 Proto zůstávají automatické review a assignee dotažení dvě odlišné události.
 
 Při přechodu z dosavadního významu assignee se nový automatický trigger

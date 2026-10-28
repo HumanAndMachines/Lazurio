@@ -249,7 +249,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   tlačítkem „Publikovat změny“. Publikace patří uživateli: provedeš ji jen na
   jeho výslovný pokyn v aktuálním threadu, který se nepřenáší do dalších
   konverzací. Takovým pokynem je i ověřené předání přes GitHub assignee
-  (`manual/pull-request-handoff.md`). Způsobilost Publikaci schválit určují
+  a stálý mandát, který člověk zapsal rozhodnutím (0171, 0218;
+  `manual/pull-request-handoff.md`). Způsobilost Publikaci schválit určují
   živá práva uživatele k přesné operaci. **Release** není Publikace; spouští ho
   jen ten, komu to GitHub práva dovolují, a i k němu potřebuješ výslovný
   pokyn uživatele.
