@@ -535,6 +535,12 @@ Dlouhodobé názvy produktu jsou Lazurio a Buddy. Generační označení
 může zůstat v historii a migračních formátech, ale není samostatnou vrstvou
 architektury.
 
+Agentům pro orientaci slouží dva pojmy (0219). **GEN3** je Lazurio Root na
+počítači uživatele s Organizacemi `<login>_GEN3` a root CLI. **GEN4** je
+Prostředí s Lazurio Folderem, který spravuje LazurioPlatform. Nejsou to
+názvy produktů, složek ani repozitářů. Root se na mechanismech Folderu
+sjednocuje, aby obě instalace jednoho uživatele fungovaly stejně.
+
 ## Kontrola nového návrhu
 
 Nový návrh musí umět jednoduše odpovědět:
