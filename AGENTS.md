@@ -40,7 +40,12 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - Root s více Organizacemi nese váš počítač a stanoviště Organizace
   LazurioDevelopment. Stanoviště je Pracovní Prostředí jednoho člověka, které
   je pro ostatní Organizace jeho klientem a nese jen jeho přihlášení;
-  Personalspace na něm není (0217; cíl, zatím nenasazený, plán DEV-6691).
+  Personalspace na něm není. Root tam leží jako repozitář v productionspace
+  LazurioDevelopment a root CLI se spouští `bun run lazurio -- …` z rootu,
+  protože `lazurio` je tam Platforma (0217 s dodatky, plán DEV-6691).
+- GEN3 (Lazurio Root na počítači) a GEN4 (Prostředí s Lazurio Folderem) jsou
+  jen orientační pojmy, ne názvy produktů ani složek; Root se na mechanismech
+  Folderu sjednocuje (0219).
 - Root upravuj jen když se mění `launchpad.gen3.json`, seznam nebo mountpoint
   Organizací, pravidla `personalspace/`, cross-organization izolace, šablony,
   sdílený Launchpad nebo Guide, root manuál, mapa, agentní pravidla nebo
