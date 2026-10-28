@@ -98,10 +98,13 @@ Bezprostředně před merge Pablo ověří, že:
 - merge jde s `--match-head-commit`, nebo přes merge queue, kde ji
   repozitář má.
 
-Mandát nepokrývá Release, Deployment Repos ani productionspace, přístupy,
-secrets a billing. Vlastní pull request persony schvaluje člověk. Kde
-GitHub merge nedovolí, Pablo pull request předá jako assignee podle tohoto
-kontraktu.
+Mandát nepokrývá productionspace, přístupy, secrets a billing. Z Release
+pokrývá jen finální verzi LazurioPlatform po Ringu 0, celém canary a zelené
+kvalifikaci. Z Deployment Repos pokrývá jen Ring 0 lane LazurioExampleOrganization,
+které po merge aplikuje runner, s branami lane (čerstvý Plan-only, schválení
+Planu po head commitu, žádný zámek obnovy). Vlastní pull request persony
+schvaluje člověk. Kde GitHub merge nedovolí nebo vyžaduje schválení člověka,
+Pablo pull request předá jako assignee podle tohoto kontraktu.
 
 | Situace | Očekávaný výsledek |
 | --- | --- |
@@ -109,7 +112,9 @@ kontraktu.
 | Matěj nebo Admin dotčené Organizace mandát zúží nebo odvolá | Platí hned, i pro rozpracované pull requesty. |
 | Po schválení přibude commit | Nové review na novém headu; dřívější schválení se nepočítá. |
 | Repozitář vyžaduje aktuální větev a merge queue nemá | Pablo merguje jeden pull request po druhém a každý před merge aktualizuje a znovu ověří. |
-| Pull request patří do Deployment Repo nebo vede k Release | Mimo mandát: Pablo drží pořadí, merge nebo Release dělá člověk. |
+| Pull request patří do jiného Deployment Repa, nebo jde o Release jiné linky | Mimo mandát: Pablo drží pořadí, merge nebo Release dělá člověk. |
+| Kandidát LazurioPlatform nemá celý canary nebo zelenou kvalifikaci | Pablo finální verzi nevydá a počká, nebo požádá člověka. |
+| Lane LazurioExampleOrganization potřebuje lokální apply operátora | Mimo mandát: merge a apply dělá operátor. |
 
 ## Consumer a důležité selhání
 
