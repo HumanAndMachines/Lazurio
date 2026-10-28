@@ -1358,6 +1358,16 @@ test("MS-14 reads runners from runs-on and only the matrix keys it names (#664)"
     "          - platform: macos-14",
     "",
   ].join("\n"))).toEqual(["Windows nebo macOS běží při push"]);
+  // Nested and indexed lookups follow their path, include entries too (#665).
+  const nested = (runsOn, matrix) =>
+    workflowMinutesFindings(["on: [pull_request, push]", "jobs:", "  a:", `    runs-on: ${runsOn}`, "    strategy:", "      matrix:", ...matrix, ""].join("\n"));
+  const both = ["Windows nebo macOS běží pro každý pull_request (chybí pull_request.paths na kód)", "Windows nebo macOS běží při push"];
+  expect(nested("${{ matrix.config.os }}", ["        config: [{os: ubuntu-latest}, {os: windows-latest}]"])).toEqual(both);
+  expect(nested("${{ matrix['os'] }}", ["        os: [ubuntu-latest, windows-latest]"])).toEqual(both);
+  expect(nested("${{ matrix.config.os }}", ["        config: [{os: ubuntu-latest}]", "        include:", "          - config: {os: macos-14}"])).toEqual(both);
+  expect(nested("${{ Matrix.OS }}", ["        os: [windows-latest]"])).toEqual(both);
+  // ...but never into fields the path does not name.
+  expect(nested("${{ matrix.config.os }}", ["        config: [{os: ubuntu-latest, fixture: windows-paths}]"])).toEqual([]);
   // {group, labels} form.
   expect(workflowMinutesFindings("on: push\njobs:\n  a:\n    runs-on:\n      group: big\n      labels: [windows-2022]\n")).toEqual([
     "Windows nebo macOS běží při push",

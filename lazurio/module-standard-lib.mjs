@@ -617,9 +617,21 @@ export function workflowMinutesFindings(text) {
   return findings;
 }
 
+// A matrix lookup in runs-on: matrix.os, matrix.config.os, matrix['os'].
+const MATRIX_REFERENCE = /\bmatrix((?:\s*\.\s*[A-Za-z_][\w-]*|\s*\[\s*(?:'[^']*'|"[^"]*")\s*\])+)/gi;
+const MATRIX_SEGMENT = /\.\s*([A-Za-z_][\w-]*)|\[\s*(?:'([^']*)'|"([^"]*)")\s*\]/g;
+
+// GitHub expressions dereference properties case-insensitively.
+function property(object, name) {
+  if (!object || typeof object !== "object" || Array.isArray(object)) return undefined;
+  if (Object.hasOwn(object, name)) return object[name];
+  const key = Object.keys(object).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+  return key === undefined ? undefined : object[key];
+}
+
 // The runner labels a job may run on: its runs-on labels (a string, a list or
-// {group, labels}), with every ${{ matrix.<key> }} replaced by the values that
-// key takes in strategy.matrix and its include entries. Other matrix data
+// {group, labels}), with every matrix lookup there replaced by the values its
+// path takes in strategy.matrix and its include entries. Other matrix data
 // (a fixture named windows-paths, say) is not a runner and is never read.
 function runnerLabels(job) {
   if (!job || typeof job !== "object") return [];
@@ -633,14 +645,19 @@ function runnerLabels(job) {
           ? [runsOn.group, ...(Array.isArray(runsOn.labels) ? runsOn.labels : [runsOn.labels])]
           : [];
   const matrix = job.strategy?.matrix && typeof job.strategy.matrix === "object" ? job.strategy.matrix : {};
-  const valuesOf = (key) => [
-    ...(Array.isArray(matrix[key]) ? matrix[key] : matrix[key] === undefined ? [] : [matrix[key]]),
-    ...(Array.isArray(matrix.include) ? matrix.include.map((entry) => entry?.[key]).filter((value) => value !== undefined) : []),
-  ];
+  const include = Array.isArray(property(matrix, "include")) ? property(matrix, "include") : [];
+  const valuesOf = ([first, ...rest]) => {
+    const own = property(matrix, first);
+    let values = [...(Array.isArray(own) ? own : own === undefined ? [] : [own]), ...include.map((entry) => property(entry, first))];
+    for (const name of rest) values = values.map((value) => property(value, name));
+    return values.flat(Infinity).filter((value) => typeof value === "string");
+  };
   const labels = [];
   for (const label of raw.filter((value) => typeof value === "string")) {
     labels.push(label.replace(/\$\{\{[^}]*\}\}/g, ""));
-    for (const [, key] of label.matchAll(/\bmatrix\.([A-Za-z0-9_-]+)/g)) labels.push(...valuesOf(key).map(String));
+    for (const [, path] of label.matchAll(MATRIX_REFERENCE)) {
+      labels.push(...valuesOf([...path.matchAll(MATRIX_SEGMENT)].map(([, dot, single, double]) => dot ?? single ?? double)));
+    }
   }
   return labels;
 }
