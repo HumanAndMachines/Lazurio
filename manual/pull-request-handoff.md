@@ -65,6 +65,12 @@ repo může vyžadovat Henryho schválení a umožňovat merge jen Ownerům.
 Henry v takovém repozitáři zajistí review a předá dovolený merge Ownerovi.
 Přiřazení takové omezení nepřebije.
 
+V `infra` platí dodatek 0169 z 2026-10-27: Henry tam má jen přímý Write
+a review policy lanes ho jmenuje jako `independent-steward`. Na GitHub Free
+smí infra PR mergnout jen po přiřazení od jiného živého Repository Admina,
+na placeném plánu předá PR po review Ownerovi. Merge nikdy nespouští apply,
+Release ani změnu přístupů.
+
 ## Trvalý mandát k pinům nástrojů
 
 Jediný trvalý publikační mandát persony drží Dodatek 0171 z 2026-10-24 v
