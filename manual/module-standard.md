@@ -581,6 +581,28 @@ z kanonické cesty balíčku a datové repo se do klíče počítá, jen když j
   runtime knihovna Modulu; neroste v framework.
 - Kvalita: `bun run check` (tsc `--noEmit` + `biome check`) a `bun test`
   v každé App; CI repozitáře je spouští na každém PR.
+- **CI šetří minuty GitHub Actions** (dodatek 0171 z 2026-10-28). Soukromý
+  repozitář má v bezplatném tarifu GitHubu 2 000 linuxových minut měsíčně;
+  minuta na Windows se počítá dvakrát, na macOS desetkrát. Proto:
+  - linuxový job spouští všechny gate pro každý pull request i push do
+    `main`, s `concurrency` (novější push zruší běh staršího headu PR)
+    a `timeout-minutes`;
+  - Windows a macOS běží v samostatném workflow jen pro pull requesty, které
+    mění kód App, její migrace, toolchain nebo workflow (`pull_request.paths`),
+    a na vyžádání (`workflow_dispatch`); nikdy po merge do `main`, podle
+    plánu ani pro změnu obsahu, protože pull request už totéž prověřil;
+  - repozitář s obsahem (knowledgebase, web) na Linuxu ověří, že každou cestu
+    jde na Windows checkoutnout, a čte přitom skutečné názvy
+    (`git -c core.quotePath=false ls-files`, jinak Git uvozovkami a escape
+    sekvencemi zkreslí české názvy);
+  - kroky, piny akcí a verze Bunu jsou na všech systémech stejné.
+
+  Hlídá to `MS-14`. Vzory nesou šablony `TemplatesRozjedeme-ai`
+  (Knowledgebase, Organizace, Mission Control, Design System, Website)
+  a `Lazurio/PersonalspaceTemplate_GEN3`; scaffold `lazurio module create`
+  zakládá jen linuxový workflow. Kořen Organizace hlídá stejné pravidlo
+  šablonový `scripts/check-template.mjs`. Deployment Repa (`infra`) a CI
+  Machines se řídí Machines, ne tímto pravidlem.
 
 ## 7. Python Modul
 
@@ -718,6 +740,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-11` | žádné absolutní cesty na stroj, žádné symlinky vytvářené při startu, žádné `modules/` |
 | `MS-12` | `apps[]` odpovídá adresářům; nejvýše dvě generace App (výchozí a jedna předchozí nebo kandidátní) |
 | `MS-13` | `bun run check` a `bun test` skripty existují (spuštění je věc CI Modulu) |
+| `MS-14` | CI šetří minuty GitHub Actions (kap. 6): workflow, jehož job běží na Windows nebo macOS, se spouští jen pro `pull_request` s neprázdným `paths` na kód a na vyžádání (`workflow_dispatch`), nikdy při `push`, podle plánu (`schedule`), ve frontě merge ani pro každý pull request; nález je `warn` |
 
 Report `lazurio.module_setup.report.v1` nese seznam kontrol; `current`
 znamená všechny `pass`. Platforma čte totéž (Diagnostika, katalog), nepíše
@@ -771,7 +794,8 @@ repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
    s `--port`; `app/v1/` se šablonou stacku, `lazurio.runtime`,
    `lazurio.preparation`, `bun.lock`, `tsconfig` strict, biome,
    `check`/`test`, README, AGENTS.md, CI workflow spouštějící
-   `bun run check && bun test`), vloží slot do `modules.manifest.json`
+   `bun run check && bun test` jen na Linuxu, s `concurrency` a `timeout-minutes`
+   podle kap. 6), vloží slot do `modules.manifest.json`
    téhož worktree, udělá první commit a hned ho ověří `lazurio module
    setup` → `current` (varianta `none` = Modul bez App podle DEV-6514). Na
    `main` odmítne psát; `--dry-run` jen vypíše plán s `tree_hash`. Jediným

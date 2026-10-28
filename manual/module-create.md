@@ -94,7 +94,7 @@ i shodně v `[tool.lazurio]` v `pyproject.toml`.
   náhled; `MS-02` pak hlásí chybějící lockfile).
 - `git init` s větví `main` a první commit Modulu (autor z Git konfigurace).
 - Nakonec změří výsledek stejnými kontrolami jako `lazurio module setup`
-  (`MS-01`–`MS-13`) plus kontrakt `lazurio.module.json` a `lazurio.runtime`.
+  (`MS-01`–`MS-14`) plus kontrakt `lazurio.module.json` a `lazurio.runtime`.
 
 Lease se volí pod stejným Organization lockem jako v `lazurio module setup`.
 Selže-li zápis souborů nebo slotu, příkaz složku z tohoto běhu smaže a nic

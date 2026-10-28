@@ -157,7 +157,8 @@ describe("planModuleScaffold", () => {
     for (const stack of MODULE_SCAFFOLD_STACKS) {
       const result = plan({ stack, slug: `x-${stack}` });
       for (const entry of result.files) {
-        expect(entry.content.includes("{{"), `${stack}: ${entry.path}`).toBe(false);
+        // GitHub Actions expressions (${{ … }}) are workflow syntax, not template placeholders.
+        expect(entry.content.replace(/\$\{\{[^}]*\}\}/g, "").includes("{{"), `${stack}: ${entry.path}`).toBe(false);
         expect(entry.path.includes("{{") || entry.path.endsWith(".tmpl") || /(^|\/)dot-/.test(entry.path)).toBe(false);
       }
       const paths = result.files.map((entry) => entry.path);
@@ -323,7 +324,7 @@ describe("generated Modules pass the Lazurio Module Standard", () => {
         expect(notPassing).toEqual([]);
         expect(report).toMatchObject({ status: "current", reason: "module_contract_current", changes: [], issues: [] });
       }
-      expect(report.standard.checks).toHaveLength(13);
+      expect(report.standard.checks).toHaveLength(14);
     });
   }
 });

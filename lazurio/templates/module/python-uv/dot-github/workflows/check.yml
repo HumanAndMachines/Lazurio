@@ -5,9 +5,17 @@ on:
     branches: [main]
 permissions:
   contents: read
+# GitHub Actions minutes (manual/module-standard.md kap. 6): every gate on
+# Linux for every change; a newer push to a pull request cancels the run of
+# its older head. A Windows or macOS run, if this Module needs one, goes into
+# its own workflow for pull requests that change code (MS-14).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: app/v1

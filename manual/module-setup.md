@@ -147,12 +147,12 @@ ruční úprava manifestu v PR Modulu (kapitola níže).
 Admin opraví pouze owning Organization deklaraci a Agent příkaz zopakuje.
 Stabilní porty jiných Modulů se kvůli pohodlnější alokaci neposouvají.
 
-## Konformance se standardem (MS-01–MS-13)
+## Konformance se standardem (MS-01–MS-14)
 
 Pravidla drží [Lazurio Module Standard](module-standard.md) (decision 0171);
 tahle kapitola popisuje jen, jak je `lazurio module setup` měří. Každý report
-nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
-`MS-01`…`MS-13`:
+nese sekci `standard` se stabilním seznamem čtrnácti kontrol v pořadí
+`MS-01`…`MS-14`:
 
 ```json
 "standard": {
@@ -172,7 +172,8 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   nerozhodne (Modul není Git checkout, tsconfig rozšiřuje nenainstalovaný
   preset, Python App, vydání verze Bunu nejde ověřit), nebo vědomou volbu,
   na kterou upozorňuje (`MS-02`: verze Bunu novější než výchozí nebo pod
-  minimem). `current` vyžaduje u všech třinácti `pass`.
+  minimem; `MS-14`: workflow spouští Windows nebo macOS zbytečně často).
+  `current` vyžaduje u všech čtrnácti `pass`.
 - `MS-02` měří `packageManager` každé Bun App proti `lazurio/toolchain.json`.
   Chybějící `packageManager` doplní `--apply` výchozí verzí
   (`tools.bun.default`); hodnota, která není `bun@x.y.z` (`bun@1.4`, rozsah,

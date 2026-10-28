@@ -161,13 +161,13 @@
       "properties": {
         "checks": {
           "type": "array",
-          "minItems": 13,
-          "maxItems": 13,
+          "minItems": 14,
+          "maxItems": 14,
           "items": {
             "type": "object",
             "required": ["id", "status", "summary", "details"],
             "properties": {
-              "id": { "type": "string", "pattern": "^MS-(0[1-9]|1[0-3])$" },
+              "id": { "type": "string", "pattern": "^MS-(0[1-9]|1[0-4])$" },
               "status": { "enum": ["pass", "fail", "warn"] },
               "summary": { "type": "string", "minLength": 1 },
               "details": {

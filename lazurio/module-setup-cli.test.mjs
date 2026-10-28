@@ -541,7 +541,7 @@ test("concurrent Module setup serializes on the existing Organization port alloc
 function expectContractConverged(report) {
   expect(report).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant" });
   expect(report.runtime).not.toBeNull();
-  expect(report.standard.checks).toHaveLength(13);
+  expect(report.standard.checks).toHaveLength(14);
   expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
 }
 

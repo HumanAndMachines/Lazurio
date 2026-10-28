@@ -21,6 +21,6 @@ generátor je čistá funkce `planModuleScaffold` v
   `bun_version`, `module_kit_version`, `uv_version`. Neznámé jméno je chyba
   šablony; engine ani escapování neexistuje, proto plan funkce hodnoty
   validuje (`display_name` bez `"`, `\`, `<`, `>`, `{`, `}` a řídicích znaků).
-- **Standard.** Každá App šablona musí po vygenerování projít `MS-02`–`MS-13`;
+- **Standard.** Každá App šablona musí po vygenerování projít `MS-02`–`MS-14`;
   hlídá to `lazurio/module-scaffold.test.mjs`. Port se do šablon nepíše
   (`MS-01` a kap. 4.2), App ho čte jen z listener proměnných.

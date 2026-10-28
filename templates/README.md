@@ -24,3 +24,9 @@ nedrží hardcodovaný allowlist required template názvů. GitHub `is_template`
 musí být `true` pro všechny čtyři upstreamy; Mission Control ani Design System
 se nezakládají kopií souborů. `CompanyTemplate` je legacy GEN2 šablona a není
 správný výchozí bod pro novou GEN3 Organizaci.
+
+**CI šablon šetří minuty GitHub Actions** (dodatek 0171 z 2026-10-28,
+`manual/module-standard.md` kap. 6): linuxový job pro každý pull request
+i push do `main`, Windows a macOS jen v samostatném workflow pro pull
+requesty, které mění kód, a na vyžádání. Nová Organizace a nový Modul ze
+šablon i ze scaffoldu ho dostanou rovnou; Moduly hlídá `MS-14`.

@@ -31,6 +31,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-11", summary: "žádné absolutní cesty na stroj, symlinky vytvářené při startu ani layout modules/" },
   { id: "MS-12", summary: "apps[] odpovídá adresářům a Modul drží nejvýše dvě generace App (výchozí a jednu předchozí nebo kandidátní)" },
   { id: "MS-13", summary: "skripty check a test existují" },
+  { id: "MS-14", summary: "CI šetří minuty GitHub Actions: Windows a macOS běží jen pro pull requesty, které mění kód, a na vyžádání" },
 ]);
 
 const CHECK_ACTIONS = Object.freeze({
@@ -47,6 +48,7 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-11": "Odstraňte absolutní cesty a vytváření symlinků ze startu (patří do prepare_script); Modul patří do workspace/.",
   "MS-12": "Sjednoťte apps[] s adresáři app/*/package.json a smažte starší generace App (historie zůstává v Gitu).",
   "MS-13": "Doplňte do každé App skripty check (typecheck + biome) a test (bun test).",
+  "MS-14": "Linuxový job ať spouští všechny gate pro každý pull request i push do main; Windows a macOS přesuňte do samostatného workflow jen s pull_request.paths na kód App, migrace, toolchain a workflow a s workflow_dispatch, bez push (manual/module-standard.md kap. 6).",
 });
 const ms02Action = (bunDefault) =>
   `Nastavte packageManager na přesnou vydanou verzi Bunu (výchozí bun@${bunDefault}) a commitněte čerstvý bun.lock.`;
@@ -90,7 +92,7 @@ let preparationSchemaPromise = null;
  * Measures one Module against the standard. `manifest` and `packages` are the
  * values setup is about to leave on disk (planned writes overlaid on the
  * checkout), so a dry-run reports the state `--apply` would produce for the
- * contract layer. Returns the 13 checks and repaired values for the
+ * contract layer. Returns the 14 checks and repaired values for the
  * mechanical items only. MS-02 measures the pinned Bun against `toolchain`
  * (lazurio/toolchain.json) and asks `isBunVersionPublished(version)` (true,
  * false, or null when it cannot tell) only for a version other than its
@@ -437,6 +439,17 @@ export async function evaluateModuleStandard({
     }
   }
 
+  // MS-14 GitHub Actions minutes: a workflow whose jobs run on Windows or
+  // macOS (2x and 10x the free tier's Linux minutes) runs only for pull
+  // requests that change code (a positive pull_request.paths list) and on
+  // demand, never on push, on a schedule or for every pull request. A warning:
+  // the Module still runs; its CI just spends what it need not.
+  for (const file of files.filter((entry) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(entry.path))) {
+    const text = await readText(join(root, ...file.path.split("/")));
+    if (text === null) continue;
+    for (const finding of workflowMinutesFindings(text)) record("MS-14", "warn", `${file.path}: ${finding}`);
+  }
+
   // MS-09 symlinks whose target lies outside the Module repository: an
   // import through them resolves inside the repo textually but reads foreign
   // code. A tracked symlink is the repo's own boundary breach (fail); an
@@ -557,6 +570,96 @@ export async function evaluateModuleStandard({
     };
   });
   return { checks, repairedPackages };
+}
+
+const COSTLY_RUNNER = /\b(?:windows|macos)(?:-|\b)/i;
+const UNFILTERED_TRIGGERS = Object.freeze({
+  push: "při push",
+  schedule: "podle plánu (schedule)",
+  merge_group: "ve frontě merge (merge_group)",
+});
+
+/**
+ * MS-14: what a workflow file spends on Windows or macOS runners where Linux
+ * or a narrower trigger would do. Returns one finding per offending trigger,
+ * or a single finding when the file is not readable YAML.
+ */
+export function workflowMinutesFindings(text) {
+  let workflow;
+  try {
+    workflow = Bun.YAML.parse(text);
+  } catch {
+    return ["workflow nejde přečíst jako YAML"];
+  }
+  if (!workflow || typeof workflow !== "object") return [];
+  const jobs = workflow.jobs && typeof workflow.jobs === "object" ? Object.values(workflow.jobs) : [];
+  const costly = jobs.some((job) => runnerLabels(job).some((label) => COSTLY_RUNNER.test(label)));
+  if (!costly) return [];
+  // YAML 1.1 parsers read the key `on` as true; accept both.
+  const on = workflow.on ?? workflow[true];
+  const triggers =
+    typeof on === "string"
+      ? { [on]: null }
+      : Array.isArray(on)
+        ? Object.fromEntries(on.map((name) => [name, null]))
+        : on && typeof on === "object"
+          ? on
+          : {};
+  const findings = [];
+  for (const [name, config] of Object.entries(triggers)) {
+    if (UNFILTERED_TRIGGERS[name]) findings.push(`Windows nebo macOS běží ${UNFILTERED_TRIGGERS[name]}`);
+    if (name === "pull_request" || name === "pull_request_target") {
+      const paths = config && typeof config === "object" ? config.paths : undefined;
+      if (!Array.isArray(paths) || paths.length === 0)
+        findings.push(`Windows nebo macOS běží pro každý ${name} (chybí pull_request.paths na kód)`);
+    }
+  }
+  return findings;
+}
+
+// A matrix lookup in runs-on: matrix.os, matrix.config.os, matrix['os'].
+const MATRIX_REFERENCE = /\bmatrix((?:\s*\.\s*[A-Za-z_][\w-]*|\s*\[\s*(?:'[^']*'|"[^"]*")\s*\])+)/gi;
+const MATRIX_SEGMENT = /\.\s*([A-Za-z_][\w-]*)|\[\s*(?:'([^']*)'|"([^"]*)")\s*\]/g;
+
+// GitHub expressions dereference properties case-insensitively.
+function property(object, name) {
+  if (!object || typeof object !== "object" || Array.isArray(object)) return undefined;
+  if (Object.hasOwn(object, name)) return object[name];
+  const key = Object.keys(object).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+  return key === undefined ? undefined : object[key];
+}
+
+// The runner labels a job may run on: its runs-on labels (a string, a list or
+// {group, labels}), with every matrix lookup there replaced by the values its
+// path takes in strategy.matrix and its include entries. Other matrix data
+// (a fixture named windows-paths, say) is not a runner and is never read.
+function runnerLabels(job) {
+  if (!job || typeof job !== "object") return [];
+  const runsOn = job["runs-on"];
+  const raw =
+    typeof runsOn === "string"
+      ? [runsOn]
+      : Array.isArray(runsOn)
+        ? runsOn
+        : runsOn && typeof runsOn === "object"
+          ? [runsOn.group, ...(Array.isArray(runsOn.labels) ? runsOn.labels : [runsOn.labels])]
+          : [];
+  const matrix = job.strategy?.matrix && typeof job.strategy.matrix === "object" ? job.strategy.matrix : {};
+  const include = Array.isArray(property(matrix, "include")) ? property(matrix, "include") : [];
+  const valuesOf = ([first, ...rest]) => {
+    const own = property(matrix, first);
+    let values = [...(Array.isArray(own) ? own : own === undefined ? [] : [own]), ...include.map((entry) => property(entry, first))];
+    for (const name of rest) values = values.map((value) => property(value, name));
+    return values.flat(Infinity).filter((value) => typeof value === "string");
+  };
+  const labels = [];
+  for (const label of raw.filter((value) => typeof value === "string")) {
+    labels.push(label.replace(/\$\{\{[^}]*\}\}/g, ""));
+    for (const [, path] of label.matchAll(MATRIX_REFERENCE)) {
+      labels.push(...valuesOf([...path.matchAll(MATRIX_SEGMENT)].map(([, dot, single, double]) => dot ?? single ?? double)));
+    }
+  }
+  return labels;
 }
 
 export function moduleStandardIssues(checks) {
