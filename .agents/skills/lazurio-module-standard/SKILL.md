@@ -46,6 +46,10 @@ Zkrácený kontrakt, který drží každá App Modulu:
 - Z `main` běží sestavená verze: statická App deklaruje `build_output`
   (kap. 4.5), App s vlastním serverem `start_script` (kap. 4.6). Náhled
   z worktree zůstává `dev`.
+- CI šetří minuty GitHub Actions (kap. 6, `MS-14`): linuxový job spouští
+  všechny gate pro každý PR i push do `main`; Windows a macOS běží jen
+  v samostatném workflow pro PR, které mění kód (`pull_request.paths`),
+  a na vyžádání (`workflow_dispatch`), nikdy po merge ani podle plánu.
 
 ## Co platí dnes a co je cílový stav
 
@@ -54,7 +58,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 
 | Mechanismus | Stav | Co to znamená pro postup |
 | --- | --- | --- |
-| `lazurio module setup` s `standard.checks[]` (`MS-01`–`MS-13`) | vzniká (HumanAndMachines/Lazurio#454); dostupný, když report obsahuje klíč `standard` | Bez `standard.checks[]` je `current` jen důkaz platného kontraktu Modulu, **ne** konformance. Agent pak projde kapitoly 2–9 manuálu ručně a v PR to napíše. |
+| `lazurio module setup` s `standard.checks[]` (`MS-01`–`MS-14`) | vzniká (HumanAndMachines/Lazurio#454); dostupný, když report obsahuje klíč `standard` | Bez `standard.checks[]` je `current` jen důkaz platného kontraktu Modulu, **ne** konformance. Agent pak projde kapitoly 2–9 manuálu ručně a v PR to napíše. |
 | `lazurio module create` (scaffold) | vzniká (HumanAndMachines/Lazurio#458, stacky vite-react, astro, astro-starlight, bun-service, python-uv, none; dostupný, když `lazurio module create --help` odpoví) | Do vydání nový Modul zakládá jen Organization Admin na základě rozhodnutí uživatele: repo na GitHubu + slot PR; obsah Modulu Agent připraví podle kapitol 2–6 manuálu a po vydání scaffoldu ho sladí se šablonou. Není to „ruční zakládání" ve smyslu zákazu — zákaz míří na Moduly bez slotu, bez repa a mimo standard. |
 | Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
 | `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |

@@ -292,7 +292,7 @@ minimální module-relative projekci Apps a materializovaných listenerů. Tenk�
 legacy adaptery smějí konzumovat pouze tento výstup package-managed CLI;
 manifest, port lease ani názvy runtime proměnných samy neparsují. U
 neaplikovaného nebo blokovaného kontraktu je `runtime: null`, takže jej nelze
-omylem spustit jako platný stav. Sekce `standard` nese kontroly `MS-01`–`MS-13`
+omylem spustit jako platný stav. Sekce `standard` nese kontroly `MS-01`–`MS-14`
 Lazurio Module Standardu; `current` znamená platný kontrakt a všechny kontroly
 `pass`, nekonformní, ale spustitelný Modul končí `action_required` s
 vyplněným `runtime` (`reason: module_standard_nonconformant`).
@@ -310,7 +310,7 @@ lazurio module create ExampleOrganization/portal --stack vite-react --teams web
 Spouští se z task worktree root repa Organizace. Scaffold zapíše Modul podle
 stacku (`vite-react`, `astro`, `astro-starlight`, `bun-service`, `python-uv`,
 `none`), přidá slot do `modules.manifest.json`, nainstaluje závislosti, udělá
-první commit a změří výsledek kontrolami `MS-01`–`MS-13`. Generátor je čistá
+první commit a změří výsledek kontrolami `MS-01`–`MS-14`. Generátor je čistá
 funkce `planModuleScaffold` (`module-scaffold-lib.mjs`) sdílená s Dashboardem;
 report `lazurio.module_create.report.v1` a exit kódy popisuje
 [manuál nového Modulu](../manual/module-create.md).

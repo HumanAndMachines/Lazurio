@@ -13,6 +13,7 @@ import {
   evaluateModuleStandard,
   legacyRuntimeReads,
   transpiledSource,
+  workflowMinutesFindings,
 } from "./module-standard-lib.mjs";
 import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
@@ -35,7 +36,7 @@ test("a conformant Module is current with exactly the thirteen passing checks", 
   expect(report.standard.checks.map((check) => check.id)).toEqual(MODULE_STANDARD_CHECKS.map((check) => check.id));
   expect(report.standard.checks.map((check) => check.id)).toEqual([
     "MS-01", "MS-02", "MS-03", "MS-04", "MS-05", "MS-06", "MS-07",
-    "MS-08", "MS-09", "MS-10", "MS-11", "MS-12", "MS-13",
+    "MS-08", "MS-09", "MS-10", "MS-11", "MS-12", "MS-13", "MS-14",
   ]);
   expect(report.standard.checks.every((check) => check.status === "pass")).toBe(true);
   expect(report.standard.checks.every((check) => check.summary.length > 0 && check.action === undefined)).toBe(true);
@@ -47,7 +48,7 @@ test("a conformant Module is current with exactly the thirteen passing checks", 
     process.execPath, "run", cliPath, "module", "setup", fixture.moduleRoot, "--json", "--root", fixture.lazurioRoot,
   ], { cwd: fixture.lazurioRoot, stdout: "pipe", stderr: "pipe" });
   expect(cli.exitCode).toBe(0);
-  expect(JSON.parse(cli.stdout.toString()).standard.checks).toHaveLength(13);
+  expect(JSON.parse(cli.stdout.toString()).standard.checks).toHaveLength(14);
 });
 
 test("MS-01 reports an out-of-pool lease with the lowest free pool port and never moves it", async () => {
@@ -1248,6 +1249,90 @@ test("MS-03 and MS-13 report a missing runtime and missing check/test scripts", 
   ]);
 });
 
+test("MS-14 warns when Windows or macOS runs on push, a schedule or every pull request, and stays quiet for Linux and code pull requests", async () => {
+  const fixture = await conformantFixture();
+  const workflows = join(fixture.moduleRoot, ".github", "workflows");
+  await mkdir(workflows, { recursive: true });
+  await writeFile(join(workflows, "every-change.yml"), [
+    "on:",
+    "  pull_request:",
+    "  push:",
+    "    branches: [main]",
+    "jobs:",
+    "  check:",
+    "    runs-on: ${{ matrix.os }}",
+    "    strategy:",
+    "      matrix:",
+    "        os: [ubuntu-latest, windows-latest]",
+    "    steps:",
+    "      - run: bun test",
+    "",
+  ].join("\n"));
+  await writeFile(join(workflows, "nightly-mac.yml"), [
+    "on:",
+    "  schedule:",
+    "    - cron: '0 3 * * *'",
+    "jobs:",
+    "  mac:",
+    "    runs-on: macos-latest",
+    "    steps:",
+    "      - run: bun test",
+    "",
+  ].join("\n"));
+  await writeFile(join(workflows, "windows-portability.yml"), [
+    "on:",
+    "  pull_request:",
+    "    paths:",
+    "      - \"app/**\"",
+    "  workflow_dispatch:",
+    "jobs:",
+    "  windows:",
+    "    runs-on: windows-latest",
+    "    steps:",
+    "      - run: bun test",
+    "",
+  ].join("\n"));
+  await writeFile(join(workflows, "linux.yml"), [
+    "on: [pull_request, push]",
+    "jobs:",
+    "  check:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: bun test",
+    "",
+  ].join("\n"));
+  const evaluation = await evaluateModuleStandard({
+    moduleRoot: fixture.moduleRoot,
+    slotPath: "workspace/portal",
+    manifest: await readJson(join(fixture.moduleRoot, "lazurio.module.json")),
+    packages: new Map([["app/v1/package.json", await readJson(join(fixture.appRoot, "package.json"))]]),
+    organization: { slug: "Acme", module_port_pool: { start: 24_000, end: 24_099 } },
+    organizations: [{ slug: "Acme", module_port_pool: { start: 24_000, end: 24_099 } }],
+    modules: [],
+  });
+  const check = evaluation.checks.find((item) => item.id === "MS-14");
+  expect(check.status).toBe("warn");
+  expect([...check.details].sort()).toEqual([
+    ".github/workflows/every-change.yml: Windows nebo macOS běží pro každý pull_request (chybí pull_request.paths na kód)",
+    ".github/workflows/every-change.yml: Windows nebo macOS běží při push",
+    ".github/workflows/nightly-mac.yml: Windows nebo macOS běží podle plánu (schedule)",
+  ]);
+  expect(check.action).toContain("workflow_dispatch");
+  expect(evaluation.checks.filter((item) => item.id !== "MS-14").every((item) => item.status === "pass")).toBe(true);
+});
+
+test("workflowMinutesFindings reads every trigger shape and refuses unreadable YAML", () => {
+  expect(workflowMinutesFindings("on: push\njobs:\n  a:\n    runs-on: [self-hosted, macos]\n")).toEqual([
+    "Windows nebo macOS běží při push",
+  ]);
+  expect(workflowMinutesFindings("on:\n  pull_request_target:\n    paths-ignore: [docs/**]\njobs:\n  a:\n    runs-on: windows-2022\n")).toEqual([
+    "Windows nebo macOS běží pro každý pull_request_target (chybí pull_request.paths na kód)",
+  ]);
+  expect(workflowMinutesFindings("on: [workflow_dispatch, release]\njobs:\n  a:\n    runs-on: windows-latest\n")).toEqual([]);
+  expect(workflowMinutesFindings("on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n")).toEqual([]);
+  expect(workflowMinutesFindings("on: [push\n")).toEqual(["workflow nejde přečíst jako YAML"]);
+});
+
 test("human output lists failing checks and their next step", async () => {
   const fixture = await conformantFixture({ port: 23_502 });
   const cli = Bun.spawnSync([
@@ -1255,7 +1340,7 @@ test("human output lists failing checks and their next step", async () => {
   ], { cwd: fixture.lazurioRoot, stdout: "pipe", stderr: "pipe" });
   expect(cli.exitCode).toBe(2);
   const output = cli.stdout.toString();
-  expect(output).toContain("Lazurio Module Standard: 12/13 pass");
+  expect(output).toContain("Lazurio Module Standard: 13/14 pass");
   expect(output).toContain("MS-01 fail");
   expect(output).toContain("lease main 23502 leží mimo pool 24000-24099; volný port poolu: 24000");
   expect(output).toContain("Další krok: Přepište port leasu v lazurio.module.json na navržený volný port poolu");
