@@ -593,12 +593,7 @@ export function workflowMinutesFindings(text) {
   }
   if (!workflow || typeof workflow !== "object") return [];
   const jobs = workflow.jobs && typeof workflow.jobs === "object" ? Object.values(workflow.jobs) : [];
-  const costly = jobs.some(
-    (job) =>
-      job &&
-      typeof job === "object" &&
-      COSTLY_RUNNER.test(JSON.stringify([job["runs-on"] ?? null, job.strategy?.matrix ?? null])),
-  );
+  const costly = jobs.some((job) => runnerLabels(job).some((label) => COSTLY_RUNNER.test(label)));
   if (!costly) return [];
   // YAML 1.1 parsers read the key `on` as true; accept both.
   const on = workflow.on ?? workflow[true];
@@ -620,6 +615,34 @@ export function workflowMinutesFindings(text) {
     }
   }
   return findings;
+}
+
+// The runner labels a job may run on: its runs-on labels (a string, a list or
+// {group, labels}), with every ${{ matrix.<key> }} replaced by the values that
+// key takes in strategy.matrix and its include entries. Other matrix data
+// (a fixture named windows-paths, say) is not a runner and is never read.
+function runnerLabels(job) {
+  if (!job || typeof job !== "object") return [];
+  const runsOn = job["runs-on"];
+  const raw =
+    typeof runsOn === "string"
+      ? [runsOn]
+      : Array.isArray(runsOn)
+        ? runsOn
+        : runsOn && typeof runsOn === "object"
+          ? [runsOn.group, ...(Array.isArray(runsOn.labels) ? runsOn.labels : [runsOn.labels])]
+          : [];
+  const matrix = job.strategy?.matrix && typeof job.strategy.matrix === "object" ? job.strategy.matrix : {};
+  const valuesOf = (key) => [
+    ...(Array.isArray(matrix[key]) ? matrix[key] : matrix[key] === undefined ? [] : [matrix[key]]),
+    ...(Array.isArray(matrix.include) ? matrix.include.map((entry) => entry?.[key]).filter((value) => value !== undefined) : []),
+  ];
+  const labels = [];
+  for (const label of raw.filter((value) => typeof value === "string")) {
+    labels.push(label.replace(/\$\{\{[^}]*\}\}/g, ""));
+    for (const [, key] of label.matchAll(/\bmatrix\.([A-Za-z0-9_-]+)/g)) labels.push(...valuesOf(key).map(String));
+  }
+  return labels;
 }
 
 export function moduleStandardIssues(checks) {

@@ -1333,6 +1333,37 @@ test("workflowMinutesFindings reads every trigger shape and refuses unreadable Y
   expect(workflowMinutesFindings("on: [push\n")).toEqual(["workflow nejde přečíst jako YAML"]);
 });
 
+test("MS-14 reads runners from runs-on and only the matrix keys it names (#664)", () => {
+  // A fixed Linux job whose matrix only names fixtures is not a Windows run.
+  expect(workflowMinutesFindings([
+    "on: [pull_request, push]",
+    "jobs:",
+    "  paths:",
+    "    runs-on: ubuntu-latest",
+    "    strategy:",
+    "      matrix:",
+    "        fixture: [windows-paths, unix-paths]",
+    "",
+  ].join("\n"))).toEqual([]);
+  // A runner named through include entries of the key runs-on references is.
+  expect(workflowMinutesFindings([
+    "on: push",
+    "jobs:",
+    "  build:",
+    "    runs-on: ${{ matrix.platform }}",
+    "    strategy:",
+    "      matrix:",
+    "        fixture: [a]",
+    "        include:",
+    "          - platform: macos-14",
+    "",
+  ].join("\n"))).toEqual(["Windows nebo macOS běží při push"]);
+  // {group, labels} form.
+  expect(workflowMinutesFindings("on: push\njobs:\n  a:\n    runs-on:\n      group: big\n      labels: [windows-2022]\n")).toEqual([
+    "Windows nebo macOS běží při push",
+  ]);
+});
+
 test("human output lists failing checks and their next step", async () => {
   const fixture = await conformantFixture({ port: 23_502 });
   const cli = Bun.spawnSync([
