@@ -133,9 +133,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jednoho uživatele napříč Organizacemi a Conglomerate Host pro Mašinu
   s Headscale a Vaultwardenem (0144).
 - Místo, kde uživatel pracuje, je česky **Prostředí** (velké P, střední rod:
-  toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou jen
-  tři: **Osobní**, **Pracovní** a **Týmové Prostředí**; o konkrétním
-  Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
+  toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou
+  čtyři: **Osobní**, **Pracovní**, **Týmové Prostředí** a **Prostředí
+  služeb** (Služby serveru jen pro Ownery a Adminy; dodatek 0209
+  z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní);
+  o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
   Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
   Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
