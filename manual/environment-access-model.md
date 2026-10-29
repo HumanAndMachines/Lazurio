@@ -54,10 +54,10 @@ připojení není přístupem k pracovním datům. Síťová schválení se vá�
 konkrétní identitu zařízení a účet; jejich přesný mechanismus musí prokázat
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
 v mezeře před schválením. SSH ze schváleného zařízení do pracovního
-Environmentu, který je přidělený témuž uživateli, je pravidlo: vzniká v téže
-reviewované změně jako schválení zařízení a při změně přidělení, odvolání
-zařízení nebo konci členství se v téže změně síťového záměru přidá nebo
-odebere. Opačný směr (Environment →
+Environmentu, který je přidělený témuž uživateli, je pravidlo: vzniká spolu
+se schválením zařízení a při změně přidělení, odvolání zařízení nebo konci
+členství se přidá nebo odebere odvozením z téže pravdy, bez další žádosti
+(dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652). Opačný směr (Environment →
 zařízení) se obecně nedává a jde o samostatné rozhodnutí (0182); jiné SSH
 vyžaduje vlastní oprávnění, kromě SSH z Osobního Environmentu do pracovních
 Environmentů přidělených témuž uživateli ve stejném tailnetu: i to je pravidlo
@@ -67,12 +67,24 @@ z 2026-10-26).
 **Schválení zařízení.** Schválení je vztah konkrétního zařízení, účtu jeho
 vlastníka a cílové Organizace. Na tailnetu, který obsluhuje víc Organizací,
 schvaluje vstup do každé Organizace její Admin; schválení pro jednu Organizaci
-neotevře jinou a jedno zařízení může nést schválení pro víc Organizací. Do
-přechodu na Auth drží schválení jediný zapisovatel: síťový záměr v Deployment
-Repu vlastníka hostu. Vznikne reviewovanou změnou ze živého stavu a vynutí ho
-Machines (Plan, Permit, readback); Dashboard ho nepřepisuje přímým zápisem do
-Headscale. Přesun záznamu do Auth je samostatná migrace bez období dvou
-zapisovatelů.
+neotevře jinou a jedno zařízení může nést schválení pro víc Organizací.
+Jednotlivá schválení jsou runtime stav s jediným zapisovatelem: službou na
+Conglomerate Hostu, kterou Admin ovládá v Dashboardu (Žádosti o přístup →
+Zařízení → Schválit, nebo Odebrat). Služba u každé operace ověří přes GitHub
+živou roli Owner volajícího v té Organizaci, zapíše schválení s auditem
+a přes API Headscale změní politiku bez restartu; cílem je 30–60 sekund
+od kliknutí po dosah i po jeho ztrátu. Své ztracené nebo ukradené zařízení
+smí odebrat i sám člověk, hned a bez Admina; schvaluje jen Admin. Pravidla, tedy kdo smí schvalovat
+a kam schválené zařízení dosáhne, zůstávají v Deployment Repu vlastníka hostu
+a mění se reviewovanou změnou (Plan, Permit, readback). Politiku vykresluje
+jeden renderer z těchto pravidel a ze schválení služby; converge Machines
+schválení čte, nikdy je nepřepíše. Služba schválení a odebrání automaticky,
+bez review, promítá do Deployment Repa jako auditní záznam; projekce je
+záznam, ne vstup, a je jedinou výjimkou z pravidla, že se Deployment Repo
+mění jen pull requestem (0205 bod 2). Při výpadku služby je záložní cestou reviewovaná změna
+v Deployment Repu a služba takové schválení po obnově převezme. Přesun
+záznamu do Auth je samostatná migrace bez období dvou zapisovatelů
+(dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652).
 
 ## Kdo může přístup spravovat
 
@@ -269,7 +281,7 @@ organizačního bota samy neomezují práva takto vloženého účtu.
 |---|---|
 | Lazurio účty, propojené identity, členství a oprávnění ke vstupu | Auth na standardním identity provideru; Dashboard je spravuje, nevytváří druhý seznam ACL. |
 | Technická existence, vlastník a nasazené verze Environmentu; konfigurace a důkazy sítě | Deployment Repo vlastníka a řízený apply Machines. |
-| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Do přechodu na Auth síťový záměr v Deployment Repu vlastníka hostu jako jediný zapisovatel, vynucený řízeným apply Machines; cílově Auth spravovaný z Dashboardu. |
+| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Jednotlivá schválení: služba na Conglomerate Hostu jako jediný zapisovatel, ovládaná Adminem z Dashboardu (své zařízení smí odebrat i sám člověk), s auditem a automatickou projekcí do Deployment Repa bez review; pravidla schvalování a dosahu: Deployment Repo vlastníka hostu a řízený apply Machines; cílově Auth spravovaný z Dashboardu (dodatek 0192 z 2026-10-26, HumanAndMachines/Lazurio#652). |
 | Přidělení uživatele a delegované sdílení | Jeden autoritativní account/access kontrakt Auth spravovaný přes Dashboard. Dosavadní infra assignment je migrační vstup, ne druhý nezávislý writer. |
 | Repozitáře, Team capability, schválení PR a branch rules | GitHub. |
 | Tajné hodnoty | Příslušný trezor/custody; ostatní vrstvy drží reference. |
@@ -305,9 +317,16 @@ zařízení. Výjimkou je SSH z Osobního Prostředí do Pracovních Prostředí
 Ownera ve stejném tailnetu: Osobní Prostředí není zařízení a toto pravidlo se
 odvozuje z přidělení Pracovního Prostředí a živého členství, bez schválení
 zařízení (dodatek 0192 z 2026-10-26). Diagram výše ukazuje vstup lidí a jejich
-zařízení, ne úplný model zdrojů SSH. Změny infrastruktury dál používají řízené
-plánování, apply a evidenci; Dashboard nesmí obejít tyto kontroly přímým
-zápisem do Headscale. To neznamená nutnost osobního GitHub účtu nebo dalšího
+zařízení, ne úplný model zdrojů SSH. Každá SSH hrana mezi Prostředími má
+kromě grantu v síti i klíč zdrojového Prostředí, který cíl přijímá jen
+z adresy zdroje (`from=`), jen k přidělenému účtu a bez přeposílání, a který
+se přidá a odebere se stejným přidělením nebo rolí; chyba v síťových
+pravidlech tak sama SSH neotevře.
+Změny infrastruktury dál používají řízené plánování, apply a evidenci;
+Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale. Jedinou
+výjimkou jsou jednotlivá schválení zařízení, která jdou přes službu na
+Conglomerate Hostu podle pravidel z Deployment Repa (dodatek 0192
+z 2026-10-26, HumanAndMachines/Lazurio#652). To neznamená nutnost osobního GitHub účtu nebo dalšího
 kliknutí Admina pro každé dovolené interní sdílení. Servisní vykonavatel smí
 mít jen rozsah schválené operace a nesmí vytvářet vlastní přístupovou
 autoritu.
@@ -347,7 +366,10 @@ přihlášením do tailnetu Lazurio účtem (Headscale OIDC); zařízení přist
 jeho osobním Headscale userem s identitou Lazurio subject a nemá žádný dosah.
 Admin každé Organizace schválí konkrétní zařízení. Schválené zařízení dostane
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
-dál rozhoduje brána Environmentu. SSH zůstává u přesných grantů: zařízení →
+dál rozhoduje brána Environmentu. Laptop člověka dosáhne do všech jeho
+vlastních Environmentů na HTTPS 443 i SSH 22, telefon jen na 443, dokud ho
+aplikace nepotřebuje na 22 (dodatek 0192 z 2026-10-26,
+HumanAndMachines/Lazurio#652). SSH zůstává u přesných grantů: zařízení →
 Environment přidělený témuž uživateli vzniká spolu se schválením zařízení a sleduje
 změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně (SSH z Osobního
 Environmentu upravuje dodatek 0192 z 2026-10-26), a
