@@ -164,9 +164,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   na přidělená Prostředí Organizace.
 - Buddy je jen pro člověka: nabrífovaný Hermes Agent z forku
   `Lazurio/hermes-agent` s pamětí v gbrainu, který běží přímo v Osobním
-  Prostředí (0210, `manual/buddy.md`). Je koordinátor: vlastní práci dává
-  botům MausBotu v Prostředí, kam patří, vlákna T3 Code smí číst, ale zakládá
-  a vede je jen na žádost uživatele. Agenti ve vláknech s ním nekomunikují.
+  Prostředí (0210, `manual/buddy.md`). Je koordinátor: jednoduchý úkol zhruba
+  do dvou minut udělá sám, ostatní práci dává botům MausBotu v Prostředí, kam
+  patří. Vlákna T3 Code smí číst, ale zakládá a vede je jen na žádost
+  uživatele. Agenti ve vláknech s ním nekomunikují.
   Jeho instalace, paměť a konverzace patří Osobnímu Prostředí a Personalspace
   jeho Ownera; z jiného Prostředí do nich bez pokynu Ownera nesaháš.
   Přístup do Osobního Prostředí patří uživateli, ne agentovi, i když ho

@@ -25,8 +25,10 @@ Mašina uživatele (0153) je jeho Osobní Prostředí; kdo ho nemá, Buddyho nem
 - **Dosah.** Kam se dostane Osobní Prostředí, tam se dostane i Buddy. Do
   dalšího Prostředí vstupuje relací SSH a pracuje tam podle jeho `AGENTS.md`;
   přihlášení Osobního Prostředí se nepřeposílá (0210 bod 5).
-- **Boti a Chat Agenti.** Buddy sám nic neimplementuje: co chce zjistit,
-  udělat nebo pohlídat, dává botům MausBotu v Prostředí, kam práce patří.
+- **Boti a Chat Agenti.** Buddy sám nic neimplementuje. Jednoduchý úkol
+  zhruba do dvou minut udělá sám; co přerůstá, dává botům MausBotu
+  v Prostředí, kam práce patří, a vrací se k uživateli (dodatek 0210
+  z 2026-10-28).
   Agentům ve vláknech Chatu (T3 Code) se říká Chat Agenti; zvláštní pojem
   „pomocník“ Lazurio nezavádí (dodatek 0210 z 2026-10-24).
   Vlákna T3 Code jsou místo uživatele; Buddy je smí kdykoli číst kvůli
