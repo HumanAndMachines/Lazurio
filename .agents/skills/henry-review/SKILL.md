@@ -48,6 +48,9 @@ persony, nereviewuje: schvaluje ho člověk.
 3. **Review.** `gh pr edit <n> -R <owner>/<repo> --add-reviewer <login>`.
    Žádost znamená „vyžádáno“, ne „hotovo“. Neopakuješ ji, ani po pushi,
    a nezakládáš druhou cestu (soubor, skript, SSH, zprávu do vlákna).
+   Když GitHub odpoví 422 „Reviews may only be requested from
+   collaborators“, je login špatně, nebo účet persony nemá k repozitáři
+   přístup; přístup nepřidáváš, řekneš to uživateli.
 4. **Dotažení**, jen na pokyn uživatele nebo podle stálého mandátu:
    `gh pr edit <n> -R <owner>/<repo> --add-assignee <login>`, sebe jako
    předávajícího assignee odeber a do komentáře napiš stav, ověření a další
@@ -71,7 +74,8 @@ Ownerovi.
 - **Dotažení** je hotové, až je PR mergnutý do zamýšlené báze, nebo předaný
   dalšímu jmenovanému assignee se stavem a dalším krokem. Samotný komentář
   ani APPROVED dotažení nejsou.
-- **Bez verdiktu po hodině:** ověř Ready, login a že je v
+- **Bez verdiktu ani důvodu** v čase z `manual/pull-request-handoff.md`:
+  ověř Ready, login a že je v
   `requested_reviewers` nebo už reviewoval
   (`gh api repos/<owner>/<repo>/pulls/<n> --jq '{draft, requested: [.requested_reviewers[].login]}'`).
   Pak to řekni uživateli; bot tomu, kdo mu práci zadal. Druhou cestu
