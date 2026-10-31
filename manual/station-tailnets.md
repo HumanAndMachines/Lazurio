@@ -2,9 +2,10 @@
 
 Linuxové Pracovní Prostředí, které pracuje ve více tailnetech zároveň
 (stanoviště LazurioDevelopment, 0217), drží každý cizí tailnet ve vlastním
-kontejneru s vlastním `tailscaled`. Každé vlákno si tailnet volí u každého
-příkazu, nic se nepřepíná globálně a vlastní tailnet Prostředí zůstává
-nedotčený. Model zvolil Matěj 2026-10-31 (dodatek 0217, plán DEV-6691);
+síťovém prostoru: v kontejneru s vlastním `tailscaled` v plném režimu
+(kernel TUN). Všechny tailnety běží naráz, vlákno si tailnet volí u každého
+příkazu, nic se nepřepíná globálně a síť samotného Prostředí zůstává
+nedotčená. Model zvolil Matěj 2026-10-31 (dodatek 0217, plán DEV-6691);
 nástroj je `bun run tailnet` (`scripts/tailnet/`), guard
 `scripts/hooks/system-tailnet-guard.mjs`.
 
@@ -29,7 +30,7 @@ Každý cizí tailnet `<name>` (`^[a-z0-9][a-z0-9-]{0,38}$`) má:
 
 | Co | Kde |
 | --- | --- |
-| `tailscaled` v kernel módu (`--tun=tailscale0`) | kontejner `lazurio-tailnet-<name>`, `--restart unless-stopped`, `NET_ADMIN`, `NET_RAW`, `/dev/net/tun` |
+| `tailscaled` v plném režimu (`--tun=tailscale0`) | kontejner `lazurio-tailnet-<name>`, `--restart unless-stopped`, `NET_ADMIN`, `NET_RAW`, `/dev/net/tun` |
 | vlastní síť | Docker bridge `lazurio-tailnet-<name>`; kontejnery různých tailnetů na sebe nevidí |
 | image | oficiální `tailscale/tailscale:v<verze>` připnutý digestem; výchozí verze je `tailscale version` hostu |
 | stav (klíče uzlu) | `/var/lib/lazurio-tailnets/<name>/state` (root, `0700`) → `/var/lib/tailscale` |

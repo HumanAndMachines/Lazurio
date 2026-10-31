@@ -33,6 +33,11 @@ Maintenance agent před zásahem ověřuje:
 - `drafts/` — lokální prostor bez dlouhodobé autority.
 - `manual/security/local-secret-custody.md` — standard pro lokální držení
   OAuth client JSONů, token helper souborů a dalších secret artefaktů mimo Git.
+- [Cizí tailnety na stanovišti](station-tailnets.md) — na Linuxovém Prostředí
+  (stanoviště 0217) jeden `tailscaled` v plném režimu na cizí tailnet ve
+  vlastním kontejneru: `bun run tailnet`, tailnet zvolený u každého příkazu
+  (`run`, `proxy`, `ssh-proxy`), převzetí headless klientů, záruky, selhání
+  a guard, který agentům nedovolí měnit tailnet samotného Prostředí.
 - [Servisní připravenost agentů](agent-service-readiness.md) — návrh společné
   acceptance pro neinteraktivní servis, nezávislou obnovu a dostupnost modulu
   přes běžnou URL; rozlišuje dnešní hranice a cílovou automatickou konvergenci.
