@@ -128,12 +128,12 @@ function pathTexts(parts, home, { inside = false } = {}) {
   let text = "";
   for (const part of parts) {
     if (part.k === "lit" && (part.q || !/[*?[{]/u.test(part.v))) text += part.v;
-    else if (part.k === "var" && part.name === "HOME" && part.plain) text += home;
+    else if (part.k === "var" && part.name === "HOME" && part.plain && home !== null) text += home;
     else return null;
   }
   const first = parts[0];
   if (first?.k !== "lit" || first.q || !first.v.startsWith("~")) return [text];
-  if (!/^~(?:\/|$)/u.test(first.v)) return null;
+  if (home === null || !/^~(?:\/|$)/u.test(first.v)) return null;
   const expanded = home + text.slice(1);
   return inside ? [text, expanded] : [expanded];
 }
@@ -554,6 +554,21 @@ function coarse(command, system) {
   return null;
 }
 
+// Whether $HOME and `~` may mean another directory than the hook's home when
+// the command runs: the command changes HOME (an assignment, also as a
+// prefix or through env, export, declare, unset, read or printf -v), or
+// hands code to a program that may start it with another HOME (sudo, su,
+// runuser, doas, env, setpriv, nsenter, chroot, machinectl, ssh). Then
+// their value is not known before the command runs.
+function homeMayChange(command) {
+  return (
+    /(?:^|[^\w$])HOME\+?=/u.test(command) ||
+    /(?:^|[\s;&|(`'"])(?:unset|read|declare|typeset|local|readonly|export)\b[^;&|\n]*\bHOME\b/u.test(command) ||
+    /(?:^|[\s;&|(`'"])printf\b[^;&|\n]*-v\s*HOME\b/u.test(command) ||
+    /(?:^|[\s;&|(`'"])(?:\S*\/)?(?:sudo|su|runuser|doas|env|setpriv|nsenter|chroot|machinectl|ssh)(?=$|[\s;&|)`'"])/u.test(command)
+  );
+}
+
 // The reason a tool call can change the Environment's own tailnet, or null.
 // The hook's `cwd` is where a relative path starts. `home` and
 // `systemSockets` stand in for this Environment's in tests.
@@ -564,7 +579,7 @@ export function tailnetReason(input, { home = homedir(), systemSockets = SYSTEM_
   const cwd = typeof input?.cwd === "string" && posix.isAbsolute(input.cwd) ? input.cwd : null;
   const system = lazy(() => systemTargets(systemSockets));
   try {
-    return reasonIn(command, { cwd, home, system });
+    return reasonIn(command, { cwd, home: homeMayChange(command) ? null : home, system });
   } catch (error) {
     if (error instanceof ShellParseError) return coarse(command, system);
     throw error;
