@@ -12,6 +12,7 @@ import {
   entrypointScript,
   evaluateSystem,
   evaluateTailnet,
+  isSameReleaseWarning,
   listConfigs,
   nameservers,
   normalizeLoginServer,
@@ -239,6 +240,12 @@ describe("container", () => {
       "--ssh=false",
       "--timeout=15s",
     ]);
+  });
+
+  test("a version warning between two builds of one release is noise, a real mismatch is not", () => {
+    expect(isSameReleaseWarning('Warning: client version "1.102.2-t6cac91817-g6ff0ddc72" != tailscaled server version "1.102.2-teb67e5dcb"')).toBe(true);
+    expect(isSameReleaseWarning('Warning: client version "1.102.2-t6cac91817" != tailscaled server version "1.104.0-t0123456"')).toBe(false);
+    expect(isSameReleaseWarning("Logged out.")).toBe(false);
   });
 
   test("adoption sees a tailscaled that still uses the state", () => {

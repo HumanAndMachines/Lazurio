@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "./cli.mjs";
+import { filterStderr, main } from "./cli.mjs";
 import { containerSpec, readConfig, TAILNETS_ROOT, writeConfig } from "./lib.mjs";
 
 // A stand-in for the system: Docker, sudo, ss and the host tailscale are
@@ -133,9 +133,9 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
     out: (line) => out.push(line),
     err: (line) => err.push(line),
     exec,
-    spawnInherit: async (argv) => {
+    spawnInherit: async (argv, options = {}) => {
       const envFile = argv[argv.indexOf("lazurio-tailnet-run") + 7];
-      spawned.push({ argv, env: envFile && existsSync(envFile) ? readFileSync(envFile, "utf8") : null });
+      spawned.push({ argv, options, env: envFile && existsSync(envFile) ? readFileSync(envFile, "utf8") : null });
       return 7;
     },
     which: () => "/usr/bin/tailscale",
@@ -336,6 +336,10 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     const system = await ready();
     expect(await main(["ssh-proxy", "example-org", "example-host", "22"], system.ctx)).toBe(7);
     expect(system.spawned[0].argv).toEqual(["tailscale", `--socket=${TAILNETS_ROOT}/example-org/run/tailscaled.sock`, "nc", "example-host", "22"]);
+    // Only the warning between two builds of one release is dropped from stderr.
+    const { dropStderr } = system.spawned[0].options;
+    expect(dropStderr('Warning: client version "1.102.2-a" != tailscaled server version "1.102.2-b"')).toBe(true);
+    expect(dropStderr("tailscale nc: connection refused")).toBe(false);
     system.docker.controlUrl = "https://other.example.lazurio.io";
     expect(await main(["ssh-proxy", "example-org", "example-host", "22"], system.ctx)).toBe(1);
     expect(system.err.join("\n")).toContain("not connecting");
@@ -383,4 +387,11 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     expect(report.ok).toBe(false);
     expect(report.tailnets[0].checks.find((c) => c.id === "control_url")).toMatchObject({ ok: false, detail: "https://other.example.lazurio.io" });
   });
+});
+
+test("filterStderr passes every line but the dropped ones, also a last line without newline", async () => {
+  const written = [];
+  const stream = new Response("keep one\nDROP me\nkeep two\nlast").body;
+  await filterStderr(stream, (line) => line.startsWith("DROP"), (text) => written.push(text));
+  expect(written).toEqual(["keep one\n", "keep two\n", "last\n"]);
 });

@@ -243,6 +243,15 @@ tailscale --socket=/var/lib/lazurio-tailnets/example-org/run/tailscaled.sock sta
   a samy se vrátí. S `live-restore` běží dál.
 - **Restart Mašiny:** Docker kontejnery spustí sám; mounty jsou z `/var/lib`
   a entrypoint routy přidá znovu.
+- **Uzel, který se ještě nepřihlásil, a restart kontejneru:** Tailscale
+  ukládá nastavení profilu až po přihlášení. Po restartu má takový uzel
+  `WantRunning` vypnuté a nikam se nepřipojuje, `doctor` ukáže prázdný
+  ControlURL a `ssh-proxy` odmítne spojit; `up` nastavení vrátí. Přihlášený
+  uzel si nastavení pamatuje.
+- **Varování o verzi:** CLI hostu (balíček distribuce) a daemon z image jsou
+  tatáž verze ve dvou buildech, takže `tailscale --socket=…` na hostu vypíše
+  `Warning: client version … != tailscaled server version …`. Je neškodné;
+  `ssh-proxy` ho při shodné verzi vynechá a skutečný rozdíl verzí ukáže.
 - **Chybí schválení Admina:** uzel je `NeedsLogin` a `up` i `status`
   ukážou odkaz k přihlášení. Schválený uzel bez grantů je `Running` s nula
   peery; to opraví grant Admina té Organizace, ne tento nástroj.

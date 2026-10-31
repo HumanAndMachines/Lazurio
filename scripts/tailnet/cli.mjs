@@ -20,6 +20,7 @@ import {
   entrypointScript,
   evaluateSystem,
   evaluateTailnet,
+  isSameReleaseWarning,
   LABEL,
   listConfigs,
   networkCreateArgs,
@@ -80,13 +81,30 @@ function execSync(argv, { input, timeoutMs = 120_000 } = {}) {
   }
 }
 
+// Copies a child's stderr to ours line by line, leaving out lines `drop` matches.
+export async function filterStderr(stream, drop, write = (text) => process.stderr.write(text)) {
+  const decoder = new TextDecoder();
+  let pending = "";
+  const line = (text) => {
+    if (!drop(text)) write(`${text}\n`);
+  };
+  for await (const chunk of stream) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop();
+    for (const text of lines) line(text);
+  }
+  pending += decoder.decode();
+  if (pending) line(pending);
+}
+
 // Runs a command on this terminal and returns its exit code. A terminal's
 // Ctrl-C reaches the child's process group by itself; other signals sent to
 // this process are passed on.
-async function spawnInherit(argv) {
+async function spawnInherit(argv, { dropStderr = null } = {}) {
   let child;
   try {
-    child = Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"] });
+    child = Bun.spawn(argv, { stdin: "inherit", stdout: "inherit", stderr: dropStderr ? "pipe" : "inherit" });
   } catch (error) {
     throw new TailnetError(`cannot start ${argv[0]}: ${error?.message ?? "unknown error"}`);
   }
@@ -95,7 +113,7 @@ async function spawnInherit(argv) {
   process.on("SIGINT", ignore);
   for (const [signal, handler] of forward) process.on(signal, handler);
   try {
-    await child.exited;
+    await Promise.all([child.exited, dropStderr ? filterStderr(child.stderr, dropStderr) : null]);
   } finally {
     process.off("SIGINT", ignore);
     for (const [signal, handler] of forward) process.off(signal, handler);
@@ -571,7 +589,7 @@ async function sshProxy(ctx, args) {
   if (controlUrl !== config.login_server) {
     throw new TailnetError(`the daemon on ${socket} is signed in to ${controlUrl ?? "nothing"}, not ${config.login_server}; not connecting`);
   }
-  return ctx.spawnInherit(["tailscale", `--socket=${socket}`, "nc", host, port]);
+  return ctx.spawnInherit(["tailscale", `--socket=${socket}`, "nc", host, port], { dropStderr: isSameReleaseWarning });
 }
 
 function down(ctx, args) {
