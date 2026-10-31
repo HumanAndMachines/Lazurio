@@ -6,8 +6,10 @@ import {
   allocatePorts,
   CGNAT_IPV4,
   configPath,
+  containerMismatch,
   containerSpec,
   countProfiles,
+  daemonMismatch,
   defaultImage,
   entrypointScript,
   evaluateSystem,
@@ -361,6 +363,36 @@ describe("run", () => {
   });
 });
 
+describe("identity", () => {
+  const ours = () => ({ labels: { "ai.lazurio.tailnet": "example-org" }, image: `tailscale/tailscale@${DIGEST}` });
+
+  test("a container is the tailnet's by the name label this tool sets and by the pinned image", () => {
+    expect(containerMismatch(config(), ours())).toBeNull();
+    expect(containerMismatch(config(), { ...ours(), labels: {} })).toBe("container lazurio-tailnet-example-org was not created by this tool for example-org");
+    expect(containerMismatch(config(), { ...ours(), labels: { "ai.lazurio.tailnet": "other-org" } })).toContain("was not created by this tool");
+    expect(containerMismatch(config(), { ...ours(), image: "tailscale/tailscale:latest" })).toBe(
+      `container lazurio-tailnet-example-org runs tailscale/tailscale:latest, not the recorded tailscale/tailscale@${DIGEST}`,
+    );
+    // A spec label from an older version of the tool is no mismatch: `up` recreates that container.
+    expect(containerMismatch(config(), { ...ours(), labels: { ...ours().labels, "ai.lazurio.tailnet.spec": "0000000000000000" } })).toBeNull();
+  });
+
+  test("a daemon is the tailnet's node by its ControlURL and its hostname", () => {
+    const prefs = { ControlURL: "https://headscale.example.lazurio.io/", Hostname: "login-device-cli" };
+    expect(daemonMismatch(config(), prefs)).toBeNull();
+    expect(daemonMismatch(config(), { ...prefs, ControlURL: "https://other.example.lazurio.io" })).toBe(
+      "uses https://other.example.lazurio.io, not the recorded https://headscale.example.lazurio.io",
+    );
+    expect(daemonMismatch(config(), { ...prefs, ControlURL: "" })).toBe("uses no login server, not the recorded https://headscale.example.lazurio.io");
+    expect(daemonMismatch(config(), { ...prefs, Hostname: "other-cli" })).toBe("is node other-cli, not the recorded login-device-cli");
+    expect(daemonMismatch(config(), { ...prefs, Hostname: "" })).toBe("is node (none), not the recorded login-device-cli");
+    expect(daemonMismatch(config(), null)).toBe("does not answer");
+    // A login server that is no clean URL is not repeated: it could carry credentials.
+    const odd = daemonMismatch(config(), { ...prefs, ControlURL: "https://user:secret@other.example.lazurio.io" });
+    expect(odd).toBe("uses an invalid login server, not the recorded https://headscale.example.lazurio.io");
+  });
+});
+
 describe("doctor", () => {
   test("parses listeners, nameservers and profiles", () => {
     const ss = [
@@ -389,6 +421,7 @@ describe("doctor", () => {
       status: "running",
       restartPolicy: "unless-stopped",
       image: `tailscale/tailscale@${DIGEST}`,
+      labels: { "ai.lazurio.tailnet": "example-org", "ai.lazurio.tailnet.spec": containerSpec(config()).spec },
       spec: containerSpec(config()).spec,
       ports: { "1055/tcp": [{ HostIp: "127.0.0.1", HostPort: "10550" }], "1056/tcp": [{ HostIp: "127.0.0.1", HostPort: "10551" }] },
     },
@@ -446,6 +479,7 @@ describe("doctor", () => {
     ["a silent SOCKS5 port", (f) => (f.socks5 = false), "socks5_answers"],
     ["Docker's DNS instead of quad-100", (f) => (f.resolvConf = "nameserver 127.0.0.11\n"), "dns_quad100"],
     ["another resolver next to quad-100", (f) => (f.resolvConf = "nameserver 100.100.100.100\nnameserver 127.0.0.11\n"), "dns_quad100"],
+    ["a container this tool did not create", (f) => (f.container.labels = {}), "owner"],
     ["a stopped container", (f) => ((f.container.running = false), (f.container.status = "exited")), "container"],
     ["another restart policy", (f) => (f.container.restartPolicy = "no"), "restart_policy"],
   ])("%s fails a required check", (_name, mutate, id) => {

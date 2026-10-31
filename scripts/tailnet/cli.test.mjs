@@ -19,7 +19,9 @@ const fail = (stderr) => ({ code: 1, stdout: "", stderr });
 
 function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authUrl = "", processes = [], statePresent = false } = {}) {
   const home = mkdtempSync(join(sandbox, "home-"));
-  const docker = { containers: new Map(), networks: new Map(), backend, authUrl, controlUrl: LOGIN, upCode: 0 };
+  // controlUrl and hostname are the daemon's live identity; a test changes
+  // them to stand for a daemon switched to another tailnet or node.
+  const docker = { containers: new Map(), networks: new Map(), backend, authUrl, controlUrl: LOGIN, hostname: "login-device-cli", answers: true, upCode: 0 };
   const calls = [];
   const out = [];
   const err = [];
@@ -27,7 +29,7 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
   const option = (args, flag) => args.flatMap((a, k) => (a === flag ? [args[k + 1]] : []));
   const prefs = () => ({
     ControlURL: docker.controlUrl,
-    Hostname: "login-device-cli",
+    Hostname: docker.hostname,
     ShieldsUp: true,
     RouteAll: false,
     CorpDNS: true,
@@ -74,12 +76,12 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
         return ok(
           JSON.stringify([
             {
-              Id: "c0ffee",
+              Id: c.id,
               State: { Running: c.running, Status: c.running ? "running" : "exited", Pid: c.running ? 4242 : 0 },
               HostConfig: { RestartPolicy: { Name: "unless-stopped" }, PortBindings: ports },
               Config: { Image: c.image, Labels: c.labels },
               NetworkSettings: { Ports: c.running ? ports : {} },
-              ResolvConfPath: "/var/lib/docker/containers/c0ffee/resolv.conf",
+              ResolvConfPath: `/var/lib/docker/containers/${c.id}/resolv.conf`,
             },
           ]),
         );
@@ -91,6 +93,7 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
       case "run": {
         const container = option(a, "--name")[0];
         docker.containers.set(container, {
+          id: "c0ffee",
           running: true,
           image: a.at(-2),
           labels: Object.fromEntries(option(a, "--label").map((l) => l.split("="))),
@@ -108,10 +111,13 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
         docker.containers.delete(name);
         return ok();
       case "exec": {
+        // By name or by ID, as Docker accepts both.
+        const target = [...docker.containers].find(([key, c]) => key === a[1] || c.id === a[1])?.[1];
+        if (!target?.running) return fail(`Error response from daemon: container ${a[1]} is not running`);
         const inside = a.slice(2).join(" ");
         if (inside === "tailscale status --json") return ok(JSON.stringify({ BackendState: docker.backend, AuthURL: docker.authUrl, Peer: { a: { Online: true }, b: { Online: false } } }));
         if (inside.startsWith("tailscale up ")) return docker.upCode === 0 ? ok() : fail("timeout waiting for Tailscale service to enter a Running state");
-        if (inside === "tailscale debug prefs") return ok(JSON.stringify(prefs()));
+        if (inside === "tailscale debug prefs") return docker.answers ? ok(JSON.stringify(prefs())) : fail("failed to connect to local tailscaled");
         if (inside === "ip -4 route show type unreachable") return ok("unreachable 100.64.0.0/10 \n");
         if (inside === "ip -6 route show type unreachable") return ok("");
         if (inside === "cat /etc/resolv.conf") return ok("nameserver 100.100.100.100\n");
@@ -312,6 +318,8 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     expect(env).toContain("'EXAMPLE=kept'");
     // The temporary environment file is gone once the command ended.
     expect(existsSync(argv[argv.indexOf("lazurio-tailnet-run") + 7])).toBe(false);
+    // The identity comes from the daemon of the very container it enters.
+    expect(system.ran("docker exec c0ffee tailscale debug prefs")).toHaveLength(1);
   });
 
   test("run needs -- and a running tailnet", async () => {
@@ -320,6 +328,45 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     await main(["down", "example-org"], system.ctx);
     expect(await main(["run", "example-org", "--", "id"], system.ctx)).toBe(1);
     expect(system.err.join("\n")).toContain("is not running");
+    expect(system.spawned).toEqual([]);
+  });
+
+  // `down` keeps the config, so another container can take the name later.
+  const foreignAfterDown = async (container = {}) => {
+    const system = await ready();
+    expect(await main(["down", "example-org"], system.ctx)).toBe(0);
+    system.docker.containers.set("lazurio-tailnet-example-org", { id: "f0e1d2", running: true, image: IMAGE, labels: {}, ...container });
+    system.calls.length = 0;
+    system.out.length = 0;
+    return system;
+  };
+
+  test("run refuses a container this tool did not create and runs nothing in it", async () => {
+    const system = await foreignAfterDown();
+    expect(await main(["run", "example-org", "--", "id"], system.ctx)).toBe(1);
+    expect(system.err.join("\n")).toContain("container lazurio-tailnet-example-org was not created by this tool for example-org; nothing was run");
+    expect(system.ran("docker exec")).toEqual([]);
+    expect(system.spawned).toEqual([]);
+  });
+
+  test("run refuses a container of this tool on another image", async () => {
+    const system = await ready();
+    system.docker.containers.get("lazurio-tailnet-example-org").image = "tailscale/tailscale:latest";
+    expect(await main(["run", "example-org", "--", "id"], system.ctx)).toBe(1);
+    expect(system.err.join("\n")).toContain(`runs tailscale/tailscale:latest, not the recorded ${IMAGE}`);
+    expect(system.spawned).toEqual([]);
+  });
+
+  test.each([
+    ["another login server", (docker) => (docker.controlUrl = "https://other.example.lazurio.io"), `uses https://other.example.lazurio.io, not the recorded ${LOGIN}`],
+    ["no login server, as after a restart before sign-in", (docker) => (docker.controlUrl = ""), `uses no login server, not the recorded ${LOGIN}`],
+    ["another node", (docker) => (docker.hostname = "other-device-cli"), "is node other-device-cli, not the recorded login-device-cli"],
+    ["no answer", (docker) => (docker.answers = false), "does not answer"],
+  ])("run refuses a daemon with %s", async (_name, change, message) => {
+    const system = await ready();
+    change(system.docker);
+    expect(await main(["run", "example-org", "--", "id"], system.ctx)).toBe(1);
+    expect(system.err.join("\n")).toContain(`the daemon of tailnet example-org ${message}; nothing was run`);
     expect(system.spawned).toEqual([]);
   });
 
@@ -332,7 +379,26 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     expect(JSON.parse(system.out[0])).toEqual({ name: "example-org", socks5: "socks5h://127.0.0.1:10552", http: "http://127.0.0.1:10553" });
   });
 
-  test("ssh-proxy checks the login server, then runs tailscale nc on the tailnet's socket", async () => {
+  test("proxy prints nothing for ports that would not reach this tailnet", async () => {
+    // The daemon behind the proxies was switched to another tailnet.
+    const switched = await ready();
+    switched.docker.controlUrl = "https://other.example.lazurio.io";
+    expect(await main(["proxy", "example-org"], switched.ctx)).toBe(1);
+    expect(switched.err.join("\n")).toContain("uses https://other.example.lazurio.io");
+    // Another container took the name and the recorded ports after `down`.
+    const foreign = await foreignAfterDown({ publish: ["127.0.0.1:10552:1055/tcp", "127.0.0.1:10553:1056/tcp"] });
+    expect(await main(["proxy", "example-org", "--json"], foreign.ctx)).toBe(1);
+    expect(foreign.err.join("\n")).toContain("was not created by this tool");
+    expect(foreign.ran("docker exec")).toEqual([]);
+    // The config records other ports than the container publishes.
+    const moved = await ready();
+    writeConfig(moved.home, { ...readConfig(moved.home, "example-org"), ports: { socks5: 10560, http: 10561 } });
+    expect(await main(["proxy", "example-org"], moved.ctx)).toBe(1);
+    expect(moved.err.join("\n")).toContain("publishes 1055/tcp->127.0.0.1:10552 1056/tcp->127.0.0.1:10553, not the recorded 127.0.0.1:10560 and 127.0.0.1:10561");
+    expect([...switched.out, ...foreign.out, ...moved.out]).toEqual([]);
+  });
+
+  test("ssh-proxy checks the login server and the node, then runs tailscale nc on the tailnet's socket", async () => {
     const system = await ready();
     expect(await main(["ssh-proxy", "example-org", "example-host", "22"], system.ctx)).toBe(7);
     expect(system.spawned[0].argv).toEqual(["tailscale", `--socket=${TAILNETS_ROOT}/example-org/run/tailscaled.sock`, "nc", "example-host", "22"]);
@@ -342,7 +408,11 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     expect(dropStderr("tailscale nc: connection refused")).toBe(false);
     system.docker.controlUrl = "https://other.example.lazurio.io";
     expect(await main(["ssh-proxy", "example-org", "example-host", "22"], system.ctx)).toBe(1);
-    expect(system.err.join("\n")).toContain("not connecting");
+    expect(system.err.join("\n")).toContain(`uses https://other.example.lazurio.io, not the recorded ${LOGIN}; not connecting`);
+    system.docker.controlUrl = LOGIN;
+    system.docker.hostname = "other-device-cli";
+    expect(await main(["ssh-proxy", "example-org", "example-host", "22"], system.ctx)).toBe(1);
+    expect(system.err.join("\n")).toContain("is node other-device-cli, not the recorded login-device-cli; not connecting");
     expect(system.spawned).toHaveLength(1);
     expect(await main(["ssh-proxy", "example-org", "example-host", "99999"], system.ctx)).toBe(2);
     expect(system.out).toEqual([]);
@@ -386,6 +456,17 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     const report = JSON.parse(system.out.join("\n"));
     expect(report.ok).toBe(false);
     expect(report.tailnets[0].checks.find((c) => c.id === "control_url")).toMatchObject({ ok: false, detail: "https://other.example.lazurio.io" });
+  });
+
+  test("status and doctor report a container this tool did not create and run nothing in it", async () => {
+    const system = await foreignAfterDown();
+    expect(await main(["status", "--json"], system.ctx)).toBe(0);
+    expect(JSON.parse(system.out.join("\n"))[0]).toMatchObject({ name: "example-org", container: "foreign", backend: null });
+    system.out.length = 0;
+    expect(await main(["doctor", "--json"], system.ctx)).toBe(1);
+    const report = JSON.parse(system.out.join("\n"));
+    expect(report.tailnets[0].checks.find((c) => c.id === "owner")).toMatchObject({ ok: false, level: "required", detail: "not created by this tool" });
+    expect(system.ran("docker exec")).toEqual([]);
   });
 });
 
