@@ -229,7 +229,11 @@ proměnná ho nevypnou.
   obalů (`sudo -D`, `env -C`, `nsenter --wd`, `unshare --wd`). `~`
   a `$HOME` rozvine, odkazy a `..` bere fyzicky a výsledek porovná se
   systémovým socketem podle cesty i podle souboru, takže zachytí
-  i symbolický nebo pevný odkaz. Proměnná, substituce, glob, neznámý
+  i symbolický nebo pevný odkaz. `~` a `$HOME` zná, jen když je příkaz
+  nemůže změnit: přiřazení, builtin, jehož proměnná může být HOME (i
+  `printf -v HO''ME` nebo jméno známé až za běhu), `eval` či `trap`
+  vypočteného textu, `source` nebo obal s jiným HOME (`sudo`, `su`,
+  `env`…) je nechají neznámé. Proměnná, substituce, glob, neznámý
   adresář (`cd "$X"`, `cd -`, relativní `cd`, `popd`, `sudo -i`, chybějící
   `cwd`), smyčka odkazů, `/proc` nebo složka, kterou guard nesmí číst,
   nechají cíl neznámý a měnící příkaz se zamítne. Socket cizího tailnetu
