@@ -79,6 +79,7 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
               HostConfig: { RestartPolicy: { Name: "unless-stopped" }, PortBindings: ports },
               Config: { Image: c.image, Labels: c.labels },
               NetworkSettings: { Ports: c.running ? ports : {} },
+              ResolvConfPath: "/var/lib/docker/containers/c0ffee/resolv.conf",
             },
           ]),
         );
@@ -133,7 +134,7 @@ function fakeSystem({ platform = "linux", uid = 1000, backend = "Running", authU
     err: (line) => err.push(line),
     exec,
     spawnInherit: async (argv) => {
-      const envFile = argv[argv.indexOf("lazurio-tailnet-run") + 6];
+      const envFile = argv[argv.indexOf("lazurio-tailnet-run") + 7];
       spawned.push({ argv, env: envFile && existsSync(envFile) ? readFileSync(envFile, "utf8") : null });
       return 7;
     },
@@ -306,11 +307,11 @@ describe("run, proxy, ssh-proxy, down, status, doctor", () => {
     const [{ argv, env }] = system.spawned;
     expect(argv.slice(0, 6)).toEqual(["sudo", "-n", "--", "nsenter", "--target=4242", "--net"]);
     expect(argv.slice(-3)).toEqual(["curl", "-sS", "https://app.example.lazurio.io"]);
-    expect(argv.slice(argv.indexOf("lazurio-tailnet-run") + 1, argv.indexOf("lazurio-tailnet-run") + 3)).toEqual(["4242", "c0ffee"]);
+    expect(argv.slice(argv.indexOf("lazurio-tailnet-run") + 1, argv.indexOf("lazurio-tailnet-run") + 4)).toEqual(["4242", "c0ffee", "/var/lib/docker/containers/c0ffee/resolv.conf"]);
     expect(env).toContain("'LAZURIO_TAILNET=example-org'");
     expect(env).toContain("'EXAMPLE=kept'");
     // The temporary environment file is gone once the command ended.
-    expect(existsSync(argv[argv.indexOf("lazurio-tailnet-run") + 6])).toBe(false);
+    expect(existsSync(argv[argv.indexOf("lazurio-tailnet-run") + 7])).toBe(false);
   });
 
   test("run needs -- and a running tailnet", async () => {
