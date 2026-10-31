@@ -7,8 +7,16 @@ samostatně a samotný tento dokument je nezapíná.
 
 ## Jeden mechanismus předání
 
+Lidé, Task Agenti a boti různých Prostředí, včetně Prostředí Henry (Pablo,
+Henryové Organizací), spolupracují na pull requestu jen přes GitHub.
 Reviewer request žádá o kontrolu. Přiřazení PR jako **assignee** předává
-odpovědnost za dotažení včetně dovoleného merge. Autor nebo současný
+odpovědnost za dotažení včetně dovoleného merge. Obojí platí jen pro pull
+request v Ready: Draft je rozpracovaný a review ani předání nedostane.
+Reviewera jmenuje `AGENTS.md` owning Organizace, jinak je to Pablo
+(`agentrozjedemeai`). Kde je persona code owner, požádá ji GitHub při Ready
+sám. Po pushi se žádost persony neopakuje: persona, která PR už
+reviewovala, vezme nový head sama; člověka je třeba požádat znovu. Postup
+drží skill `henry-review`. Autor nebo současný
 odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
 musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
 Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
@@ -130,6 +138,8 @@ Převzetí úlohy není dokončené review ani merge.
 | --- | --- |
 | Ready PR je přiřazen oprávněným předávajícím | Jedna úloha k dotažení bez dalšího komentáře. |
 | Je požádáno pouze o review | Verdikt; žádný mandát k merge. |
+| Žádost o review nebo předání míří na Draft | Příjem úlohu nespustí. Autor PR přepne na Ready a žádost platí dál; po Lazurio/OpenMausBot#82 to příjem jednou napíše do PR. |
+| Dvě hodiny po žádosti na Ready PR není verdikt ani důvod | Autor ověří Ready, žádost a head a dá vědět svému uživateli, bot tomu, kdo mu práci zadal; potichu nečeká. |
 | Assignee je odebrán nebo změněn | Původní příjemce nemerguje; nový má vlastní předání. |
 | Původ přiřazení či živá práva nejdou doložit | Viditelný blokátor; žádné odhadování mandátu. |
 | Fronta se přeruší před spuštěním review | Bezpečná obnova existující cestou nebo viditelná potřeba obnovy. |

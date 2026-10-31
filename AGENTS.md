@@ -139,12 +139,15 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní);
   o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
   Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
-  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Vlastní
+  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Obdobně
+  Prostředí AI Zaměstnance (0220) je obyčejné Osobní Prostředí
+  s automatizovaným operátorem, ne další druh. Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
   kde je třeba ho odlišit, „Prostředí na serveru“ a anglicky Remote
   Environment, nikdy „Vzdálené Prostředí“. Slovy Mašina, VM ani server
   Prostředí nepojmenovávej. Osobní zástupce je **Buddy** a obsah Osobního
-  Prostředí **Osobní Workspace** (0207).
+  Prostředí **Osobní Workspace** (0207); agent persony je
+  **AI Zaměstnanec** (0220).
 - **Machine / Mašina** zůstává přesný technický pojem pro hranici, na které
   Prostředí běží: v identifikátorech, příkazech, schématech, custody,
   decision records a `ARCHITECTURE.md` ho nepřepisuj. Pravidla pro agenty
@@ -277,7 +280,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   prvního pushe je vidět jako GitHub Draft PR, kde to plán repozitáře umí,
   jinak jako běžný pull request s rozpracovaným stavem v popisu (0103).
   Hotovou a ověřenou práci sám přepneš na Ready for review; Ready není
-  Publikace.
+  Publikace. Draft review ani předání nedostane a na verdikt nečekáš potichu
+  (`manual/pull-request-handoff.md`, skill `henry-review`).
 - **Popis PR** nese kontext k rozhodnutí: motivaci, cílový stav, co se mění
   i záměrně nemění, ověření, rizika a navazující kroky. Po změně scope nebo
   rebase odpovídá aktuálnímu headu.
