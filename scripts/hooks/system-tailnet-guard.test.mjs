@@ -189,6 +189,16 @@ describe("follows a socket path the way the kernel does", () => {
     ["a relative path after sudo -i, in root's home", "sudo -i tailscale --socket=x.sock up"],
     ["a link loop", `tailscale --socket=${links}/loop-a down`],
     ["a path in /proc, which depends on the process", "tailscale --socket=/proc/self/cwd/tailscaled.sock down"],
+    ["$HOME after export HOME", "export HOME=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["~ after HOME=", "HOME=/run/tailscale; tailscale --socket=~/tailscaled.sock down"],
+    ["$HOME after a prefix assignment", "HOME=/run/tailscale tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME in code env starts with another HOME", "env HOME=/run/tailscale bash -c 'tailscale --socket=$HOME/tailscaled.sock down'"],
+    ["$HOME in code sudo starts", "sudo -H bash -c 'tailscale --socket=$HOME/tailscaled.sock logout'"],
+    ["~ in code su starts", "su - root -c 'tailscale --socket ~/tailscaled.sock down'"],
+    ["$HOME after read", "read HOME < home.txt; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v", "printf -v HOME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after unset", "unset HOME; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["cd ~ after HOME=", "HOME=/run/tailscale; cd ~ && tailscale --socket=tailscaled.sock down"],
   ])("denies a target that cannot be known before the command runs: %s", (_name, command) => {
     expect(at("/home/station-user", command)).toEqual(expect.any(String));
   });
@@ -244,6 +254,8 @@ describe("follows a socket path the way the kernel does", () => {
     ["$HOME to a foreign socket", "/home/station-user", "tailscale --socket=$HOME/foreign.sock up"],
     ["a relative path after an unknown cd, for a read", "/home/station-user", 'cd "$DIR" && tailscale --socket=x.sock status'],
     ["an absolute foreign path after an unknown cd", "/home/station-user", `cd "$DIR" && tailscale --socket=${foreign}/tailscaled.sock up`],
+    ["a read on $HOME after HOME changes", "/home/station-user", "export HOME=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock status"],
+    ["an absolute foreign path when HOME changes", "/home/station-user", `HOME=/run/tailscale; tailscale --socket=${foreign}/tailscaled.sock up`],
   ])("allows %s", (_name, cwd, command) => {
     expect(at(cwd, command)).toBeNull();
   });
