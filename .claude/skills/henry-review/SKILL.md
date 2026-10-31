@@ -70,12 +70,13 @@ Ownerovi.
   headu:
   `gh api repos/<owner>/<repo>/pulls/<n>/reviews --jq '.[] | select(.user.login == "<login>") | [.state, .commit_id] | @tsv'`
   proti `gh pr view <n> -R <owner>/<repo> --json headRefOid --jq .headRefOid`.
-  Schválení, které GitHub po rebase přenese na nový head, se nepočítá.
+  Přenesené schválení se nepočítá: po merge base větve nebo rebase beze
+  změny diffu má `commit_id` nového headu, ale `submitted_at` starší než
+  datum commitu headu.
 - **Dotažení** je hotové, až je PR mergnutý do zamýšlené báze, nebo předaný
   dalšímu jmenovanému assignee se stavem a dalším krokem. Samotný komentář
   ani APPROVED dotažení nejsou.
-- **Bez verdiktu ani důvodu** v čase z `manual/pull-request-handoff.md`:
-  ověř Ready, login a že je v
+- **Když verdikt ani důvod nepřichází:** ověř Ready, login a že je v
   `requested_reviewers` nebo už reviewoval
   (`gh api repos/<owner>/<repo>/pulls/<n> --jq '{draft, requested: [.requested_reviewers[].login]}'`).
   Pak to řekni uživateli; bot tomu, kdo mu práci zadal. Druhou cestu
