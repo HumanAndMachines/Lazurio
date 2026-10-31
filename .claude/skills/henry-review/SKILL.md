@@ -18,12 +18,16 @@ nemá vlastní práva; jedná v živých grantech svého účtu. Pablo je tentý
 mechanismus v Organizaci LazurioDevelopment.
 
 Práci přebírá jen nativní GitHub intake MausBotu (`docs/lazurio-github-intake.md`
-ve forku `Lazurio/OpenMausBot`). Zhruba každých 90 s hledá otevřený Ready PR,
-kde je účet persony:
+ve forku `Lazurio/OpenMausBot`). Zhruba každých 90 s hledá otevřený Ready PR
+v repozitářích vlastníků ze svého nastavení (`OMB_GITHUB_INTAKE_OWNERS`), kde
+je účet persony:
 
 - požádaný reviewer: review aktuálního headu;
 - dřívější reviewer: review každého nového headu bez nové žádosti;
-- assignee od živého pisatele repozitáře: dotažení PR včetně dovoleného merge.
+- assignee od živého pisatele repozitáře, jen se zapnutým předáním
+  (`OMB_GITHUB_INTAKE_ASSIGNMENTS=1`): dotažení PR včetně dovoleného merge.
+
+Repozitář mimo vlastníky intake nikdo nezpracuje, i když GitHub žádost přijme.
 
 Draft intake přeskočí, dokud ho nepřepneš na Ready. PR, jehož autorem je účet
 persony, nereviewuje: schvaluje ho člověk.
@@ -36,8 +40,9 @@ persony, nereviewuje: schvaluje ho člověk.
 
 ## Postup
 
-1. **Login.** Vezmi ho z `AGENTS.md` Organizace, které repozitář patří. Když ho
-   nejmenuje, je to Pablo `agentrozjedemeai` (skill `pablo-review`).
+1. **Login.** Vezmi ho z `AGENTS.md` Organizace, které repozitář patří: je to
+   persona, jejíž intake tuto Organizaci pokrývá. Když ho nejmenuje, je to
+   Pablo `agentrozjedemeai`; jeho rozsah drží skill `pablo-review`.
 2. **Příprava.** PR má popis s kontextem a zelené CI na headu a je Ready:
    `gh pr ready <n> -R <owner>/<repo>`.
 3. **Review.** `gh pr edit <n> -R <owner>/<repo> --add-reviewer <login>`.
@@ -70,5 +75,6 @@ Ownerovi.
   `requested_reviewers` nebo už reviewoval
   (`gh api repos/<owner>/<repo>/pulls/<n> --jq '{draft, requested: [.requested_reviewers[].login]}'`).
   Pak to řekni uživateli; bot tomu, kdo mu práci zadal. Druhou cestu
-  nezakládej. Pozastavený intake, chybějící přihlášení nebo plná fronta jsou
-  konkrétní blokátory pro odpovědného uživatele Prostředí persony.
+  nezakládej. Owner mimo rozsah intake, vypnuté předání, pozastavený intake,
+  chybějící přihlášení nebo plná fronta jsou konkrétní blokátory pro
+  odpovědného uživatele Prostředí persony.
