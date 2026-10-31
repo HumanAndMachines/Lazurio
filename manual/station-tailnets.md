@@ -73,9 +73,10 @@ nemění: `doctor` z něj jen čte. Před omylem ho chrání guard (oddíl Guard
 ## Příkazy
 
 `bun run tailnet -- <příkaz>` z rootu. `bun run` spouští skript v kořeni
-repozitáře; `run` a `ssh-proxy` proto volej cestou ke skriptu, například
-`bun ~/Lazurio/scripts/tailnet/cli.mjs run …`, aby zůstal pracovní adresář.
-Na stanovišti leží root v productionspace LazurioDevelopment (0217).
+repozitáře; `run` a `ssh-proxy` proto volej cestou ke skriptu,
+`bun <Lazurio>/scripts/tailnet/cli.mjs run …`, aby zůstal pracovní adresář.
+`<Lazurio>` je cesta k rootu; na stanovišti leží root v productionspace
+LazurioDevelopment (0217).
 
 | Příkaz | Co dělá |
 | --- | --- |
@@ -92,7 +93,7 @@ Příklady (zástupná jména):
 ```sh
 bun run tailnet -- up example-org --login-server https://headscale.example.lazurio.io --hostname <login>-<zařízení>-cli
 bun run tailnet -- doctor
-bun ~/Lazurio/scripts/tailnet/cli.mjs run example-org -- curl -sS https://app.example-host.example-org.lazurio.io
+bun <Lazurio>/scripts/tailnet/cli.mjs run example-org -- curl -sS https://app.example-host.example-org.lazurio.io
 bun run tailnet -- proxy example-org
 ```
 
@@ -101,7 +102,7 @@ Organizace (pinnutý host klíč přes `HostKeyAlias` a vlastní
 `UserKnownHostsFile`, AGENTS.md); mění se jen `ProxyCommand`:
 
 ```text
-ProxyCommand bun ~/Lazurio/scripts/tailnet/cli.mjs ssh-proxy example-org %h %p
+ProxyCommand bun <Lazurio>/scripts/tailnet/cli.mjs ssh-proxy example-org %h %p
 ```
 
 Prohlížeč a nástroje s proxy: Chromium s
@@ -229,8 +230,8 @@ tailnet Prostředí jen čte: jeden profil a jeho ControlURL.
 Ruční průchod:
 
 ```sh
-bun ~/Lazurio/scripts/tailnet/cli.mjs run example-org -- cat /etc/resolv.conf   # nameserver 100.100.100.100
-bun ~/Lazurio/scripts/tailnet/cli.mjs run example-org -- ip route get 100.64.200.200   # unreachable, není-li to peer
+bun <Lazurio>/scripts/tailnet/cli.mjs run example-org -- cat /etc/resolv.conf   # nameserver 100.100.100.100
+bun <Lazurio>/scripts/tailnet/cli.mjs run example-org -- ip route get 100.64.200.200   # unreachable, není-li to peer
 tailscale --socket=/var/lib/lazurio-tailnets/example-org/run/tailscaled.sock status   # bez sudo
 ```
 
