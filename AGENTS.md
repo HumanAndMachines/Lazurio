@@ -293,6 +293,15 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   odpovíš věcnou námitkou v PR a požádáš o verdikt na nezměněném headu.
   Trvá-li reviewer na svém, předložíš obě stanoviska uživateli. Nález, který
   má cenu, ale do PR nepatří, zapíšeš jako issue.
+- **Review persony** (Pablo, Henry): hotový PR přepneš na Ready
+  (`gh pr ready`) a hned požádáš o review, ať PR publikuje kdokoli.
+  Žádáš reviewer requestem `gh pr edit <n> -R <owner>/<repo> --add-reviewer
+  <login>`; intake MausBotu Draft přeskočí, dokud ho nepřepneš. Login jmenuje
+  `AGENTS.md` owning Organizace; kde ho nejmenuje, je to Pablo
+  `agentrozjedemeai` (v HumanAndMachine-ai na stejném účtu odpovídá její
+  Henry). Kontext patří do popisu PR. Žádost neopakuješ ani nezdvojuješ jinou
+  cestou: nový head už reviewovaného PR dostane review sám. Postup
+  a selhání drží `manual/pull-request-handoff.md`.
 - **Handoff** je průvodcovský a jeho tvar drží oddíl Handoff. Po každé
   Publikaci uživateli navrhneš, co dalšího dotáhnout.
 

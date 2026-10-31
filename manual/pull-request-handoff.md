@@ -31,6 +31,34 @@ Přiřazení samo nese publikační mandát k tomuto PR. Druhý komentář
 Dřívější komentář může zůstat kompatibilní cestou, ale nezvyšuje práva
 a po odebrání přiřazení nepokračuje.
 
+## Review persony
+
+Pablo (vývoj Lazuria) i Henry (Organizace s vlastním Prostředím Henry) jsou
+persony, za kterými běží tým Lazurio MausBotu. Oba dostávají práci stejně:
+nativní GitHub intake zhruba každých 90 s hledá otevřené PR, kde je jejich
+účet požádaný reviewer, dřív reviewoval, nebo je assignee. Jiná cesta
+(soubor, skript, SSH, zpráva do vlákna) review nezaloží. Bot bez uživatele
+vše, co tu míří k uživateli, předá tomu, kdo mu práci zadal.
+
+1. Hotový PR má popis s kontextem a zelené CI na headu. Přepneš ho na Ready
+   (`gh pr ready <n> -R <owner>/<repo>`); o review žádáš hned, i když PR
+   potom publikuje člověk.
+2. Login jmenuje `AGENTS.md` owning Organizace repozitáře; kde ho nejmenuje,
+   je to Pablo `agentrozjedemeai`. V HumanAndMachine-ai na stejném účtu
+   odpovídá její Henry.
+3. `gh pr edit <n> -R <owner>/<repo> --add-reviewer <login>`.
+4. Verdikt (APPROVED nebo CHANGES_REQUESTED) platí, když review od toho
+   loginu má `commit_id` rovný aktuálnímu headu PR.
+
+| Situace | Co se stane | Co uděláš ty |
+| --- | --- | --- |
+| PR je Draft | Intake žádost potichu odloží. | Přepneš PR na Ready; žádost platí dál. |
+| Push po review persony | Intake reviewuje nový head sám. | Nic; znovu nežádáš. |
+| Push po review člověka | GitHub ho znovu nežádá. | Požádáš ho znovu na novém headu. |
+| Autorem PR je účet persony | Intake review nezaloží. | Požádáš o review odpovědného uživatele Prostředí persony. |
+| Účet nemá k repozitáři přístup | `gh pr edit` žádost odmítne. | Ověříš login v `AGENTS.md` Organizace; když tam chybí nebo nemá přístup, zeptáš se uživatele. |
+| Dvě hodiny bez verdiktu | Práce může čekat ve frontě. | Ověříš Ready, login a že je v `requested_reviewers` nebo už reviewoval; pak to řekneš uživateli. Druhou cestu nezakládáš. |
+
 ## Ověření před prací a před merge
 
 Agent ověří skutečnou GitHub assignment událost, jejího autora a cílový
