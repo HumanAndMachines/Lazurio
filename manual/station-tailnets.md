@@ -83,9 +83,9 @@ LazurioDevelopment (0217).
 | `up <name> --login-server <url> --hostname <uzel> [--adopt-state <statedir>] [--image <ref>]` | Připraví adresáře, síť a kontejner a aplikuje nastavení uzlu. Opakované `up` nic nerozbije; kontejner jiné verze nástroje znovu vytvoří, stav zůstane. Čeká-li uzel na přihlášení, vypíše odkaz a skončí kódem 3. Klíče nikdy nevypisuje. |
 | `status [<name>] [--json]` | Kontejner, stav uzlu, počet peerů, odkaz k přihlášení, proxy. |
 | `doctor [--json]` | Kontroly níže; vlastní tailnet Prostředí jen čte (počet profilů, ControlURL). Kód 1, když povinná kontrola selže. |
-| `run <name> -- <příkaz…>` | Spustí příkaz jako uživatel uvnitř tailnetu (viz níže). |
-| `proxy <name> [--json]` | `socks5h://127.0.0.1:<port>` a `http://127.0.0.1:<port>` pro prohlížeč a nástroje s proxy. |
-| `ssh-proxy <name> <host> <port>` | Pro `ProxyCommand`: ověří, že daemon na socketu tailnetu je přihlášený k zapsanému login serveru, a spustí `tailscale --socket=<socket> nc`. |
+| `run <name> -- <příkaz…>` | Ověří kontejner a uzel tailnetu (oddíl Totožnost tailnetu) a spustí příkaz jako uživatel uvnitř tailnetu (viz níže). |
+| `proxy <name> [--json]` | `socks5h://127.0.0.1:<port>` a `http://127.0.0.1:<port>` pro prohlížeč a nástroje s proxy. Vypíše je, jen když kontejner a uzel projdou ověřením jako u `run` a kontejner publikuje právě zapsané porty. |
+| `ssh-proxy <name> <host> <port>` | Pro `ProxyCommand`: ověří, že daemon na socketu tailnetu používá zapsaný login server a je zapsaným uzlem, a spustí `tailscale --socket=<socket> nc`. |
 | `down <name>` | Zastaví a odstraní kontejner a síť. Stav a konfigurace zůstanou, `up` vrátí tentýž uzel. |
 
 Příklady (zástupná jména):
@@ -116,10 +116,30 @@ Návratové kódy: 0 hotovo, 1 selhání, 2 použití nebo nepodporovaná platfo
 spuštěného příkazu. Na macOS nástroj skončí kódem 2: počítač si nechává své
 headless klienty s jejich omezením DNS.
 
+### Totožnost tailnetu
+
+`down` nechává konfiguraci, takže jméno `lazurio-tailnet-<name>` může později
+převzít cizí kontejner, a daemon tailnetu jde přes jeho socket přepnout na
+jiný login server nebo uzel. Proto `run`, `proxy` a `ssh-proxy` před každým
+použitím ověří, že míří do zapsaného tailnetu, a jinak nic nespustí,
+nevypíšou ani nespojí a skončí kódem 1:
+
+- kontejner nese štítek `ai.lazurio.tailnet=<name>`, který mu dal `up`,
+  a běží na připnutém image z konfigurace (štítek specifikace ze starší
+  verze nástroje nevadí, `up` takový kontejner znovu vytvoří);
+- jeho daemon má v `tailscale debug prefs` ControlURL zapsaného login
+  serveru a jméno zapsaného uzlu. `run` a `proxy` je čtou z kontejneru
+  s ověřeným ID, `ssh-proxy` ze socketu, přes který spojení vede;
+- `proxy` navíc ověří, že kontejner publikuje právě zapsané porty.
+
+`status` a `doctor` do kontejneru, který nástroj nevytvořil, nic nespouštějí:
+`status` ho ukáže jako `foreign` a `doctor` selže na kontrole `owner`.
+
 ### Co přesně dělá `run`
 
-1. Při každém volání zjistí PID kontejneru (po restartu je jiný) a ověří,
-   že PID pořád patří tomuto kontejneru.
+1. Při každém volání ověří totožnost tailnetu (oddíl výše), zjistí PID
+   ověřeného kontejneru (po restartu je jiný) a ověří, že PID pořád patří
+   tomuto kontejneru.
 2. Přes `sudo` a `nsenter --net` vstoupí do síťového namespace tailnetu
    a `unshare --mount --propagation private` mu dá soukromý mount namespace,
    takže nic z dalších kroků nevidí zbytek Mašiny.
@@ -189,7 +209,8 @@ jinak nic, a při vlastní chybě příkaz pustí (fail open). Přepínač ani
 proměnná ho nevypnou.
 
 - **Zamítne** `tailscale up|down|login|logout|switch|set|set-operator|serve|funnel|update`
-  bez `--socket` nebo se systémovým socketem; `systemctl
+  bez `--socket`, se systémovým socketem, nebo se socketem, o kterém nejde
+  před spuštěním říct, kam vede; `systemctl
   stop|restart|try-restart|reload-or-restart|force-reload|kill|disable|mask`
   jednotky `tailscaled` (ne `--user`); `service tailscaled stop|restart`;
   `pkill` a `killall`, jejichž vzor zasáhne systémový `tailscaled`. Vidí
@@ -197,10 +218,22 @@ proměnná ho nevypnou.
   command substitution a skript poslaný shellu na stdin.
 - **Pustí** čtení (`status`, `ping`, `netcheck`, `ip`, `whois`, `version`,
   `dns status`, `debug prefs`, `switch --list`, `serve status`,
-  `funnel status`, `update --dry-run`, nápovědu), cokoli se `--socket`
-  mimo systémový socket a `bun run tailnet -- …`. Nevidí příkaz složený až
-  za běhu, skript spuštěný cestou ani příkaz na jiném stroji (`ssh`) či
-  v jiném kontejneru (`docker exec`).
+  `funnel status`, `update --dry-run`, nápovědu), cokoli se `--socket`,
+  který vede jinam než na systémový socket, a `bun run tailnet -- …`.
+  Nevidí příkaz složený až za běhu, skript spuštěný cestou, odkaz, který
+  vytvoří až sám příkaz, ani příkaz na jiném stroji (`ssh`) či v jiném
+  kontejneru (`docker exec`).
+- **Socket sleduje jako jádro.** Relativní cestu bere od každého adresáře,
+  ve kterém příkaz může běžet: `cwd` z hooku, cíl každého `cd` a `pushd`
+  kdekoli v příkazu (i v podshellu, smyčce nebo `sh -c`) a `--chdir`
+  obalů (`sudo -D`, `env -C`, `nsenter --wd`, `unshare --wd`). `~`
+  a `$HOME` rozvine, odkazy a `..` bere fyzicky a výsledek porovná se
+  systémovým socketem podle cesty i podle souboru, takže zachytí
+  i symbolický nebo pevný odkaz. Proměnná, substituce, glob, neznámý
+  adresář (`cd "$X"`, `cd -`, relativní `cd`, `popd`, `sudo -i`, chybějící
+  `cwd`), smyčka odkazů, `/proc` nebo složka, kterou guard nesmí číst,
+  nechají cíl neznámý a měnící příkaz se zamítne. Socket cizího tailnetu
+  proto piš absolutní cestou.
 
 Instalace je uživatelská jako u custody guardu: v `~/.claude/settings.json`
 další položka `hooks.PreToolUse` s matcherem `Bash|Monitor`, v
@@ -216,8 +249,9 @@ jako custody guard.
 
 ## Ověření
 
-`bun run tailnet -- doctor` pro každý tailnet ověří: kontejner běží
-s `unless-stopped` a připnutým image; uzel je `Running`; ControlURL je
+`bun run tailnet -- doctor` pro každý tailnet ověří: kontejner vytvořil
+tento nástroj (štítek `ai.lazurio.tailnet=<name>`) a běží s `unless-stopped`
+a připnutým image; uzel je `Running`; ControlURL je
 zapsaný login server; jméno uzlu a operátor sedí; `ShieldsUp`,
 `RouteAll=false`, `CorpDNS=true`, žádný exit node, Tailscale SSH vypnuté;
 v namespace je `unreachable 100.64.0.0/10`; proxy jsou publikované jen na
@@ -248,8 +282,15 @@ tailscale --socket=/var/lib/lazurio-tailnets/example-org/run/tailscaled.sock sta
 - **Uzel, který se ještě nepřihlásil, a restart kontejneru:** Tailscale
   ukládá nastavení profilu až po přihlášení. Po restartu má takový uzel
   `WantRunning` vypnuté a nikam se nepřipojuje, `doctor` ukáže prázdný
-  ControlURL a `ssh-proxy` odmítne spojit; `up` nastavení vrátí. Přihlášený
-  uzel si nastavení pamatuje.
+  ControlURL a `run`, `proxy` i `ssh-proxy` ho odmítnou; `up` nastavení
+  vrátí. Přihlášený uzel si nastavení pamatuje.
+- **Jméno převzal cizí kontejner** (po `down`): `run` ani `proxy` do něj nic
+  nespustí ani nevydají, `status` ho ukáže jako `foreign`, `doctor` selže na
+  `owner` a `up` i `down` ho odmítnou změnit. Odstraň ho nebo přejmenuj
+  a spusť `up`.
+- **Daemon používá jiný login server nebo uzel** (někdo ho přepnul přes
+  socket): `run`, `proxy` i `ssh-proxy` odmítnou a `doctor` ukáže rozdíl
+  v `control_url` nebo `node_name`.
 - **Varování o verzi:** CLI hostu (balíček distribuce) a daemon z image jsou
   tatáž verze ve dvou buildech, takže `tailscale --socket=…` na hostu vypíše
   `Warning: client version … != tailscaled server version …`. Je neškodné;
