@@ -464,6 +464,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   (0213) i z internetu přes veřejný vstup serveru k bráně s přihlášením
   Lazurio účtem, a produkční aplikace `<app>.<org>.lazurio.io`. Podrobný model
   drží `MAP.md`.
+- **Hostující Moduly** (0221): Organizace smí namountovat Modul jiné
+  Organizace jako kontext ve `workspace/<DomovskáOrganizace>_GEN3/<repozitář>`,
+  jediné výjimce z ploché složky; slot nese `home_organization`. Čteš ho podle
+  `AGENTS.md` té složky, nic z něj nekopíruješ a změny v něm jdou pull
+  requestem do domovského repozitáře podle pravidel domovské Organizace.
 - **Design System** Organizace má číst každý aktivní člen včetně účtů jejích
   Prostředí Henry, ve všech Teamech a u organizačních i produktových Design
   Systemů. Při založení, onboardingu člena i instalaci Prostředí ověř

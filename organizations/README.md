@@ -34,6 +34,7 @@ organizations/<org>/
 ```
 
 - Všechny workspace moduly Organizace žijí fyzicky v jedné ploché složce `workspace/`; složky `workspaces/<slug>/` se nezavádějí (decision 0041 v `../manual/decision-register.md`).
+- Jedinou výjimkou jsou hostující Moduly: Moduly jiné (domovské) Organizace, namountované jako kontext ve `workspace/<DomovskáOrganizace>_GEN3/<repozitář>` se slotem nesoucím `home_organization` (decision 0221 s dodatkem z 2026-10-31). Složka trackuje jen svůj `README.md` a `AGENTS.md` a pro změny platí pravidla domovské Organizace.
 - Pojmenované Workspaces („Oddělení“/„Kanceláře“ — digitální kancelář jednoho týmu NEBO značky/venture) s vlastním doctorem, pravidly a access hranicí jsou logická deklarace v manifestu (`modules[].workspace` / `module_slots[].workspace`), ne adresář; deklarace je autorita a UI grupuje podle ní.
 - Modul patří právě do jednoho Workspace; chybějící deklarace = default Workspace se slugem `workspace`. Hosted vzor `<modul>.<workspace>.<doména>` se generuje z deklarace.
 - `productionspace/` drží org-level repozitáře, které nejsou workspace moduly (např. firmware, connect, monorepo). Každé takové repo si definuje vlastní pravidla (branch model, release proces); doctor u nich vynucuje jen bezpečné minimum, na rozdíl od jednotného kontraktu workspace modulů (decision 0041 body 6–7 v `../manual/decision-register.md`).
