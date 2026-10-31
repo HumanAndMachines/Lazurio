@@ -10,10 +10,12 @@
     "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs"
   },
   "scripts": {
-    "check": "bun run organization:compiler:test && bun run terminology:test && bun run custody:test && bun run preservation:test && bun run personalspace:test && bun run worktrees:test && bun run runtime:migrate:test && bun run git-policy:test && bun run ci:test && bun run agent-skills:test && bun run mission-control:smoke:test && bun run lazurio:test && bun run resident:test && bun run doctor:agent-skills && bun run --cwd launchpad check",
+    "check": "bun run organization:compiler:test && bun run terminology:test && bun run custody:test && bun run tailnet:test && bun run preservation:test && bun run personalspace:test && bun run worktrees:test && bun run runtime:migrate:test && bun run git-policy:test && bun run ci:test && bun run agent-skills:test && bun run mission-control:smoke:test && bun run lazurio:test && bun run resident:test && bun run doctor:agent-skills && bun run --cwd launchpad check",
     "check:windows": "bun scripts/test-lanes.mjs windows",
     "check:docs": "bun scripts/test-lanes.mjs docs && bun run doctor:agent-skills",
     "custody:test": "bun test ./scripts/custody",
+    "tailnet": "bun scripts/tailnet/cli.mjs",
+    "tailnet:test": "bun test ./scripts/tailnet ./scripts/hooks",
     "custody:shape": "bun scripts/custody/custody-shape.mjs",
     "ci:test": "bun test ./scripts/ci-change-scope.test.mjs ./scripts/test-lanes.test.mjs",
     "doctor": "bun run --cwd launchpad doctor",
