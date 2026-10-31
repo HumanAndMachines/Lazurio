@@ -220,8 +220,9 @@ s `unless-stopped` a připnutým image; uzel je `Running`; ControlURL je
 zapsaný login server; jméno uzlu a operátor sedí; `ShieldsUp`,
 `RouteAll=false`, `CorpDNS=true`, žádný exit node, Tailscale SSH vypnuté;
 v namespace je `unreachable 100.64.0.0/10`; proxy jsou publikované jen na
-`127.0.0.1` a SOCKS5 odpovídá; `resolv.conf` kontejneru má jediný
-nameserver 100.100.100.100. Varováním hlásí chybějící IPv6 route,
+`127.0.0.1` a SOCKS5 odpovídá; `resolv.conf` kontejneru má za nameserver
+jen 100.100.100.100 (kde je IPv6, také jeho IPv6 obdobu
+`fd7a:115c:a1e0::53`). Varováním hlásí chybějící IPv6 route,
 nedostupný socket bez sudo a kontejner ze starší verze nástroje. Vlastní
 tailnet Prostředí jen čte: jeden profil a jeho ControlURL.
 

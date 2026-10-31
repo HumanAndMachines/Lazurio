@@ -31,6 +31,8 @@ export const PORT_RANGE = Object.freeze({ first: 10550, last: 10649 });
 export const CGNAT_IPV4 = "100.64.0.0/10";
 export const TAILSCALE_IPV6 = "fd7a:115c:a1e0::/48";
 export const QUAD_100 = "100.100.100.100";
+// Written next to QUAD_100 where the namespace has IPv6.
+export const QUAD_100_IPV6 = "fd7a:115c:a1e0::53";
 export const CONFIG_SCHEMA = "lazurio.tailnet.v1";
 export const ENTRYPOINT_IN_CONTAINER = "/usr/local/bin/lazurio-tailnet-entrypoint";
 export const LABEL = "ai.lazurio.tailnet";
@@ -460,7 +462,7 @@ export function evaluateTailnet(config, facts) {
   } else check("listeners_loopback_only", false, "could not list listeners (ss)", "advisory");
   check("socks5_answers", facts.socks5 === true, facts.socks5 === true ? `socks5h://127.0.0.1:${config.ports.socks5}` : "no SOCKS5 answer");
   const servers = nameservers(facts.resolvConf);
-  check("dns_quad100", servers.length === 1 && servers[0] === QUAD_100, servers.join(" ") || "unknown");
+  check("dns_quad100", servers.includes(QUAD_100) && servers.every((s) => s === QUAD_100 || s === QUAD_100_IPV6), servers.join(" ") || "unknown");
   check("socket_reachable", facts.socket === true, facts.socket === true ? resources(config.name).socket : "no connection without sudo", "advisory");
   return { name: config.name, ok: checks.every((c) => c.ok || c.level !== "required"), checks };
 }
