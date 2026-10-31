@@ -438,6 +438,67 @@ test("lazurio update materializes an absent guest with the user's own access and
   expect(byKey("HostOrg::knowledgebase")).toMatchObject({ state: "current" });
 });
 
+test("lazurio update fast-forwards a guest but never installs its dependencies or runs its scripts", async () => {
+  const { root, organizationRoot } = await createGuestFixture();
+  await materializeGuestCheckouts(organizationRoot);
+  // A guest Mission Control carries its home Organization's package root and lockfile.
+  const guestMissionControl = join(organizationRoot, "workspace", "HomeOrg_GEN3", "mission-control");
+  await writeJson(join(guestMissionControl, "package.json"), {
+    name: "homeorg-mission-control-root",
+    private: true,
+    scripts: { postinstall: "echo must-not-run" },
+  });
+  await writeFile(join(guestMissionControl, "bun.lock"), "{\n  \"lockfileVersion\": 1\n}\n");
+  const hostKnowledgebase = join(organizationRoot, "workspace", "knowledgebase");
+  await writeJson(join(hostKnowledgebase, "package.json"), { name: "hostorg-knowledgebase-root", private: true });
+  await writeFile(join(hostKnowledgebase, "bun.lock"), "{\n  \"lockfileVersion\": 1\n}\n");
+  const head = "c".repeat(40);
+  const refreshed = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    organizations: [{ slug: "HostOrg", path: ORGANIZATION_PATH }],
+    deps: {
+      runId: "guest-dependencies",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: (options) => buildGitInventory({ ...options, companiesRoot: root }),
+      updateRepo: async (repo) => {
+        const moved = repo.key === "HostOrg::HomeOrg/mission-control" || repo.key === "HostOrg::knowledgebase";
+        return {
+          repo_key: repo.key,
+          organization: repo.organization,
+          module: repo.module,
+          repo_kind: repo.repo_kind,
+          repo_path: repo.repo_path,
+          state: moved ? "updated" : "current",
+          reason: moved ? "checkout_updated" : "already_current",
+          message: "fixture",
+          head,
+          actions: moved ? ["fast_forward"] : [],
+        };
+      },
+      materializeRepo: async () => ({ ok: true, outcome: "materialized", head }),
+      discoverApps: async () => ({ apps: [], failures: [] }),
+      refreshPackageDependencies: async ({ cwd }) => {
+        refreshed.push(cwd);
+        return { ok: true, refresh_strategy: "ensure" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(report.results.find((result) => result.repo_key === "HostOrg::HomeOrg/mission-control")).toMatchObject({
+    state: "updated",
+  });
+  expect(refreshed.some((cwd) => cwd.includes(join("workspace", "HomeOrg_GEN3")))).toBe(false);
+  // The host's own Module with the same kind of package root is still prepared.
+  expect(refreshed.some((cwd) => cwd.endsWith(join("workspace", "knowledgebase")))).toBe(true);
+});
+
 test("the host's own KB and MC stay the entrypoints; guests are no worktree or plan authority", async () => {
   const { root, organizationRoot } = await createGuestFixture();
   await materializeGuestCheckouts(organizationRoot);
