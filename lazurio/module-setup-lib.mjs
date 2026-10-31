@@ -21,7 +21,10 @@ import {
   runtimeListenerEnvironmentNames,
   validateDeclaredRuntime,
 } from "./core/runtime-contract-lib.mjs";
-import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
+import {
+  organizationSlotHomeOrganization,
+  organizationSlotRepositoryId,
+} from "./core/organization-slot-scope-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
 import { evaluateModuleStandard, moduleStandardIssues } from "./module-standard-lib.mjs";
@@ -1255,6 +1258,15 @@ async function resolveModuleSetupContext(options) {
         && samePhysicalPath(targetCheckout.commonDirectory, canonicalCheckout.commonDirectory),
       );
       if (!exact && !linkedWorktree) continue;
+      const homeOrganization = organizationSlotHomeOrganization(slot);
+      if (homeOrganization !== null) {
+        throw new ModuleSetupActionRequired({
+          code: "guest_module_setup_refused",
+          message: `${slot.path} je hostující Modul Organizace ${homeOrganization}; Organizace ${organizationResource.organization.slug} ho jen hostuje ke čtení a nespouští, takže jeho konformanci tady setup neověřuje ani nemění`,
+          action: `Spusťte lazurio module setup nad checkoutem Modulu v domovské Organizaci ${homeOrganization}; změny jdou běžným pull requestem do jejího repozitáře.`,
+          context: fallbackContext(options),
+        });
+      }
       const policySource = `${organizationRoot}/Organization manifest`;
       const pool = normalizeOrganizationPortPool({ manifest: organizationResource, source: policySource });
       if (pool.issues.length > 0) {

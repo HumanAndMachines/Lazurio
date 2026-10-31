@@ -2,7 +2,7 @@ import { readFile } from "fs/promises";
 import { dirname, posix, win32 } from "path";
 import { fileURLToPath } from "url";
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
-import { isCanonicalOrganizationRepositorySlotPath, isNestedOrganizationRepositoryDbSlotPath, isOrganizationRepositoryDbSlot, organizationSlotRepositoryMountIssue, organizationSlotRepositoryAliasIssues, organizationSlotRepositoryRemote, organizationSlotRepositoryBranch } from "../core/organization-slot-scope-lib.mjs";
+import { isCanonicalOrganizationRepositorySlot, isOrganizationRepositoryDbSlot, organizationGuestSlotDeclarationIssues, organizationSlotHasRepositoryDbPath, organizationSlotHomeOrganization, organizationSlotRepositoryMountIssue, organizationSlotRepositoryAliasIssues, organizationSlotRepositoryRemote, organizationSlotRepositoryBranch } from "../core/organization-slot-scope-lib.mjs";
 import {
   githubRepositoryCoordinateIdentity,
   githubRepositoryUrlIdentity,
@@ -152,17 +152,17 @@ function collectSemanticFailures({
 
   collectDuplicates(
     companyModules
-      .map((module) => module.slug)
+      .map((module) => slotIdentityKey(module, module.slug))
       .filter((slug) => typeof slug === "string"),
     (slug) => failures.push(`company.gen3.json/modules: duplicitní slug ${slug}`),
   );
   collectDuplicates(
     manifestSlots
       .map((slot) => {
-        if (typeof slot.slug === "string") return slot.slug;
+        if (typeof slot.slug === "string") return slotIdentityKey(slot, slot.slug);
         const fallbackSlug = legacySlotSlugFromPath(slot.path);
         return fallbackSlug !== null && /^[a-z0-9][a-z0-9-]*$/.test(fallbackSlug)
-          ? fallbackSlug
+          ? slotIdentityKey(slot, fallbackSlug)
           : null;
       })
       .filter((slug) => typeof slug === "string"),
@@ -170,8 +170,11 @@ function collectSemanticFailures({
   );
 
   for (const item of [...companyModules, ...manifestSlots]) {
-    if (!isCanonicalOrganizationRepositorySlotPath(item.path)) failures.push(`Invalid module path: ${item.path}`);
-    if (isNestedOrganizationRepositoryDbSlotPath(item.path)) {
+    for (const issue of organizationGuestSlotDeclarationIssues(item, { githubOrg: company.github_org })) {
+      failures.push(`${item.path}: ${issue.code} ${issue.detail}`);
+    }
+    if (!isCanonicalOrganizationRepositorySlot(item)) failures.push(`Invalid module path: ${item.path}`);
+    if (organizationSlotHasRepositoryDbPath(item)) {
       const mountIssue = organizationSlotRepositoryMountIssue(item);
       if (mountIssue) failures.push(`${item.path}: ${mountIssue}`);
       for (const issue of organizationSlotRepositoryAliasIssues(item)) failures.push(`${item.path}: ${issue.detail ?? issue}`);
@@ -996,6 +999,15 @@ function collectDuplicates(values, onDuplicate) {
 
 function portablePathIdentity(value) {
   return typeof value === "string" ? value.toLowerCase() : null;
+}
+
+// Hostující slot (DEV-6694) má identitu <home_organization>/<slug>, takže se
+// se stejným slugem vlastního slotu hostitele nesráží.
+function slotIdentityKey(item, slug) {
+  if (typeof slug !== "string") return null;
+  if (item === null || typeof item !== "object" || !Object.hasOwn(item, "home_organization")) return slug;
+  const home = organizationSlotHomeOrganization(item) ?? String(item.home_organization);
+  return `${home.toLowerCase()}/${slug}`;
 }
 
 function legacySlotSlugFromPath(value) {

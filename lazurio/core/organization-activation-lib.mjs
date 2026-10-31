@@ -9,9 +9,9 @@ import {
 } from "./organization-forge-binding-lib.mjs";
 import {
   githubRepositoryCoordinate,
-  isNestedOrganizationRepositoryDbSlotPath,
   normalizeOrganizationSlotPath,
   organizationRootRepositoryAliasIssues,
+  organizationSlotHasRepositoryDbPath,
   organizationSlotPathScope,
 } from "./organization-slot-scope-lib.mjs";
 
@@ -893,7 +893,9 @@ function projectLegacyModules(slots) {
       delete projected.space;
       delete projected.default_access;
       delete projected.required_roles;
-      if (projected.slug === undefined && !isNestedOrganizationRepositoryDbSlotPath(slot.path)) {
+      // Repository-db child (vlastní i hostující) nikdy nedostane slug odvozený
+      // z basename `db`; jeho identita je explicitní slug.
+      if (projected.slug === undefined && !organizationSlotHasRepositoryDbPath(slot)) {
         projected.slug = slot.path.split("/").at(-1);
       }
       projected.repo = remote;
@@ -919,7 +921,7 @@ function normalizeRepositorySlots(slots) {
   return slots.map((slot) => {
     const normalized = clone(slot);
     const path = normalizeOrganizationSlotPath(slot?.path);
-    if (normalized.slug === undefined && path && !isNestedOrganizationRepositoryDbSlotPath(path)) {
+    if (normalized.slug === undefined && path && !organizationSlotHasRepositoryDbPath(slot, path)) {
       normalized.slug = path.split("/").at(-1);
     }
     return sortObject(normalized);

@@ -2,6 +2,7 @@ import {
   classifyOrganizationSlotAccess,
   githubRepositoryCoordinate,
   normalizeOrganizationSlotPath,
+  organizationSlotDeclaresHomeOrganization,
 } from "./organization-slot-scope-lib.mjs";
 
 // Role, pro které `lazurio organization install --role` provádí read-only
@@ -128,6 +129,10 @@ function roleRepositoryPlan({ organization, rootRepository, resource, role, slot
   for (const slot of inventory) {
     if (!isRoleRepositorySlot(slot, role) || isBelowNonOrdinarySlot(slot, inventory)) continue;
     if (!slotInInstallScope(slot, inventory)) continue;
+    // Hostující Modul (DEV-6694) patří domovské Organizaci a jeho přístup drží
+    // její granty; chybějící přístup je slot-local výsledek materializace,
+    // ne blocker role této Organizace.
+    if (organizationSlotDeclaresHomeOrganization(slot)) continue;
     const coordinate = githubRepositoryCoordinate(slot?.git?.url ?? slot?.repository ?? slot?.git_url);
     if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
       blockers.push(blocker(

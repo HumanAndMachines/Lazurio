@@ -636,7 +636,8 @@ export async function updateManagedRepo(repo, context = {}) {
 
   const source = await verifyRemoteSource(repo, run);
   if (!source.ok) {
-    const repairAction = source.reason === "origin_mismatch" && repo.repo_kind === "module"
+    // Hostující checkout hostitel nerelokuje; origin opraví deklarace.
+    const repairAction = source.reason === "origin_mismatch" && repo.repo_kind === "module" && repo.guest !== true
       ? buildModuleLocationRepairAction({
           organization: repo.organization,
           module: repo.module,

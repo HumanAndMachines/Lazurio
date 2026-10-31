@@ -158,13 +158,18 @@
       "properties": {
         "path": {
           "type": "string",
-          "description": "Kanonicky workspace/<repo-name> nebo productionspace/<repo-name>; basename zachovává explicitně deklarovaný case a nesmí se odvozovat z lowercase slugu. Nové HumanAndMachine mounty používají providerový repo basename přesně, historické aliasy zůstávají validní do explicitní migrace (decision 0125). design-system, infra a mission-control[/db] jsou Doctor-managed Organization root nested repo checkouty. mission-control je app/code fork a mission-control/db jeho oddělené data repo. modules/<repo-name> je deprecated migrace.",
-          "pattern": "^(?:(?:workspace|modules)/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?|productionspace/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?|design-system|infra|mission-control(?:/db)?)$"
+          "description": "Kanonicky workspace/<repo-name> nebo productionspace/<repo-name>; basename zachovává explicitně deklarovaný case a nesmí se odvozovat z lowercase slugu. Nové HumanAndMachine mounty používají providerový repo basename přesně, historické aliasy zůstávají validní do explicitní migrace (decision 0125). design-system, infra a mission-control[/db] jsou Doctor-managed Organization root nested repo checkouty. mission-control je app/code fork a mission-control/db jeho oddělené data repo. modules/<repo-name> je deprecated migrace. Hostující Modul jiné Lazurio Organizace leží ve workspace/<home_organization>_GEN3/<repo-name> (případně s podřízeným repository-db /db) a deklaruje home_organization (DEV-6694, decision 0221).",
+          "pattern": "^(?:(?:workspace|modules)/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?|workspace/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})_GEN3/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?|productionspace/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?|design-system|infra|mission-control(?:/db)?)$"
         },
         "slug": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$",
           "description": "Stabilní lowercase identifikátor slotu; není odvozený z názvu repozitáře ani basename fyzické cesty. Vynechat jej smí jen legacy slot, jehož basename už je stejný platný lowercase slug; case-preserving nebo jinak odlišný basename vyžaduje explicitní slug (decision 0125)."
+        },
+        "home_organization": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$",
+          "description": "Hostující Modul (DEV-6694, decision 0221): přesný GitHub organization login domovské Lazurio Organizace, které repozitář patří. Slot pak leží přesně ve workspace/<home_organization>_GEN3/<repo-name> nebo workspace/<home_organization>_GEN3/<repo-name>/db, remote vlastní home_organization a login se liší od hostitelské Organizace. Hostitel Modul klonuje a aktualizuje přístupem uživatele, ale nespouští ho a nebere ho jako svou Knowledgebase ani Mission Control; identita slotu je <home_organization>/<slug>. Vlastní Moduly hostitele toto pole nedeklarují."
         },
         "repo": {
           "type": "string"
@@ -494,6 +499,41 @@
                 "const": "workspace"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "home_organization"
+            ]
+          },
+          "then": {
+            "required": [
+              "path",
+              "slug"
+            ],
+            "properties": {
+              "path": {
+                "pattern": "^workspace/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})_GEN3/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^workspace/[^/]+/(?:(?!db$)[^/]+|[^/]+/db)$"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "required": [
+              "home_organization"
+            ]
           }
         }
       ],

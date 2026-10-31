@@ -11,6 +11,7 @@ import {
   githubRepositoryCoordinate,
   isOrganizationRepositoryDbSlot,
   normalizeOrganizationSlotPath,
+  organizationSlotDeclaresHomeOrganization,
   organizationSlotRepositoryRemote,
   organizationSlotScope,
 } from "../lazurio/core/organization-slot-scope-lib.mjs";
@@ -26,6 +27,9 @@ function argumentValue(argv, name) {
 }
 
 function moduleExclusionReason(slot) {
+  // Hostující Modul (DEV-6694) je Modul domovské Organizace; jeho
+  // konformanci hlásí inventář té Organizace, ne hostitele.
+  if (organizationSlotDeclaresHomeOrganization(slot)) return "guest-module";
   const path = normalizeOrganizationSlotPath(slot?.path) ?? "";
   const scope = organizationSlotScope(slot, path);
   if (scope === "productionspace") return "productionspace";
@@ -168,6 +172,9 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
         classification: slot?.classification ?? null,
         materialization: slot?.materialization ?? null,
         declaration_source,
+        ...(organizationSlotDeclaresHomeOrganization(slot)
+          ? { home_organization: slot.home_organization ?? null, guest: true }
+          : {}),
       };
       if (reason) {
         excluded.push({ ...record, reason });
