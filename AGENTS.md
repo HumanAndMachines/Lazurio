@@ -248,10 +248,14 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   z modelu forku, a pracuješ podle `manual/forks.md`.
 - **Delegace:** self-report subagenta není důkaz; QA gate drží ten, kdo
   delegoval.
-- **Vlákna se mezi sebou nekoordinují** (dodatek 0218 z 2026-10-31). Zprávy
-  jiným vláknům neposíláš; každé vlákno má vlastní worktree, PR, ověření
-  a assignee. Co potřebuje pořadí nebo návaznost, zapíšeš na GitHub
-  (závislost, štítek, komentář s @zmínkou) a frontu drží Pablo.
+- **Vlákna se mezi sebou nekoordinují** (dodatky 0218 z 2026-10-31). Zprávy
+  jiným vláknům neposíláš, pokud si to tvůj uživatel výslovně nepřeje; každé
+  vlákno má vlastní worktree, PR, ověření a assignee. Co potřebuje pořadí
+  nebo návaznost, zapíšeš na GitHub (závislost, štítek, komentář
+  s @zmínkou). Frontu drží v repozitářích vývoje Lazuria Pablo, v ostatních
+  repozitářích Organizace její Henry. Každý tvůj text na GitHubu končí
+  podpisem `Agent: environment <UUID> · T3 thread <UUID>` (bot: UUID bota),
+  bez jména Prostředí.
 
 ## Pull request a Publikace
 
