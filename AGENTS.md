@@ -133,16 +133,15 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jednoho uživatele napříč Organizacemi a Conglomerate Host pro Mašinu
   s Headscale a Vaultwardenem (0144).
 - Místo, kde uživatel pracuje, je česky **Prostředí** (velké P, střední rod:
-  toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhů je
-  pět: **Osobní**, **Pracovní**, **Týmové Prostředí**, **Prostředí
+  toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou
+  čtyři: **Osobní**, **Pracovní**, **Týmové Prostředí** a **Prostředí
   služeb** (Služby serveru jen pro Ownery a Adminy; dodatek 0209
-  z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní)
-  a **Prostředí zaměstnance** (pracovní název; Prostředí agenta persony,
-  technicky Osobní Prostředí s jiným presetem; dodatek 0220 z 2026-10-31,
-  zatím nenasazený); o konkrétním Prostředí piš s druhem. Prostředí
-  s automatizacemi je obyčejné Pracovní Prostředí; potřebuje-li jméno,
-  jmenuje se **Henry** (`henry-01`), jen
-  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Vlastní
+  z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní);
+  o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
+  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
+  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Obdobně
+  Prostředí zaměstnance persony (pracovní název, 0220) je obyčejné Osobní
+  Prostředí s automatizovaným operátorem, ne další druh. Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
   kde je třeba ho odlišit, „Prostředí na serveru“ a anglicky Remote
   Environment, nikdy „Vzdálené Prostředí“. Slovy Mašina, VM ani server
