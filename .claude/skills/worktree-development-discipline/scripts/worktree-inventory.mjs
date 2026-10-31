@@ -8,6 +8,7 @@ import {
   hasRepositoryDbAuthorityMarker,
   readMissionControlRepositoryDbAuthority,
 } from "../../../../scripts/repository-db-authority-contract.mjs";
+import { isPlanEnvironmentId } from "../../../../scripts/worktree-create-contract.mjs";
 import { readOrganizationRoot } from "../../../../lazurio/core/organization-root-reader-lib.mjs";
 
 const GIT_TIMEOUT_MS = 10_000;
@@ -426,16 +427,18 @@ async function validateSidecar(
     };
   }
   const planBasename = basename(planPath).replace(/\.ya?ml$/i, "");
-  if (planBasename !== basename(record.path)) {
-    return {
-      valid: false,
-      error: "worktree basename does not match canonical plan basename",
-      planPath,
-    };
-  }
   const codeMatch = planBasename.match(/^([A-Z]{2,6}-[0-9]{4})(?:-|$)/);
   if (!codeMatch || codeMatch[1] !== data.mission_control_plan_code) {
     return { valid: false, error: "plan code does not match plan basename", planPath };
+  }
+  // One environment per pull request: a plan may own its canonical
+  // <plan-basename> environment and any number of <plan-code>-<name> ones.
+  if (!isPlanEnvironmentId(basename(record.path), { planBasename, planCode: codeMatch[1] })) {
+    return {
+      valid: false,
+      error: "worktree basename is neither the canonical plan basename nor <plan-code>-<kebab-case-name>",
+      planPath,
+    };
   }
   if (!record.branch.includes(data.mission_control_plan_code)) {
     return { valid: false, error: "branch does not contain Mission Control plan code", planPath };

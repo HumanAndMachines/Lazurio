@@ -38,7 +38,12 @@ autoritu.
 3. Použij existující Mission Control plán jeho vlastníka a worktree založ
    kanonickou lane `bun run worktrees:create -- --plan <KOD-XXXX>` — odvodí
    basename z kanonického plan souboru, založí branch z čerstvého
-   `origin/main` a vygeneruje schema-validní sidecar. Create lane vyhledá exact
+   `origin/main` a vygeneruje schema-validní sidecar. Jeden worktree patří
+   jednomu pull requestu, ne celému plánu: každý další pull request téhož
+   plánu založ s `--name <kebab-case>` (vznikne `<KOD-XXXX>-<name>` s branchí
+   `agent/<KOD-XXXX>-<name>` a vlastním sidecarem téhož plánu), takže
+   souběžná vlákna na sebe nečekají a práci nikdo nepřikládá do cizího PR.
+   Sourozenecký worktree mimo create lane nezakládej. Create lane vyhledá exact
    kód plánu v připojených
    `organizations/*/mission-control/db`; přijme právě jednu shodu a při nule
    nebo více shodách failne. Připojenou Organization lze výslovně zvolit
@@ -54,11 +59,12 @@ autoritu.
    origin a runtime Organization manifest tvoří jednu identitu. Personalspace,
    Productionspace, repository-db, moduly, traversal a libovolná externí cesta
    jsou v této úzké lane odmítnuté. Worktree cesta je výhradně
-   `<owner-repo>/.worktrees/root/<canonical-plan-basename>/`;
-   basename je název kanonického plan souboru bez `.yaml`. Branch obsahuje
-   kód plánu. Vlastník edit checkoutu a vlastník Mission Control plánu smějí
-   být dvě různé Organizace; sidecar drží obě identity a plán se nekopíruje.
-4. Sidecar `<canonical-plan-basename>.worktree.json` (schema
+   `<owner-repo>/.worktrees/root/<environment-id>/`; Environment ID je název
+   kanonického plan souboru bez `.yaml`, nebo `<KOD-XXXX>-<name>` z `--name`.
+   Branch obsahuje kód plánu. Vlastník edit checkoutu a vlastník Mission
+   Control plánu smějí být dvě různé Organizace; sidecar drží obě identity
+   a plán se nekopíruje.
+4. Sidecar `<environment-id>.worktree.json` (schema
    `companiesascode.worktree.v1`) generuje create lane — zkontroluj ho,
    nevytvářej podruhé a nepřepisuj odvozená identity/path pole; doplň jen
    to, co skript nemohl bezpečně odvodit: `last_touched`, PR URL, purpose
@@ -188,8 +194,12 @@ autoritu.
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává
    otevřený a nic se neděje.
 13. Worktree odstraň jen když je clean včetně untracked souborů, nemá
-   local-only commit, exact HEAD je na remote, PR je merged nebo explicitně
-   abandoned se snapshotem, runtime ho nepoužívá a neexistuje aktivní writer.
+   local-only commit, exact HEAD je na remote (živá branch,
+   `refs/pull/<číslo>/head` nebo předek čerstvého `origin/main`), jeho PR je
+   merged nebo explicitně abandoned se snapshotem, runtime ho nepoužívá
+   a neexistuje aktivní writer. Rozhoduje PR worktree, ne stav Mission
+   Control plánu: worktree mergnutého PR ukliď hned, i když plán dál běží
+   v jiných worktrees.
    Pak použij owner repo `git worktree remove <path>` a `git worktree prune`;
    sidecar smaž až potom. Než smažeš remote branch mergnutého PR, přesuň
    pull requesty, které na ní stojí, na `main`
@@ -202,6 +212,8 @@ autoritu.
 
 ```bash
 bun run worktrees:create -- --plan <KOD-XXXX> --dry-run
+# každý další pull request téhož plánu má vlastní worktree:
+bun run worktrees:create -- --plan <KOD-XXXX> --name <kebab-case> --dry-run
 bun run worktrees:create -- --plan <KOD-XXXX> --repository organizations/<Org-mount> --dry-run
 # pouze pro výslovný výběr připojené Organization; běžně se objeví automaticky:
 MISSION_CONTROL_AUTHORITY_ROOT=<organization-root-or-db> bun run worktrees:create -- --plan <KOD-XXXX> --dry-run

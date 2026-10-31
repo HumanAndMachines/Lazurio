@@ -60,6 +60,45 @@ test("owner-repository linked worktrees retain module identity and resolve local
   expect(wrongOwner.worktrees.some((item) => item.slug === slug)).toBe(false);
 });
 
+test("one plan may own several pull-request worktrees of a module and each stays its own environment", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const orgRoot = join(root, "organizations/BetaCo_GEN3");
+  const repo = join(orgRoot, "workspace/deals");
+  await initGitRepo(repo);
+  expect((await runGit(["remote", "add", "origin", "git@github.com:BetaCo/deals.git"], { cwd: repo })).ok).toBe(true);
+  const plan = "data/mission-control/plans/2026/10/DEV-9003-deals-export.yaml";
+  await mkdir(join(orgRoot, "mission-control/db/data/mission-control/plans/2026/10"), { recursive: true });
+  await writeFile(join(orgRoot, "mission-control/db", plan), "dev_code: DEV-9003\ntitle: Deals export\nstatus: in_progress\n");
+  const environments = [
+    ["DEV-9003-deals-export", "agent/DEV-9003-deals-export"],
+    ["DEV-9003-csv-columns", "agent/DEV-9003-csv-columns"],
+  ];
+  for (const [slug, branch] of environments) {
+    const added = await runGit(["worktree", "add", "-b", branch, join(repo, ".worktrees/root", slug)], { cwd: repo });
+    expect(added.ok).toBe(true);
+    await writeJson(join(repo, ".worktrees/root", `${slug}.worktree.json`), {
+      schema_version: "companiesascode.worktree.v1", branch,
+      organization_path: ".", workspace: "root", module: "deals", module_path: ".",
+      mission_control_plan_code: "DEV-9003", mission_control_plan_path: plan,
+    });
+  }
+
+  const index = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  const owned = index.worktrees
+    .filter((item) => item.plan_code === "DEV-9003")
+    .map((item) => [item.slug, item.branch, item.ownership_status, item.owner_plan?.code])
+    .sort(([left], [right]) => left.localeCompare(right));
+  expect(owned).toEqual([
+    ["DEV-9003-csv-columns", "agent/DEV-9003-csv-columns", "owned", "DEV-9003"],
+    ["DEV-9003-deals-export", "agent/DEV-9003-deals-export", "owned", "DEV-9003"],
+  ]);
+  const publicResponse = await buildWorktreesResponse({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect(publicResponse.worktrees.map((item) => item.slug).sort()).toEqual(
+    expect.arrayContaining(["DEV-9003-csv-columns", "DEV-9003-deals-export"]),
+  );
+});
+
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
