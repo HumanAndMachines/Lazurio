@@ -17,7 +17,7 @@ požádá sám. Kde code owner chybí, jmenuje ho `AGENTS.md` owning Organizace,
 jinak je to Pablo (`agentrozjedemeai`). Po pushi se žádost persony
 neopakuje: persona, která PR už reviewovala, vezme nový head sama; člověka
 je třeba požádat znovu. Komentář s @zmínkou upozorní, když se nic neděje.
-Postup drží skill `henry-review`. Autor nebo současný
+Autor nebo současný
 odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
 musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
 Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees

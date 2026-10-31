@@ -281,7 +281,7 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jinak jako běžný pull request s rozpracovaným stavem v popisu (0103).
   Hotovou a ověřenou práci sám přepneš na Ready for review; Ready není
   Publikace. Draft review ani předání nedostane a na verdikt nečekáš potichu
-  (`manual/pull-request-handoff.md`, skill `henry-review`).
+  (`manual/pull-request-handoff.md`).
 - **Popis PR** nese kontext k rozhodnutí: motivaci, cílový stav, co se mění
   i záměrně nemění, ověření, rizika a navazující kroky. Po změně scope nebo
   rebase odpovídá aktuálnímu headu.
