@@ -23,6 +23,17 @@
       "required": false
     },
     {
+      "slug": "henry-review",
+      "path": ".agents/skills/henry-review/SKILL.md",
+      "applies_to": [
+        "github-pull-requests",
+        "persona-review",
+        "mausbot-github-intake",
+        "pr-handoff"
+      ],
+      "required": false
+    },
+    {
       "slug": "lazurio-module-standard",
       "path": ".agents/skills/lazurio-module-standard/SKILL.md",
       "applies_to": [
