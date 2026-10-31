@@ -12,12 +12,11 @@ Henryové Organizací), spolupracují na pull requestu jen přes GitHub.
 Reviewer request žádá o kontrolu. Přiřazení PR jako **assignee** předává
 odpovědnost za dotažení včetně dovoleného merge. Obojí platí jen pro pull
 request v Ready: Draft je rozpracovaný a review ani předání nedostane.
-Reviewera určuje `.github/CODEOWNERS` repozitáře a GitHub ho při Ready
-požádá sám. Kde code owner chybí, jmenuje ho `AGENTS.md` owning Organizace,
-jinak je to Pablo (`agentrozjedemeai`). Po pushi se žádost persony
-neopakuje: persona, která PR už reviewovala, vezme nový head sama; člověka
-je třeba požádat znovu. Komentář s @zmínkou upozorní, když se nic neděje.
-Autor nebo současný
+Reviewera jmenuje `AGENTS.md` owning Organizace, jinak je to Pablo
+(`agentrozjedemeai`). Kde je persona code owner, požádá ji GitHub při Ready
+sám. Po pushi se žádost persony neopakuje: persona, která PR už
+reviewovala, vezme nový head sama; člověka je třeba požádat znovu. Postup
+drží skill `henry-review`. Autor nebo současný
 odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
 musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
 Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
