@@ -3696,7 +3696,7 @@ test("Bun PATH readiness accepts a separate exact-version installation and rejec
 });
 
 
-async function appReadinessFixture({ managed = false, contract = null } = {}) {
+async function appReadinessFixture({ managed = false, contract = null, status = "active" } = {}) {
   const root = await createCompaniesWorkspaceFixture();
   const organizationRoot = join(root, "organizations/OmegaCo_GEN3");
   const target = join(organizationRoot, "design-system");
@@ -3709,7 +3709,7 @@ async function appReadinessFixture({ managed = false, contract = null } = {}) {
   });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     organization_generation: "gen3", company: "OmegaCo", github_org: "OmegaCo", module_slots: [{
-      path: "design-system", slug: "design-system", space: "root", status: "active", default_access: "expected",
+      path: "design-system", slug: "design-system", space: "root", status, default_access: "expected",
       materialization: managed ? "doctor_managed_nested_repo" : undefined,
       git: { url: "git@github.com:OmegaCo/design-system.git", branch: "main" },
     }],
@@ -3785,4 +3785,16 @@ test("Doctor reports Organization manifest state and points legacy or drifted ro
     status: "ok",
     message: "Organization manifesty: 1 Organizace bez migračního kroku",
   });
+});
+
+test("inactive materialized module does not require an available App runtime", async () => {
+  const fixture = await appReadinessFixture({ status: "inactive", contract: {
+    schema_version: "lazurio.module.v1", id: "design-system", company: "OmegaCo", tcp_port_policy: { mode: "none" }, port_leases: [], apps: ["app/package.json"], default_app: "app/package.json",
+  } });
+  const response = await fixture.read();
+  expect(response.organizations[0].organization_modules[0]).toMatchObject({
+    status: "inactive",
+    readiness: { severity: "neutral", reason: "inactive" },
+  });
+  expect(response.organizations[0].space_readiness.blocking_slots).toEqual([]);
 });
