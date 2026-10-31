@@ -140,14 +140,14 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
   Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
   Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Obdobně
-  Prostředí zaměstnance persony (pracovní název, 0220) je obyčejné Osobní
-  Prostředí s automatizovaným operátorem, ne další druh. Vlastní
+  Prostředí AI Zaměstnance (0220) je obyčejné Osobní Prostředí
+  s automatizovaným operátorem, ne další druh. Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
   kde je třeba ho odlišit, „Prostředí na serveru“ a anglicky Remote
   Environment, nikdy „Vzdálené Prostředí“. Slovy Mašina, VM ani server
   Prostředí nepojmenovávej. Osobní zástupce je **Buddy** a obsah Osobního
-  Prostředí **Osobní Workspace** (0207); agent persony je pracovně
-  **zaměstnanec** (0220).
+  Prostředí **Osobní Workspace** (0207); agent persony je
+  **AI Zaměstnanec** (0220).
 - **Machine / Mašina** zůstává přesný technický pojem pro hranici, na které
   Prostředí běží: v identifikátorech, příkazech, schématech, custody,
   decision records a `ARCHITECTURE.md` ho nepřepisuj. Pravidla pro agenty
