@@ -255,6 +255,9 @@ export function containerSpec(config) {
     "--device", "/dev/net/tun:/dev/net/tun",
     "--publish", `127.0.0.1:${config.ports.socks5}:${CONTAINER_SOCKS5_PORT}/tcp`,
     "--publish", `127.0.0.1:${config.ports.http}:${CONTAINER_HTTP_PORT}/tcp`,
+    // Docker would copy the host's search domains, the Environment's own
+    // tailnet suffix among them, and complete short names with it.
+    "--dns-search", ".",
     "--mount", `type=bind,source=${r.stateDir},target=/var/lib/tailscale`,
     "--mount", `type=bind,source=${r.socketDir},target=/var/run/tailscale`,
     "--mount", "type=bind,source=/etc/passwd,target=/etc/passwd,readonly",
@@ -318,22 +321,23 @@ const shellQuote = (value) => `'${String(value).replaceAll("'", `'\\''`)}'`;
 
 // Run as root through sudo, inside the tailnet's network namespace and a
 // private mount namespace. It checks that the PID still belongs to the
-// container, binds the container's resolv.conf over /etc/resolv.conf and the
-// tailnet's socket directory over /run/tailscale (so a bare `tailscale` talks
-// to this tailnet, not to the Environment's own), and drops to the user.
+// container, binds the container's own resolv.conf (as the container sees it)
+// over /etc/resolv.conf and the tailnet's socket directory over
+// /run/tailscale (so a bare `tailscale` talks to this tailnet, not to the
+// Environment's own), and drops to the user.
 export const RUN_SCRIPT = [
   "set -eu",
-  'pid=$1 container_id=$2 resolv_conf=$3 socket_dir=$4 uid=$5 gid=$6 env_file=$7',
-  "shift 7",
+  'pid=$1 container_id=$2 socket_dir=$3 uid=$4 gid=$5 env_file=$6',
+  "shift 6",
   'grep -q -- "$container_id" "/proc/$pid/cgroup" || { echo "lazurio-tailnet: the container restarted; run the command again" >&2; exit 125; }',
-  'mount --bind -- "$resolv_conf" /etc/resolv.conf',
+  'mount --bind -- "/proc/$pid/root/etc/resolv.conf" /etc/resolv.conf',
   `if [ -d ${SYSTEM_SOCKET_DIR} ]; then mount --bind -- "$socket_dir" ${SYSTEM_SOCKET_DIR}; fi`,
   `exec setpriv --reuid="$uid" --regid="$gid" --init-groups -- /bin/sh -c '. "$0"' "$env_file" "$@"`,
 ].join("\n");
 
 // sudo, nsenter and unshare keep the working directory, stdin, stdout and
 // the exit code; the environment travels in envFile because sudo resets it.
-export function runArgv({ name, pid, containerId, resolvConf, uid, gid, envFile, command }) {
+export function runArgv({ name, pid, containerId, uid, gid, envFile, command }) {
   if (!Number.isInteger(pid) || pid <= 1) throw new TailnetError(`tailnet ${name} has no running process`);
   if (!Array.isArray(command) || command.length === 0) throw new TailnetError("run needs a command after --", USAGE);
   const r = resources(name);
@@ -342,7 +346,7 @@ export function runArgv({ name, pid, containerId, resolvConf, uid, gid, envFile,
     "nsenter", `--target=${pid}`, "--net", "--",
     "unshare", "--mount", "--propagation", "private", "--",
     "/bin/sh", "-c", RUN_SCRIPT, "lazurio-tailnet-run",
-    String(pid), containerId, resolvConf, r.socketDir, String(uid), String(gid), envFile,
+    String(pid), containerId, r.socketDir, String(uid), String(gid), envFile,
     ...command,
   ];
 }
@@ -398,7 +402,8 @@ export function evaluateTailnet(config, facts) {
   check("container", container?.running, container ? container.status : "missing");
   check("restart_policy", container?.restartPolicy === "unless-stopped", container?.restartPolicy ?? "unknown");
   check("image", container?.image === config.image, container?.image ?? "unknown");
-  check("spec", container?.spec === containerSpec(config).spec, container?.spec ? "differs from this version of the tool; run `up` again" : "unknown", "advisory");
+  const current = container?.spec === containerSpec(config).spec;
+  check("spec", current, current ? "matches this version of the tool" : "from another version of the tool; `up` recreates it", "advisory");
   const backend = status?.BackendState ?? "unknown";
   check("backend", backend === "Running", status?.AuthURL && backend !== "Running" ? `${backend}, sign in: ${status.AuthURL}` : backend);
   let controlUrl = null;

@@ -230,7 +230,6 @@ function inspectContainer(ctx, container) {
     labels: info.Config?.Labels ?? {},
     spec: info.Config?.Labels?.[SPEC_LABEL] ?? null,
     ports: (running ? info.NetworkSettings?.Ports : info.HostConfig?.PortBindings) ?? {},
-    resolvConf: info.ResolvConfPath ?? null,
   };
 }
 
@@ -526,12 +525,11 @@ async function run(ctx, args) {
   requireConfig(ctx, name);
   const container = inspectContainer(ctx, resources(name).container);
   if (!container?.running) throw new TailnetError(`tailnet ${name} is not running; \`bun run tailnet -- up ${name} …\` starts it`);
-  if (!container.resolvConf) throw new TailnetError(`Docker reports no resolv.conf for tailnet ${name}`);
   const temporary = ctx.tempDir();
   try {
     const envFile = join(temporary, "env.sh");
     writeFileSync(envFile, runEnvScript(ctx.env, name, ctx.umask), { mode: 0o600 });
-    const argv = runArgv({ name, pid: container.pid, containerId: container.id, resolvConf: container.resolvConf, uid: ctx.uid, gid: ctx.gid, envFile, command: args.slice(2) });
+    const argv = runArgv({ name, pid: container.pid, containerId: container.id, uid: ctx.uid, gid: ctx.gid, envFile, command: args.slice(2) });
     return await ctx.spawnInherit(argv);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
