@@ -209,7 +209,7 @@ function isSystem(target, system) {
 function workingDirectories(runs, cwd, home) {
   const dirs = new Set([cwd]);
   const add = (texts) => {
-    if (texts === null || texts.some((text) => !text.startsWith("/"))) dirs.add(null);
+    if (texts === null || texts.some((text) => typeof text !== "string" || !text.startsWith("/"))) dirs.add(null);
     else for (const text of texts) dirs.add(posix.normalize(text)).add(physicalPath(text));
   };
   for (const run of runs) {
@@ -233,7 +233,7 @@ function cdTarget(program, args, home) {
     if (options && word.text === "--") options = false;
     else if (!(options && /^-[LPe@qs]+$/u.test(word.text ?? ""))) operands.push(word);
   }
-  if (operands.length === 0) return program === "cd" ? [home] : null;
+  if (operands.length === 0) return program === "cd" && home !== null ? [home] : null;
   return operands.length === 1 ? pathTexts(operands[0].token.parts, home) : null;
 }
 
@@ -561,10 +561,12 @@ function coarse(command, system) {
 // runuser, doas, env, setpriv, nsenter, chroot, machinectl, ssh). Then
 // their value is not known before the command runs.
 function homeMayChange(command) {
+  // Every mention of HOME other than a plain read of it ($HOME, ${HOME…}) may
+  // change it: an assignment, export, declare, unset, read, printf -v or any
+  // quoting of the name. What stays after removing the reads decides.
+  const withoutReads = command.replace(/\$\{HOME\b[^}]*\}|\$HOME\b/gu, "");
   return (
-    /(?:^|[^\w$])HOME\+?=/u.test(command) ||
-    /(?:^|[\s;&|(`'"])(?:unset|read|declare|typeset|local|readonly|export)\b[^;&|\n]*\bHOME\b/u.test(command) ||
-    /(?:^|[\s;&|(`'"])printf\b[^;&|\n]*-v\s*HOME\b/u.test(command) ||
+    /\bHOME\b/u.test(withoutReads) ||
     /(?:^|[\s;&|(`'"])(?:\S*\/)?(?:sudo|su|runuser|doas|env|setpriv|nsenter|chroot|machinectl|ssh)(?=$|[\s;&|)`'"])/u.test(command)
   );
 }
