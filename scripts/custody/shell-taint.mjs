@@ -74,7 +74,9 @@ function skipBacktick(src, i) {
   throw new ShellParseError("unterminated backtick");
 }
 
-// Parses `$...` at src[i]; pushes a part and returns the next index.
+// Parses `$...` at src[i]; pushes a part and returns the next index. A
+// variable part is `plain` when it is `$NAME` or `${NAME}` without an
+// operator, so its value is the variable's own.
 function lexDollar(src, i, parts) {
   const next = src[i + 1];
   if (next === "(") {
@@ -88,8 +90,9 @@ function lexDollar(src, i, parts) {
       if (src[j] === "\\") j += 1;
       else if (src[j] === "{") depth += 1;
       else if (src[j] === "}" && --depth === 0) {
-        const m = /^[#!]?([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*#?$!-])(?:(:?[-=])(.*))?/su.exec(src.slice(i + 2, j));
-        parts.push({ k: "var", name: m ? m[1] : "", fallback: m && m[2] ? m[3] : null });
+        const inner = src.slice(i + 2, j);
+        const m = /^[#!]?([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*#?$!-])(?:(:?[-=])(.*))?/su.exec(inner);
+        parts.push({ k: "var", name: m ? m[1] : "", fallback: m && m[2] ? m[3] : null, plain: Boolean(m) && inner === m[1] });
         return j + 1;
       }
     }
@@ -97,7 +100,7 @@ function lexDollar(src, i, parts) {
   }
   const m = /^([A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])/u.exec(src.slice(i + 1, i + 200));
   if (m) {
-    parts.push({ k: "var", name: m[1], fallback: null });
+    parts.push({ k: "var", name: m[1], fallback: null, plain: true });
     return i + 1 + m[1].length;
   }
   parts.push({ k: "lit", v: "$", q: false });
