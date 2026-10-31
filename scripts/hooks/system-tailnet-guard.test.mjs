@@ -199,6 +199,10 @@ describe("follows a socket path the way the kernel does", () => {
     ["$HOME after printf -v", "printf -v HOME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
     ["$HOME after unset", "unset HOME; tailscale --socket=$HOME/tailscaled.sock down"],
     ["cd ~ after HOME=", "HOME=/run/tailscale; cd ~ && tailscale --socket=tailscaled.sock down"],
+    ["a bare cd after HOME=", "HOME=/run/tailscale; cd; tailscale --socket=tailscaled.sock down"],
+    ["$HOME after printf -v with a quoted name", "printf -v 'HOME' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after read with a double-quoted name", 'read "HOME" < home.txt; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after declare -g", "declare -g HOME=/run/tailscale; tailscale --socket=${HOME}/tailscaled.sock down"],
   ])("denies a target that cannot be known before the command runs: %s", (_name, command) => {
     expect(at("/home/station-user", command)).toEqual(expect.any(String));
   });
@@ -279,6 +283,18 @@ describe("hook protocol", () => {
 
   test("a relative socket is read from the hook's cwd", () => {
     const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "tailscale --socket=tailscaled.sock down" }, cwd: "/run/tailscale" };
+    expect(JSON.parse(run(JSON.stringify(input)).out).hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  test("a bare cd after HOME changes is denied by the hook itself, not dropped as an internal error", () => {
+    const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "HOME=/run/tailscale; cd; tailscale --socket=tailscaled.sock down" }, cwd: "/home/station-user" };
+    const { code, out } = run(JSON.stringify(input));
+    expect(code).toBe(0);
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  test("printf -v with a quoted HOME is denied by the hook", () => {
+    const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "printf -v 'HOME' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down" }, cwd: "/home/station-user" };
     expect(JSON.parse(run(JSON.stringify(input)).out).hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
