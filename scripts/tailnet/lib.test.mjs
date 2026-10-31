@@ -417,6 +417,12 @@ describe("doctor", () => {
     expect(verdict.ok).toBe(true);
   });
 
+  test("quad-100 over IPv6 next to IPv4 is healthy, as tailscaled writes it where IPv6 is on", () => {
+    const facts = healthy();
+    facts.resolvConf = "nameserver 100.100.100.100\nnameserver fd7a:115c:a1e0::53\nsearch example.lazurio.io\n";
+    expect(evaluateTailnet(config(), facts).checks.find((c) => c.id === "dns_quad100").ok).toBe(true);
+  });
+
   const failing = (mutate) => {
     const facts = healthy();
     mutate(facts);
@@ -439,6 +445,7 @@ describe("doctor", () => {
     ["a host listener beyond loopback", (f) => f.listeners.push({ address: "0.0.0.0", port: 10551 }), "listeners_loopback_only"],
     ["a silent SOCKS5 port", (f) => (f.socks5 = false), "socks5_answers"],
     ["Docker's DNS instead of quad-100", (f) => (f.resolvConf = "nameserver 127.0.0.11\n"), "dns_quad100"],
+    ["another resolver next to quad-100", (f) => (f.resolvConf = "nameserver 100.100.100.100\nnameserver 127.0.0.11\n"), "dns_quad100"],
     ["a stopped container", (f) => ((f.container.running = false), (f.container.status = "exited")), "container"],
     ["another restart policy", (f) => (f.container.restartPolicy = "no"), "restart_policy"],
   ])("%s fails a required check", (_name, mutate, id) => {
