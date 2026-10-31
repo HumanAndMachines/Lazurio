@@ -132,6 +132,13 @@ Organizace, a mezi tailnety nic neroutuje. Každý takový klient běží ve vla
 síťovém prostoru, všechny naráz, a vlákno tailnet volí u příkazu; globální
 profil na stanovišti není (dodatek 0217 z 2026-10-31).
 
+Na Linuxovém stanovišti je síťovým prostorem tailnetu kontejner s vlastním
+`tailscaled` v plném režimu, stavem, socketem, DNS a proxy jen na loopbacku.
+Zakládá, převezme, ověří a odstraní ho `bun run tailnet`; příkaz v tailnetu
+spustí `run`, SSH jde přes `ssh-proxy` a prohlížeč přes `proxy`. Systémový
+`tailscaled` Prostředí před příkazy agentů hlídá guard. Postup, záruky
+a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
+
 ## Identita a jména
 
 - Osobní klienti a osobní VM patří pod **osobního Headscale usera**
