@@ -1831,7 +1831,8 @@ function slotScopeContractIssues(manifest, config) {
       continue;
     }
     // Neplatnou deklaraci hostujícího slotu hlásí discovery jako slot issue
-    // s přesným kódem (slot_home_organization_invalid, slot_guest_path_invalid).
+    // s přesným kódem (slot_home_organization_invalid,
+    // slot_home_organization_is_host, slot_guest_path_invalid).
     if (organizationSlotDeclaresHomeOrganization(slot) && !isOrganizationGuestSlot(slot)) continue;
     if (!isCanonicalOrganizationRepositorySlot(slot)) {
       issues.push(
@@ -2145,7 +2146,7 @@ function classifyModuleSlotReadiness(
       // checkout chybí, hostitel běží dál a Doctor to jen oznamuje.
       return {
         severity: "neutral",
-        reason: "guest_not_materialized",
+        reason: "guest_module_absent",
         message: `Hostující Modul Organizace ${slot.home_organization} tu zatím není; lazurio update ho naklonuje vaším GitHub přístupem do této Organizace. Bez přístupu zůstává mimo a nic dalšího neblokuje.`,
       };
     }

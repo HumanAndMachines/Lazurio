@@ -617,6 +617,7 @@ function recordDeclaredModuleIssue({
     "slot_branch_conflict",
     "slot_branch_invalid",
     "slot_home_organization_invalid",
+    "slot_home_organization_is_host",
     "slot_guest_path_invalid",
   ]).has(issue.code)) {
     recordOrganizationSlotIssue(slotIssues, {

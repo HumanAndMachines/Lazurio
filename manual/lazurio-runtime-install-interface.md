@@ -226,10 +226,11 @@ nespouští, nevede nad ním worktrees ani location repair a nebere ho jako svou
 Knowledgebase ani Mission Control. Jeho identita je
 `<home_organization>/<slug>`, takže se se stejnojmenným vlastním slotem
 nesráží. Owner jiný než `home_organization` dostane `slot_remote_owner_mismatch`,
-`home_organization` shodná s hostitelem nebo neplatná dostane
-`slot_home_organization_invalid` a cesta mimo
-`workspace/<home_organization>_GEN3/` dostane `slot_guest_path_invalid`; vždy
-izoluje jen dotčený slot. Workspace slot s cizím ownerem bez
+neplatná `home_organization` `slot_home_organization_invalid`, shodná
+s hostitelem `slot_home_organization_is_host` a cesta mimo
+`workspace/<home_organization>_GEN3/` `slot_guest_path_invalid`; vždy izoluje
+jen dotčený slot. Chybějící checkout Doctor jen oznámí jako
+`guest_module_absent`. Workspace slot s cizím ownerem bez
 `home_organization` zůstává `slot_remote_owner_mismatch` jako dosud.
 
 Kanonické task worktrees mohou fyzicky ležet v `.worktrees/` svého owner repa,

@@ -180,7 +180,7 @@ describe("guest slot declaration", () => {
   test("home_organization equal to the host (case-insensitive) or malformed is invalid", () => {
     const self = guestSlots("HostOrg")[0];
     expect(organizationGuestSlotDeclarationIssues(self, { githubOrg: "hostorg" })).toEqual([
-      expect.objectContaining({ code: "slot_home_organization_invalid" }),
+      expect.objectContaining({ code: "slot_home_organization_is_host" }),
     ]);
     for (const value of ["", " HomeOrg", null, 42, "Home/Org"]) {
       const slot = { ...guestSlots()[0], home_organization: value };

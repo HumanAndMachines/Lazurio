@@ -337,6 +337,37 @@ test("planned slot blocks before write and CLI exposes stable JSON status and ex
   });
 });
 
+test("a guest Module of another Organization is refused and checked in its home Organization", async () => {
+  const fixture = await moduleFixture({ module: "knowledgebase" });
+  const manifestPath = join(fixture.organizationRoot, "modules.manifest.json");
+  const manifest = await readJson(manifestPath);
+  manifest.module_slots.push({
+    path: "workspace/HomeOrg_GEN3/knowledgebase",
+    slug: "knowledgebase",
+    home_organization: "HomeOrg",
+    git: { url: "git@github.com:HomeOrg/knowledgebase.git", branch: "main" },
+  });
+  await writeJson(manifestPath, manifest);
+  const moduleRoot = join(fixture.organizationRoot, "workspace", "HomeOrg_GEN3", "knowledgebase");
+  await mkdir(moduleRoot, { recursive: true });
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "knowledgebase",
+    company: "HomeOrg",
+  });
+
+  const report = await setupModule({ ...fixture, moduleRoot, noApp: true });
+  expect(report).toMatchObject({
+    status: "action_required",
+    reason: "guest_module_setup_refused",
+    changes: [],
+  });
+  expect(report.issues[0].message).toContain("hostující Modul Organizace HomeOrg");
+  expect(report.issues[0].action).toContain("domovské Organizaci HomeOrg");
+  expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
+  expect(await Bun.file(join(moduleRoot, "package.json")).exists()).toBe(false);
+});
+
 test("duplicate explicit adopted port fails closed without creating either file", async () => {
   const existing = await moduleFixture({ module: "owner" });
   await writeJson(join(existing.moduleRoot, "lazurio.module.json"), {

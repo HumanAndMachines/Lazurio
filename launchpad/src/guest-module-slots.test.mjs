@@ -223,7 +223,7 @@ test("a valid guest pair beside the host's own KB and MC is accepted, listed rea
     .toMatchObject({
       status: "missing_access",
       ui_exposure: "diagnostics-only",
-      readiness: { severity: "neutral", reason: "guest_not_materialized" },
+      readiness: { severity: "neutral", reason: "guest_module_absent" },
     });
   expect(organization.space_readiness.blocking_slots.some((slot) => String(slot.path).includes("HomeOrg_GEN3")))
     .toBe(false);
@@ -319,7 +319,7 @@ test("invalid guest declarations quarantine only the implicated slot", async () 
   });
   expect(issueByPath.get("workspace/HostOrg_GEN3/mission-control")).toMatchObject({
     scope: "module_slot",
-    code: "slot_home_organization_invalid",
+    code: "slot_home_organization_is_host",
   });
   expect(issueByPath.get("workspace/OtherOrg_GEN3/notes")).toMatchObject({
     scope: "module_slot",
@@ -351,7 +351,7 @@ test("invalid guest declarations quarantine only the implicated slot", async () 
   expect(organization.guest_modules.every((slot) => slot.status === "quarantined")).toBe(true);
   const blockers = new Map(organization.space_readiness.blocking_slots.map((slot) => [slot.path, slot.reason]));
   expect(blockers.get("workspace/HomeOrg_GEN3/knowledgebase")).toBe("slot_remote_owner_mismatch");
-  expect(blockers.get("workspace/HostOrg_GEN3/mission-control")).toBe("slot_home_organization_invalid");
+  expect(blockers.get("workspace/HostOrg_GEN3/mission-control")).toBe("slot_home_organization_is_host");
   expect(blockers.get("workspace/OtherOrg_GEN3/notes")).toBe("slot_guest_path_invalid");
   expect(blockers.get("workspace/handbook")).toBe("slot_remote_owner_mismatch");
 });

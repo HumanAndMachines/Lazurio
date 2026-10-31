@@ -130,7 +130,7 @@ export function organizationGuestSlotDeclarationIssues(slot, { githubOrg = null 
   const hostLogin = typeof githubOrg === "string" ? githubOrg.trim() : "";
   if (hostLogin !== "" && home.toLowerCase() === hostLogin.toLowerCase()) {
     return [{
-      code: "slot_home_organization_invalid",
+      code: "slot_home_organization_is_host",
       detail: `.home_organization "${home}" je hostitelská Organizace sama; vlastní Modul deklarujte bez home_organization jako workspace/<repozitář>`,
     }];
   }
