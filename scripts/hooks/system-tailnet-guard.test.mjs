@@ -338,6 +338,33 @@ describe("hook protocol", () => {
     expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
+  // The shell joins quoted fragments, decodes $'…' and completes globs and braces in a command
+  // name; no text shortcut may skip the parser for them.
+  test.each([
+    ["quotes inside the name", "ta''ilscale down"],
+    ["double quotes inside the name", '"tail"scale down'],
+    ["a backslash inside the name", "t\\ailscale down"],
+    ["a hex escape in $'…'", "$'\\x74ailscale' down"],
+    ["quotes inside systemctl's name", "system''ctl restart tailscaled"],
+    ["a brace expansion that completes the name", "{tailscale,down}"],
+    ["a glob that completes the name", "tailscal? down"],
+    ["quotes inside the name, in a command that cannot be parsed", "ta''ilscale up \"unterminated"],
+    ["$'…' escapes, in a command that cannot be parsed", "$'\\x74ailscale' up \"unterminated"],
+  ])("a name the shell puts together is denied by the hook: %s", (_name, command) => {
+    const { code, out } = run(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command }, cwd: "/home/station-user" }));
+    expect(code).toBe(0);
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  test.each([
+    ["a test command", "[ -f x ] && echo ok"],
+    ["a glob and a brace among the arguments", "ls *.txt {a,b}.md"],
+    ["an ordinary command", "git status"],
+    ["$'…' with only a newline escape, in a command that cannot be parsed", "IFS=$'\\n'; set -e; echo \"unterminated"],
+  ])("allows %s", (_name, command) => {
+    expect(bash(command)).toBeNull();
+  });
+
   test("an allowed call prints nothing", () => {
     const { code, out } = run(JSON.stringify({ tool_name: "Bash", tool_input: { command: "tailscale status" } }));
     expect(code).toBe(0);

@@ -220,9 +220,12 @@ proměnná ho nevypnou.
   `dns status`, `debug prefs`, `switch --list`, `serve status`,
   `funnel status`, `update --dry-run`, nápovědu), cokoli se `--socket`,
   který vede jinam než na systémový socket, a `bun run tailnet -- …`.
-  Nevidí příkaz složený až za běhu, skript spuštěný cestou, odkaz, který
-  vytvoří až sám příkaz, ani příkaz na jiném stroji (`ssh`) či v jiném
-  kontejneru (`docker exec`).
+  Čte každý příkaz parserem, i když v něm slovo `tailscale` doslova není,
+  protože shell skládá jméno i z částí v uvozovkách (`ta''ilscale`). Jméno
+  příkazu, které doplní glob nebo složené závorky, zamítne, protože to může
+  být `tailscale`. Nevidí příkaz, jehož jméno dodá až proměnná nebo
+  substituce, skript spuštěný cestou, odkaz, který vytvoří až sám příkaz, ani
+  příkaz na jiném stroji (`ssh`) či v jiném kontejneru (`docker exec`).
 - **Socket sleduje jako jádro.** Relativní cestu bere od každého adresáře,
   ve kterém příkaz může běžet: `cwd` z hooku, cíl každého `cd` a `pushd`
   kdekoli v příkazu (i v podshellu, smyčce nebo `sh -c`) a `--chdir`
