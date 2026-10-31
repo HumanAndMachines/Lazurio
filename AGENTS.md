@@ -259,7 +259,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   v Mission Controlu LazurioDevelopment), v ostatních repozitářích
   Organizace její Henry. Každý tvůj text na GitHubu končí
   podpisem `Agent: environment <UUID> · T3 thread <UUID>` (bot: UUID bota),
-  bez jména Prostředí.
+  bez jména Prostředí. Vlákna se ani neblokují (0223): nic v Prostředí
+  globálně nepřepínáš ani nepřihlašuješ a místo, kde bys musel na jiné vlákno
+  čekat, zapíšeš jako vadu Prostředí do issue.
 
 ## Pull request a Publikace
 
