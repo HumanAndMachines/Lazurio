@@ -170,6 +170,8 @@ describe("follows a socket path the way the kernel does", () => {
     ["~ at the start of the word", user, "tailscale --socket ~/system-link.sock down"],
     ["~ after --socket=, as zsh expands it", user, "tailscale --socket=~/system-link.sock down"],
     ["$HOME", user, "tailscale --socket=$HOME/system-link.sock down"],
+    ["a socket written with $'…' escapes", user, "tailscale --socket=$'/run/tailscale/tailscaled\\x2esock' down"],
+    ["tailscale in a trap action", user, "trap 'tailscale down' EXIT"],
     ["an empty --socket, which is the default", user, "tailscale --socket= up"],
   ])("denies %s", (_name, cwd, command) => {
     expect(at(cwd, command)).toEqual(expect.any(String));
@@ -203,6 +205,34 @@ describe("follows a socket path the way the kernel does", () => {
     ["$HOME after printf -v with a quoted name", "printf -v 'HOME' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
     ["$HOME after read with a double-quoted name", 'read "HOME" < home.txt; tailscale --socket=$HOME/tailscaled.sock down'],
     ["$HOME after declare -g", "declare -g HOME=/run/tailscale; tailscale --socket=${HOME}/tailscaled.sock down"],
+    // Names the shell puts together: quotes removed, escapes decoded, or known only when it runs.
+    ["$HOME after printf -v with quotes inside the name", "printf -v HO''ME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v with double quotes inside the name", 'printf -v HO"ME" %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after printf -v with a backslash in the name", "printf -v H\\OME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v with the name attached", "printf -vHO''ME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v with a hex escape in the name", "printf -v $'HO\\x4dE' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v with an octal escape in the name", "printf -v $'HO\\115E' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf -v with a computed name", 'printf -v "$name" %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after builtin printf -v", "builtin printf -v HO''ME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after export with quotes inside the name", "export HO''ME=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after read with quotes inside the name", "read -r HO''ME < home.txt; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after mapfile with quotes inside the name", "mapfile -t HO''ME < home.txt; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after declare with a brace in the name", "declare H{O,X}ME=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after printf with a glob that may expand to -v", "printf * ; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after a nameref", "declare -n ref; ref=HO''ME; ref=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after eval of a literal string", "eval 'printf -v HO\"\"ME %s /run/tailscale'; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after eval of a computed string", 'eval "$setup"; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after eval of code that cannot be parsed", "eval 'printf -v HO\"\"ME %s /run/tailscale; echo \"unterminated'; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after a loop over HOME", "for HOME in /run/tailscale; do tailscale --socket=$HOME/tailscaled.sock down; done"],
+    ["$HOME after a trap action", "trap 'printf -v HO\"\"ME %s /run/tailscale' DEBUG; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after a computed trap action", 'trap "$action" DEBUG; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after source", "source ./env.sh; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after .", ". ./env.sh; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after a command whose name is computed", '"$cmd" -v HO\'\'ME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down'],
+    ["$HOME after a function that sets it", "f() { printf -v HO''ME %s /run/tailscale; }; f; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME after ${HOME:=…}", ": ${HOME:=/run/tailscale}; tailscale --socket=$HOME/tailscaled.sock down"],
+    ["$HOME in code a quoted sudo starts", "s''udo -H bash -c 'tailscale --socket=$HOME/tailscaled.sock logout'"],
+    ["a socket with a byte above 0x7f in $'…'", "tailscale --socket=$'/run/tailscale/\\xe9' down"],
   ])("denies a target that cannot be known before the command runs: %s", (_name, command) => {
     expect(at("/home/station-user", command)).toEqual(expect.any(String));
   });
@@ -260,6 +290,9 @@ describe("follows a socket path the way the kernel does", () => {
     ["an absolute foreign path after an unknown cd", "/home/station-user", `cd "$DIR" && tailscale --socket=${foreign}/tailscaled.sock up`],
     ["a read on $HOME after HOME changes", "/home/station-user", "export HOME=/run/tailscale; tailscale --socket=$HOME/tailscaled.sock status"],
     ["an absolute foreign path when HOME changes", "/home/station-user", `HOME=/run/tailscale; tailscale --socket=${foreign}/tailscaled.sock up`],
+    ["$HOME after builtins that set other names", "/home/station-user", "export FOO=1; read -r line < x; tailscale --socket=$HOME/foreign.sock up"],
+    ["$HOME after printf without -v and a loop", "/home/station-user", "printf '%s\\n' ok; for f in a b; do echo $f; done; tailscale --socket=$HOME/foreign.sock up"],
+    ["a foreign socket written with $'…' escapes", "/home/station-user", `tailscale --socket=$'${foreign}/tailscaled\\x2esock' up`],
   ])("allows %s", (_name, cwd, command) => {
     expect(at(cwd, command)).toBeNull();
   });
@@ -296,6 +329,13 @@ describe("hook protocol", () => {
   test("printf -v with a quoted HOME is denied by the hook", () => {
     const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "printf -v 'HOME' %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down" }, cwd: "/home/station-user" };
     expect(JSON.parse(run(JSON.stringify(input)).out).hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  test("printf -v with quotes inside the name HOME is denied by the hook", () => {
+    const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "printf -v HO''ME %s /run/tailscale; tailscale --socket=$HOME/tailscaled.sock down" }, cwd: "/home/station-user" };
+    const { code, out } = run(JSON.stringify(input));
+    expect(code).toBe(0);
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
   test("an allowed call prints nothing", () => {

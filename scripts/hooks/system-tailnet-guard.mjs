@@ -30,8 +30,8 @@
 // loop or a component the guard may not read leave the target unknown.
 //
 // Commands are read with the parser of scripts/custody/shell-taint.mjs,
-// through sudo/env/timeout-like wrappers, `sh -c`, `su -c`, `eval`, command
-// substitutions and code fed to a shell on stdin. Not seen: commands put
+// through sudo/env/timeout-like wrappers, `sh -c`, `su -c`, `eval`, a `trap`
+// action, command substitutions and code fed to a shell on stdin. Not seen: commands put
 // together at run time, scripts run by path, links the command itself makes,
 // and commands that run elsewhere (ssh, docker exec), which do not reach this
 // Environment's tailscaled.
@@ -381,18 +381,20 @@ function wrapperOption(words, i, options, moves) {
 }
 
 // Index of the command a run of wrappers runs (`sudo -n env X=1 nice …`),
-// and the directories the wrappers move it to.
+// the directories the wrappers move it to, and the wrappers' names.
 function unwrap(words) {
   let i = 0;
   const moves = [];
+  const names = [];
   for (let guard = 0; guard < 16 && i < words.length; guard += 1) {
     const name = words[i].text === null ? null : basename(words[i].text);
     const options = name !== null && Object.hasOwn(WRAPPERS, name) ? WRAPPERS[name] : null;
     if (!options) break;
+    names.push(name);
     i += 1;
     while (i < words.length) {
       const v = words[i].text;
-      if (v === null) return { at: i, moves };
+      if (v === null) return { at: i, moves, names };
       if (v === "--") {
         i += 1;
         break;
@@ -403,7 +405,7 @@ function unwrap(words) {
     if (name === "sudo" || name === "env" || name === "doas") while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/u.test(words[i].text ?? "")) i += 1;
     if (name === "timeout") i += 1;
   }
-  return { at: i, moves };
+  return { at: i, moves, names };
 }
 
 // What a shell runs: { code } for -c, { stdin: true } when it reads its
@@ -425,7 +427,8 @@ function shellInput(args) {
 }
 
 // The code a program hands to a shell in this Environment: `sh -c`, a script
-// on stdin, `su -c`, `eval`, `watch`. null for none, or a script run by path.
+// on stdin, `su -c`, `eval`, a `trap` action, `watch`. null for none, for a
+// script run by path, or for code that is not literal.
 function nestedCode(program, args, stdinCode) {
   if (SHELLS.has(program)) {
     const input = shellInput(args);
@@ -439,6 +442,11 @@ function nestedCode(program, args, stdinCode) {
     }
     case "eval":
       return args.every((w) => w.text !== null) ? args.map((w) => w.text).join(" ") : null;
+    case "trap": {
+      // `trap [--] ACTION SIGNAL…`; `-p`, `-l` and `-` (a reset) run nothing.
+      const rest = args[0]?.text === "--" ? args.slice(1) : args;
+      return rest.length >= 2 && !rest[0].text?.startsWith("-") ? rest[0].text : null;
+    }
     case "watch": {
       let k = 0;
       while (k < args.length && args[k].text?.startsWith("-")) k += ["-n", "--interval"].includes(args[k].text) ? 2 : 1;
@@ -501,11 +509,12 @@ function* commandsIn(cmd, depth) {
 function* runsIn(src, depth) {
   if (depth > MAX_DEPTH) return;
   for (const command of simpleCommands(parseShell(src), depth)) {
-    const { at, moves } = unwrap(command.words);
+    const { at, moves, names } = unwrap(command.words);
     const word = command.words[at]?.text;
     const program = word ? basename(word.replace(/^=/u, "")) : null;
     const args = command.words.slice(at + 1);
-    yield { program, args, moves };
+    // `dynamic`: the command's name is known only when it runs (`$cmd …`).
+    yield { program, args, moves, wrappers: names, dynamic: at < command.words.length && word === null };
     const code = program ? nestedCode(program, args, command.stdinCode) : null;
     if (typeof code !== "string") continue;
     let nested;
@@ -513,7 +522,7 @@ function* runsIn(src, depth) {
       nested = [...runsIn(code, command.depth + 1)];
     } catch (error) {
       if (!(error instanceof ShellParseError)) throw error;
-      nested = [{ program: null, args: [], moves: [], unparsed: code }];
+      nested = [{ program: null, args: [], moves: [], wrappers: [], dynamic: false, unparsed: code }];
     }
     yield* nested;
   }
@@ -528,8 +537,9 @@ const lazy = (make) => {
   };
 };
 
-function reasonIn(src, { cwd, home, system }) {
+function reasonIn(src, { cwd, home: hookHome, system }) {
   const runs = [...runsIn(src, 0)];
+  const home = homeMayChange(src, runs) ? null : hookHome;
   const scene = { home, system, directories: lazy(() => workingDirectories(runs, cwd, home)) };
   for (const run of runs) {
     const reason = judge(run, scene);
@@ -554,20 +564,57 @@ function coarse(command, system) {
   return null;
 }
 
+// Builtins that set a variable an argument names, always or with an option.
+const SETS_NAMED = words("export declare typeset local readonly read mapfile readarray unset let getopts");
+const SETS_NAMED_WITH = { printf: "-v", wait: "-p" };
+// Programs that may run code with another HOME than this shell's.
+const OTHER_HOME = words("sudo su runuser doas env setpriv nsenter chroot machinectl ssh");
+// Builtins whose effect on variables the guard does not follow.
+const UNFOLLOWED = words("source . alias");
+
+// A word a glob or brace may expand to other words.
+const expands = (w) => w.token.parts.some((part) => part.k === "lit" && !part.q && /[*?[{]/u.test(part.v));
+
+// Whether a run may set a variable an argument names: always for SETS_NAMED,
+// and for printf and wait when an argument is their option or may become it.
+function setsNamed(run) {
+  if (SETS_NAMED.has(run.program)) return true;
+  const option = SETS_NAMED_WITH[run.program];
+  return option !== undefined && run.args.some((w) => w.text === null || w.text.startsWith(option) || expands(w));
+}
+
+// A name a builtin may set that the guard cannot rule out as HOME: one that
+// mentions HOME once the shell has removed its quotes (`HO''ME`, `-vHOME`),
+// one known only when the command runs, one a glob or brace may expand to,
+// and any nameref (`declare -n`), whose target a later assignment sets.
+function mayNameHome(run, w) {
+  if (w.text === null || w.text.includes("HOME") || expands(w)) return true;
+  return ["declare", "typeset", "local"].includes(run.program) && /^-[^-]*n/u.test(w.text);
+}
+
 // Whether $HOME and `~` may mean another directory than the hook's home when
-// the command runs: the command changes HOME (an assignment, also as a
-// prefix or through env, export, declare, unset, read or printf -v), or
-// hands code to a program that may start it with another HOME (sudo, su,
-// runuser, doas, env, setpriv, nsenter, chroot, machinectl, ssh). Then
-// their value is not known before the command runs.
-function homeMayChange(command) {
-  // Every mention of HOME other than a plain read of it ($HOME, ${HOME…}) may
-  // change it: an assignment, export, declare, unset, read, printf -v or any
-  // quoting of the name. What stays after removing the reads decides.
-  const withoutReads = command.replace(/\$\{HOME\b[^}]*\}|\$HOME\b/gu, "");
-  return (
-    /\bHOME\b/u.test(withoutReads) ||
-    /(?:^|[\s;&|(`'"])(?:\S*\/)?(?:sudo|su|runuser|doas|env|setpriv|nsenter|chroot|machinectl|ssh)(?=$|[\s;&|)`'"])/u.test(command)
+// the command runs, so that their value is not known before it runs.
+// - Any mention of HOME in the text other than a plain read ($HOME, ${HOME}):
+//   an assignment or loop variable, whose name the shell takes only as
+//   written, `${HOME:=…}`, arithmetic.
+// - On the parsed command, where quotes are removed and `$'…'` decoded as the
+//   shell does: a builtin that sets a variable whose name may be HOME
+//   (mayNameHome); code the guard does not follow (`eval` or a `trap` of a
+//   computed string, `source`, `.`, `alias`, nested code that cannot be
+//   parsed); a command whose name is computed; a program that may start code
+//   with another HOME (sudo, su, runuser, doas, env, setpriv, nsenter, chroot,
+//   machinectl, ssh).
+function homeMayChange(src, runs) {
+  if (/\bHOME\b/u.test(src.replace(/\$\{HOME\}|\$HOME\b/gu, ""))) return true;
+  return runs.some(
+    (run) =>
+      run.unparsed !== undefined ||
+      run.dynamic ||
+      run.wrappers.some((name) => OTHER_HOME.has(name)) ||
+      OTHER_HOME.has(run.program) ||
+      UNFOLLOWED.has(run.program) ||
+      ((run.program === "eval" || run.program === "trap") && run.args.some((w) => w.text === null)) ||
+      (setsNamed(run) && run.args.some((w) => mayNameHome(run, w))),
   );
 }
 
@@ -581,7 +628,7 @@ export function tailnetReason(input, { home = homedir(), systemSockets = SYSTEM_
   const cwd = typeof input?.cwd === "string" && posix.isAbsolute(input.cwd) ? input.cwd : null;
   const system = lazy(() => systemTargets(systemSockets));
   try {
-    return reasonIn(command, { cwd, home: homeMayChange(command) ? null : home, system });
+    return reasonIn(command, { cwd, home, system });
   } catch (error) {
     if (error instanceof ShellParseError) return coarse(command, system);
     throw error;

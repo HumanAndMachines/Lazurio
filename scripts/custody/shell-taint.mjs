@@ -141,6 +141,55 @@ function lexQuoted(src, i, parts, untilEnd = false) {
   return i;
 }
 
+// Bash's `$'…'` with its escapes decoded as bash decodes them; an unknown
+// escape keeps its backslash and a NUL ends the string. A byte above 0x7f
+// (`\\351`, `\\xe9`) or an invalid code point has no exact text here, so the
+// string is then an unknown part, like an expansion.
+const ANSI_C = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+function lexAnsiC(src, i, parts) {
+  let v = "";
+  let known = true;
+  let ended = false;
+  const byte = (n) => {
+    if (n === 0) ended = true;
+    else if (n > 0x7f) known = false;
+    else if (!ended) v += String.fromCharCode(n);
+  };
+  for (; i < src.length && src[i] !== "'"; i += 1) {
+    const c = src[i + 1];
+    let m;
+    if (src[i] !== "\\") {
+      if (!ended) v += src[i];
+    } else if (c === undefined) break;
+    else if (Object.hasOwn(ANSI_C, c)) {
+      if (!ended) v += ANSI_C[c];
+      i += 1;
+    } else if ((m = /^[0-7]{1,3}/u.exec(src.slice(i + 1, i + 4)))) {
+      byte(Number.parseInt(m[0], 8) & 0xff);
+      i += m[0].length;
+    } else if (c === "x" && (m = /^[0-9A-Fa-f]{1,2}/u.exec(src.slice(i + 2, i + 4)))) {
+      byte(Number.parseInt(m[0], 16));
+      i += 1 + m[0].length;
+    } else if ((c === "u" || c === "U") && (m = (c === "u" ? /^[0-9A-Fa-f]{1,4}/u : /^[0-9A-Fa-f]{1,8}/u).exec(src.slice(i + 2, i + 10)))) {
+      const point = Number.parseInt(m[0], 16);
+      if (point === 0) ended = true;
+      else if (point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) known = false;
+      else if (!ended) v += String.fromCodePoint(point);
+      i += 1 + m[0].length;
+    } else if (c === "c" && i + 2 < src.length && src[i + 2] !== "'") {
+      const x = src[i + 2];
+      byte(x === "?" ? 0x7f : x.toUpperCase().charCodeAt(0) & 0x1f);
+      i += x === "\\" && src[i + 3] === "\\" ? 3 : 2;
+    } else {
+      if (!ended) v += `\\${c}`;
+      i += 1;
+    }
+  }
+  if (i >= src.length) throw new ShellParseError("unterminated $'");
+  parts.push(known ? { k: "lit", v, q: true } : { k: "unknown" });
+  return i + 1;
+}
+
 function lexWord(src, start) {
   const parts = [];
   let lit = "";
@@ -167,12 +216,7 @@ function lexWord(src, start) {
       i = end + 1;
     } else if (c === "$" && src[i + 1] === "'") {
       flush();
-      let j = i + 2;
-      let v = "";
-      for (; j < src.length && src[j] !== "'"; j += 1) v += src[j] === "\\" ? (src[++j] ?? "") : src[j];
-      if (j >= src.length) throw new ShellParseError("unterminated $'");
-      parts.push({ k: "lit", v, q: true });
-      i = j + 1;
+      i = lexAnsiC(src, i + 2, parts);
     } else if (c === '"') {
       flush();
       i = lexQuoted(src, i + 1, parts);
