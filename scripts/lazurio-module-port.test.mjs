@@ -95,3 +95,70 @@ test("creator allocates once from the tracked Organization pool", async () => {
     module: "gamma",
   })).rejects.toThrow("nesmí alokovat lease do worktree");
 }, platformTestTimeout(5_000) + moduleRuntimeLockIdentityTimeoutMs()); // fixture budget plus one platform identity lookup
+
+test("a guest copy of a Module never enters the host's port inventory or allocation (DEV-6694)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-port-guest-"));
+  roots.push(root);
+  const homeOrganization = join(root, "organizations", "HomeOrg_GEN3");
+  const hostOrganization = join(root, "organizations", "HostOrg_GEN3");
+  const writeOrganization = async (organizationRoot, slug, pool, slots) => {
+    await mkdir(organizationRoot, { recursive: true });
+    await writeFile(join(organizationRoot, "modules.manifest.json"), JSON.stringify({
+      organization_generation: "gen3",
+      company: slug,
+      github_org: slug,
+      module_slots: slots,
+    }));
+    await writeFile(join(organizationRoot, "company.gen3.json"), JSON.stringify({
+      organization_generation: "gen3",
+      company: { slug, display_name: slug, github_org: slug },
+      module_port_pool: pool,
+      modules: [],
+    }));
+  };
+  const writeModule = async (moduleRoot, company, id, port) => {
+    await mkdir(moduleRoot, { recursive: true });
+    await writeFile(join(moduleRoot, "lazurio.module.json"), JSON.stringify({
+      schema_version: "lazurio.module.v1",
+      id,
+      company,
+      tcp_port_policy: { mode: "single" },
+      port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    }));
+  };
+  await writeOrganization(homeOrganization, "HomeOrg", { start: 25000, end: 25099 }, [
+    { path: "workspace/mission-control", slug: "mission-control", git: { url: "git@github.com:HomeOrg/mission-control.git", branch: "main" } },
+  ]);
+  await writeOrganization(hostOrganization, "HostOrg", { start: 26000, end: 26099 }, [
+    { path: "workspace/alpha", slug: "alpha", git: { url: "git@github.com:HostOrg/alpha.git", branch: "main" } },
+    { path: "workspace/beta", slug: "beta", git: { url: "git@github.com:HostOrg/beta.git", branch: "main" } },
+    {
+      path: "workspace/HomeOrg_GEN3/mission-control",
+      slug: "mission-control",
+      home_organization: "HomeOrg",
+      git: { url: "git@github.com:HomeOrg/mission-control.git", branch: "main" },
+    },
+  ]);
+  // The home Organization's own checkout and the host's guest copy carry the same manifest.
+  await writeModule(join(homeOrganization, "workspace", "mission-control"), "HomeOrg", "mission-control", 25001);
+  await writeModule(join(hostOrganization, "workspace", "HomeOrg_GEN3", "mission-control"), "HomeOrg", "mission-control", 25001);
+  await writeModule(join(hostOrganization, "workspace", "alpha"), "HostOrg", "alpha", 26001);
+  await mkdir(join(hostOrganization, "workspace", "beta"), { recursive: true });
+
+  const result = await allocateModulePort({
+    lazurioRoot: root,
+    moduleRoot: join(hostOrganization, "workspace", "beta"),
+    company: "HostOrg",
+    module: "beta",
+  });
+  expect(result.manifest.port_leases[0].port).toBe(26000);
+
+  // The guest copy is no allocation target of the host.
+  await rm(join(hostOrganization, "workspace", "HomeOrg_GEN3", "mission-control", "lazurio.module.json"));
+  await expect(allocateModulePort({
+    lazurioRoot: root,
+    moduleRoot: join(hostOrganization, "workspace", "HomeOrg_GEN3", "mission-control"),
+    company: "HostOrg",
+    module: "mission-control",
+  })).rejects.toThrow("není modul deklarovaný");
+}, platformTestTimeout(15_000));

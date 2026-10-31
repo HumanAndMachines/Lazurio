@@ -42,6 +42,130 @@ function canonicalRepositoryMountBasenamePattern() {
   return "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?";
 }
 
+// Hostující Modul (DEV-6694, decision 0221): repozitář jiné Lazurio
+// Organizace (domovské) namountovaný ve workspace/ hostitele pod složkou
+// pojmenovanou mountem domovské Organizace. `home_organization` je její
+// GitHub organization login; prostřední segment cesty je přesně
+// `<home_organization>_GEN3`.
+export const ORGANIZATION_GUEST_SLOT_FIELD = "home_organization";
+const organizationGuestHomeLoginPattern = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})";
+const organizationGuestMountSuffix = "_GEN3";
+
+export function organizationGuestSlotPathParts(path) {
+  if (
+    typeof path !== "string"
+    || path.includes("\\")
+    || path.includes("\0")
+  ) {
+    return null;
+  }
+  const normalizedPath = normalizeOrganizationSlotPath(path);
+  if (normalizedPath === null || path !== normalizedPath) return null;
+  const match = normalizedPath.match(new RegExp(
+    `^workspace/(${organizationGuestHomeLoginPattern})${organizationGuestMountSuffix}/(${canonicalRepositoryMountBasenamePattern()})(/db)?$`,
+  ));
+  if (!match) return null;
+  return {
+    home_organization: match[1],
+    container_path: `workspace/${match[1]}${organizationGuestMountSuffix}`,
+    mount: match[2],
+    repository_db: match[3] !== undefined,
+    parent_path: match[3] === undefined ? null : normalizedPath.slice(0, -"/db".length),
+  };
+}
+
+export function organizationSlotDeclaresHomeOrganization(slot) {
+  return slot !== null
+    && typeof slot === "object"
+    && Object.hasOwn(slot, ORGANIZATION_GUEST_SLOT_FIELD);
+}
+
+// Vrací přesný login domovské Organizace jen pro strukturálně platný
+// hostující slot: neprázdný přesný login a kanonická cesta, jejíž prostřední
+// segment je právě `<login>_GEN3`. Rozpor s hostitelem ani owner remote tady
+// nerozhoduje; ty hlásí organizationGuestSlotDeclarationIssues jako slot issue.
+export function organizationSlotHomeOrganization(slot) {
+  if (!organizationSlotDeclaresHomeOrganization(slot)) return null;
+  const home = exactNonEmptyString(slot.home_organization);
+  if (!home || !new RegExp(`^${organizationGuestHomeLoginPattern}$`).test(home)) return null;
+  const parts = organizationGuestSlotPathParts(slot.path);
+  return parts && parts.home_organization === home ? home : null;
+}
+
+export function isOrganizationGuestSlot(slot) {
+  return organizationSlotHomeOrganization(slot) !== null;
+}
+
+// Slot-aware podoba isCanonicalOrganizationRepositorySlotPath. Slot, který
+// deklaruje home_organization, je kanonický jen jako platný hostující slot;
+// hostitelská cesta s home_organization ani hostující cesta bez něj
+// kanonické nejsou (workspace/ zůstává pro vlastní Moduly plochý, 0041).
+export function isCanonicalOrganizationRepositorySlot(slot) {
+  if (organizationSlotDeclaresHomeOrganization(slot)) return isOrganizationGuestSlot(slot);
+  return isCanonicalOrganizationRepositorySlotPath(slot?.path);
+}
+
+export function organizationSlotHasRepositoryDbPath(slot, normalizedPath = null) {
+  const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  if (organizationSlotDeclaresHomeOrganization(slot)) {
+    return isOrganizationGuestSlot(slot)
+      && organizationGuestSlotPathParts(slot.path)?.repository_db === true;
+  }
+  return isNestedOrganizationRepositoryDbSlotPath(path);
+}
+
+// Neplatná deklarace hostujícího slotu je vždy slot-level issue: izoluje jen
+// dotčený slot a hostitelská Organizace běží dál. Prázdné pole znamená, že
+// slot hostující není, nebo je deklarovaný správně.
+export function organizationGuestSlotDeclarationIssues(slot, { githubOrg = null } = {}) {
+  if (!organizationSlotDeclaresHomeOrganization(slot)) return [];
+  const declared = slot.home_organization;
+  const home = exactNonEmptyString(declared);
+  if (!home || !new RegExp(`^${organizationGuestHomeLoginPattern}$`).test(home)) {
+    return [{
+      code: "slot_home_organization_invalid",
+      detail: `.home_organization ${JSON.stringify(declared ?? null)} musí být přesný neprázdný GitHub login domovské Organizace hostujícího Modulu`,
+    }];
+  }
+  const hostLogin = typeof githubOrg === "string" ? githubOrg.trim() : "";
+  if (hostLogin !== "" && home.toLowerCase() === hostLogin.toLowerCase()) {
+    return [{
+      code: "slot_home_organization_is_host",
+      detail: `.home_organization "${home}" je hostitelská Organizace sama; vlastní Modul deklarujte bez home_organization jako workspace/<repozitář>`,
+    }];
+  }
+  const parts = organizationGuestSlotPathParts(slot.path);
+  if (!parts || parts.home_organization !== home) {
+    return [{
+      code: "slot_guest_path_invalid",
+      detail: `.path ${JSON.stringify(slot.path ?? null)} neodpovídá hostujícímu Modulu Organizace "${home}"; hostující slot leží přesně ve workspace/${home}${organizationGuestMountSuffix}/<repozitář> nebo workspace/${home}${organizationGuestMountSuffix}/<repozitář>/db`,
+    }];
+  }
+  const foreignOwners = [...new Set(guestSlotRemoteAliasValues(slot)
+    .map((remote) => githubRepositoryCoordinate(remote)?.owner ?? null)
+    .filter((owner) => owner !== null && owner.toLowerCase() !== home.toLowerCase()))];
+  if (foreignOwners.length > 0) {
+    return [{
+      code: "slot_remote_owner_mismatch",
+      detail: `má GitHub remote vlastníka ${foreignOwners.map((owner) => `"${owner}"`).join(", ")}, ale hostující Modul deklaruje home_organization "${home}"; remote musí patřit domovské Organizaci`,
+    }];
+  }
+  return [];
+}
+
+function guestSlotRemoteAliasValues(slot) {
+  const repositoryDb = slot?.repository_db !== null && typeof slot?.repository_db === "object"
+    ? slot.repository_db
+    : null;
+  return validAliasEntries(presentAliasEntries([
+    ["git.url", slot?.git, "url"],
+    ["repo", slot, "repo"],
+    ["repository", slot, "repository"],
+    ["repository_db.url", repositoryDb, "url"],
+    ["repository_db.repo", repositoryDb, "repo"],
+  ])).map(([, value]) => value);
+}
+
 export function isNestedOrganizationRepositoryDbSlotPath(path) {
   if (
     typeof path !== "string"
@@ -62,7 +186,7 @@ export function isOrganizationRepositoryDbSlot(slot, normalizedPath = null) {
   const sourceOfTruth = typeof slot?.source_of_truth === "string"
     ? slot.source_of_truth.trim().toLowerCase()
     : "";
-  return isNestedOrganizationRepositoryDbSlotPath(path)
+  return organizationSlotHasRepositoryDbPath(slot, path)
     && organizationRepositoryDbSourceOfTruthPattern.test(sourceOfTruth);
 }
 
@@ -109,16 +233,30 @@ export function isCanonicalOrganizationRepositorySlotPath(path) {
   );
 }
 
+// Identita hostujícího slotu je `<home_organization>/<slug>` (rule 6 kontraktu
+// DEV-6694), takže se nikdy nesrazí s vlastními sloty hostitele
+// (`knowledgebase`, `mission-control`, …) ani se jimi nestane v inventáři,
+// issue store nebo update výsledcích. Porovnává se case-insensitive.
 export function organizationSlotRepositoryId(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
-  if (!path || !isCanonicalOrganizationRepositorySlotPath(path)) return null;
+  const home = organizationSlotHomeOrganization(slot);
+  if (organizationSlotDeclaresHomeOrganization(slot) && home === null) return null;
+  if (!path || (home === null && !isCanonicalOrganizationRepositorySlotPath(path))) return null;
   const declared = slot?.slug;
-  if (isNestedOrganizationRepositoryDbSlotPath(path) && declared === undefined) return null;
+  if (organizationSlotHasRepositoryDbPath(slot, path) && declared === undefined) return null;
   const candidate = declared === undefined ? posix.basename(path) : declared;
   if (typeof candidate !== "string" || candidate.trim() !== candidate) return null;
   // `root` už vlastní implicitní Organization root záznam v Git inventáři.
   if (candidate === "root") return null;
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate) ? candidate : null;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate)) return null;
+  return home === null ? candidate : `${home}/${candidate}`;
+}
+
+// Stabilní slug hostujícího i vlastního slotu bez namespace domovské
+// Organizace; pro výpisy vedle `home_organization`.
+export function organizationSlotRepositorySlug(slot, normalizedPath = null) {
+  const id = organizationSlotRepositoryId(slot, normalizedPath);
+  return id === null ? null : id.slice(id.lastIndexOf("/") + 1);
 }
 
 export function githubRepositoryCoordinate(remote) {
@@ -295,15 +433,13 @@ export function organizationSlotRepositoryAliasIssues(slot, normalizedPath = nul
 export function organizationSlotRepositoryMountIssue(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
   if (!path || isOrganizationRootSlotPath(path)) return null;
-  if (
-    isNestedOrganizationRepositoryDbSlotPath(path)
-    && !isOrganizationRepositoryDbSlot(slot, path)
-  ) {
+  const repositoryDbPath = organizationSlotHasRepositoryDbPath(slot, path);
+  if (repositoryDbPath && !isOrganizationRepositoryDbSlot(slot, path)) {
     return "nested workspace/<module>/db je povolené jen pro source_of_truth repository-db:<version>";
   }
   const remote = organizationSlotRepositoryRemote(slot, path);
   const coordinate = githubRepositoryCoordinate(remote);
-  if (isNestedOrganizationRepositoryDbSlotPath(path)) {
+  if (repositoryDbPath) {
     if (!coordinate) {
       return "repository-db slot musí deklarovat konkrétní platný GitHub remote v git.url/repo/repository";
     }
@@ -341,9 +477,10 @@ export function organizationRepositorySlotCollectionConflicts(
   for (const slot of Array.isArray(slots) ? slots : []) {
     if (!slot || typeof slot.path !== "string") continue;
     const path = normalizeOrganizationSlotPath(slot.path);
-    if (!path || !isCanonicalOrganizationRepositorySlotPath(slot.path)) continue;
+    if (!path || !isCanonicalOrganizationRepositorySlot(slot)) continue;
     const foldedPath = path.toLowerCase();
     const id = organizationSlotRepositoryId(slot, path);
+    const foldedId = id === null ? null : id.toLowerCase();
     const previousPath = paths.get(foldedPath);
     if (previousPath) {
       const equivalent = previousPath.path === path && previousPath.id === id;
@@ -366,8 +503,8 @@ export function organizationRepositorySlotCollectionConflicts(
       paths.set(foldedPath, { path, id, slot });
     }
 
-    if (id === null) continue;
-    const previousIdPath = ids.get(id);
+    if (foldedId === null) continue;
+    const previousIdPath = ids.get(foldedId);
     if (previousIdPath) {
       if (!(allowEquivalentDuplicates && previousIdPath.path === path)) {
         conflicts.push({
@@ -377,14 +514,18 @@ export function organizationRepositorySlotCollectionConflicts(
         });
       }
     } else {
-      ids.set(id, { path, slot });
+      ids.set(foldedId, { path, slot });
     }
   }
   for (const slot of Array.isArray(slots) ? slots : []) {
     const path = normalizeOrganizationSlotPath(slot?.path);
-    if (!isNestedOrganizationRepositoryDbSlotPath(path)) continue;
+    if (!organizationSlotHasRepositoryDbPath(slot, path)) continue;
     const parentPath = path.split("/").slice(0, -1).join("/");
     const declaredParent = paths.get(parentPath.toLowerCase());
+    // Parent hostujícího data mountu je na cestě workspace/<Home>_GEN3/<mount>
+    // kanonický jen jako hostující slot se stejným přesným home_organization
+    // (prostřední segment obou cest je týž), takže jiná domovská Organizace
+    // nebo parent bez home_organization se tu projeví jako chybějící parent.
     if (!declaredParent || declaredParent.path !== parentPath) {
       conflicts.push({
         code: "repository_db_parent_missing",

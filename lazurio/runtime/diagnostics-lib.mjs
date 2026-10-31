@@ -41,7 +41,9 @@ import {
   validateDoctorReport,
 } from "./doctor-surface-lib.mjs";
 import {
+  isCanonicalOrganizationRepositorySlot,
   isCanonicalOrganizationRepositorySlotPath,
+  isOrganizationGuestSlot,
   isOrganizationRootSlotDescendantPath,
   isOrganizationRootSlotPath,
   classifyOrganizationSlotAccess,
@@ -50,6 +52,8 @@ import {
   normalizeOrganizationSlotRequiredRoles,
   organizationRepositorySlotCollectionIssues,
   organizationSlotCatalogPresentation,
+  organizationSlotDeclaresHomeOrganization,
+  organizationSlotHomeOrganization,
   organizationSlotPathScope,
   organizationSlotProjectsToLocalMachine,
   organizationSlotRepositoryBranch,
@@ -1247,8 +1251,10 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
     const declarations = Array.isArray(organization.module_declarations)
       ? organization.module_declarations
       : [];
+    // Hostující Modul (DEV-6694) hostitel nespouští: jeho lazurio.module.json
+    // patří domovské Organizaci a nevzniká z něj App ani její readiness.
     const modules = declarations.filter(
-      (slot) => slot.ui_exposure === "module" && slot.space !== "productionspace",
+      (slot) => slot.ui_exposure === "module" && slot.space !== "productionspace" && slot.guest !== true,
     );
     const moduleRootPaths = declarations.map((slot) => posix.join(organization.path, slot.path));
     for (const slot of modules) {
@@ -1499,9 +1505,12 @@ async function readOrganizationSpaces(
   const declarationPaths = projectedModuleDeclarations.map((slot) => slot.path);
   const isNestedChildSlot = (slot) =>
     declarationPaths.some((path) => path !== slot.path && slot.path.startsWith(`${path}/`));
+  // Hostující Modul jiné Organizace (DEV-6694) hostitel nespouští: nemá
+  // dlaždici ani start, jen read-only záznam v guest_modules.
   const tileModules = projectedModuleDeclarations.filter(
-    (slot) => slot.ui_exposure === "module" && !isNestedChildSlot(slot),
+    (slot) => slot.ui_exposure === "module" && !isNestedChildSlot(slot) && slot.guest !== true,
   );
+  const guestModules = projectedModuleDeclarations.filter((slot) => slot.guest === true);
   // Fyzická repository boundary zůstává autoritou pro runtime a Git operace.
   // Sdílený Workspace modul se ale smí explicitně prezentovat jednou v sekci
   // Organizace, aby se stejná dlaždice neopakovala v každém Teamu.
@@ -1554,6 +1563,7 @@ async function readOrganizationSpaces(
     teams,
     workspaces,
     productionspace,
+    guest_modules: guestModules,
     team_access: unevaluatedTeamAccess(),
     module_declarations: moduleDeclarations,
     space_readiness: {
@@ -1641,9 +1651,14 @@ function ambiguousOrganizationRepositorySlots(manifestSlots, companyModules) {
   const normalizedEntries = (slots) => slots.flatMap((slot) => {
     if (!slot || typeof slot.path !== "string") return [];
     const path = normalizeOrganizationSlotPath(slot.path);
-    if (!path || !isCanonicalOrganizationRepositorySlotPath(path)) return [];
-    const id = isCanonicalOrganizationRepositorySlotPath(slot.path)
-      ? organizationSlotRepositoryId(slot, path)
+    if (!path) return [];
+    if (organizationSlotDeclaresHomeOrganization(slot)) {
+      if (!isOrganizationGuestSlot(slot)) return [];
+    } else if (!isCanonicalOrganizationRepositorySlotPath(path)) {
+      return [];
+    }
+    const id = isCanonicalOrganizationRepositorySlot(slot)
+      ? organizationSlotRepositoryId(slot, path)?.toLowerCase() ?? null
       : null;
     return [{ slot, path, id }];
   });
@@ -1815,7 +1830,11 @@ function slotScopeContractIssues(manifest, config) {
       );
       continue;
     }
-    if (!isCanonicalOrganizationRepositorySlotPath(slot.path)) {
+    // Neplatnou deklaraci hostujícího slotu hlásí discovery jako slot issue
+    // s přesným kódem (slot_home_organization_invalid,
+    // slot_home_organization_is_host, slot_guest_path_invalid).
+    if (organizationSlotDeclaresHomeOrganization(slot) && !isOrganizationGuestSlot(slot)) continue;
+    if (!isCanonicalOrganizationRepositorySlot(slot)) {
       issues.push(
         `${source}: slot path ${JSON.stringify(slot.path)} není kanonická podporovaná Organization-relative repo boundary`,
       );
@@ -2122,6 +2141,15 @@ function classifyModuleSlotReadiness(
         message: "Checkout podle lokálně deklarovaných rolí tohoto uživatele není očekávaný.",
       };
     }
+    if (classification !== "restricted" && slot.guest === true) {
+      // Přístup k hostujícímu Modulu drží granty domovské Organizace; když
+      // checkout chybí, hostitel běží dál a Doctor to jen oznamuje.
+      return {
+        severity: "neutral",
+        reason: "guest_module_absent",
+        message: `Hostující Modul Organizace ${slot.home_organization} tu zatím není; lazurio update ho naklonuje vaším GitHub přístupem do této Organizace. Bez přístupu zůstává mimo a nic dalšího neblokuje.`,
+      };
+    }
     if (classification === "restricted") {
       return {
         severity: "neutral",
@@ -2204,7 +2232,7 @@ function normalizeModuleSlot(slot) {
   if (!slot || typeof slot !== "object" || typeof slot.path !== "string" || slot.path.trim() === "") {
     return null;
   }
-  if (!isCanonicalOrganizationRepositorySlotPath(slot.path)) return null;
+  if (!isCanonicalOrganizationRepositorySlot(slot)) return null;
   const path = normalizeOrganizationSlotPath(slot.path);
   if (
     !path
@@ -2214,6 +2242,7 @@ function normalizeModuleSlot(slot) {
     return null;
   }
   const slug = organizationSlotRepositoryId(slot, path);
+  const homeOrganization = organizationSlotHomeOrganization(slot);
   if (slug === null) return null;
   const space = organizationSlotScope(slot, path);
   const teams = organizationSlotTeams(slot, path);
@@ -2228,7 +2257,7 @@ function normalizeModuleSlot(slot) {
     name: slot.name ?? humanizeSlug(
       space === "root"
         ? path.split("/").filter((segment) => !["workspace", "modules", "productionspace"].includes(segment)).join("-")
-        : slug,
+        : slug.slice(slug.indexOf("/") + 1),
     ),
     path,
     space,
@@ -2245,6 +2274,9 @@ function normalizeModuleSlot(slot) {
     repo,
     branch,
     ui_exposure: catalogPresentation.ui_exposure,
+    ...(homeOrganization === null
+      ? {}
+      : { home_organization: homeOrganization, guest: true }),
   };
 }
 
@@ -3430,7 +3462,11 @@ function workspaceDeclarationCheck(appsResponse) {
         ];
     for (const slot of slots) {
       if (slot.status && statusCounts[slot.status] !== undefined) statusCounts[slot.status] += 1;
-      if (slot.ui_exposure === "diagnostics-only") {
+      if (slot.guest === true) {
+        details.push(
+          `info: ${organization.path}/${slot.path}: hostující Modul Organizace ${slot.home_organization} (${slot.status ?? "unknown"})`,
+        );
+      } else if (slot.ui_exposure === "diagnostics-only") {
         details.push(
           `info: ${organization.path}/${slot.path}: diagnostics-only data repo (${slot.status ?? "unknown"})`,
         );

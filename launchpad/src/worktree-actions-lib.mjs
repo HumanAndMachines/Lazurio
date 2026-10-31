@@ -557,6 +557,12 @@ async function resolveRepo(companiesRoot, repoKey) {
       code: "productionspace_read_only",
     });
   }
+  if (repo.guest === true) {
+    throw new WorktreeActionError(`Hostující Modul Organizace ${repo.home_organization} je u hostitele jen ke čtení; měňte ho z checkoutu domovské Organizace nebo běžným pull requestem do jejího repozitáře.`, {
+      status: 403,
+      code: "guest_module_read_only",
+    });
+  }
   if (!existsSync(repo.absolute_path)) {
     throw new WorktreeActionError(`Repo cesta neexistuje: ${repo.repo_path}`, { status: 404, code: "repo_missing" });
   }

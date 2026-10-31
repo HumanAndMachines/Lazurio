@@ -893,6 +893,9 @@ function projectLegacyModules(slots) {
       delete projected.space;
       delete projected.default_access;
       delete projected.required_roles;
+      // Projekce čte jen cestu; hostující slot (DEV-6694) se kopíruje celý
+      // a jeho repository-db potomek deklaruje slug sám, takže bajty zůstávají
+      // stejné jako ve Folderu.
       if (projected.slug === undefined && !isNestedOrganizationRepositoryDbSlotPath(slot.path)) {
         projected.slug = slot.path.split("/").at(-1);
       }

@@ -661,6 +661,16 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 - Mission Control v3 běží ve všech Organizacích ze stejné vydané verze app
   kódu; Organizace liší jen `db/`.
 - Layout `modules/` je zrušený.
+- **Hostující Modul** (0221 s dodatkem z 2026-10-31): Organizace smí namountovat
+  Modul jiné (domovské) Organizace jako kontext ve
+  `workspace/<DomovskáOrganizace>_GEN3/<repozitář>`, data repository-db pod
+  ním v `…/db`. Slot nese `home_organization` a remote domovského repozitáře;
+  jeho identita je `<home_organization>/<slug>`, takže se nepotká s vlastními
+  sloty hostitele. `lazurio.module.json` patří domovské Organizaci a hostitel
+  Modul nespouští (žádný port, lease ani secrets). Konformanci ověřuje domovská
+  Organizace, `lazurio module setup` hostující cestu odmítne. Složka
+  `workspace/<DomovskáOrganizace>_GEN3/` trackuje v rootu hostitele jen svůj
+  `README.md` a `AGENTS.md`; je to jediná výjimka z ploché složky `workspace/`.
 
 ## 10. Co drží Launchpad (a co nedělá)
 

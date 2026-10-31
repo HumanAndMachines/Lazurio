@@ -636,7 +636,8 @@ export async function updateManagedRepo(repo, context = {}) {
 
   const source = await verifyRemoteSource(repo, run);
   if (!source.ok) {
-    const repairAction = source.reason === "origin_mismatch" && repo.repo_kind === "module"
+    // Hostující checkout hostitel nerelokuje; origin opraví deklarace.
+    const repairAction = source.reason === "origin_mismatch" && repo.repo_kind === "module" && repo.guest !== true
       ? buildModuleLocationRepairAction({
           organization: repo.organization,
           module: repo.module,
@@ -1401,14 +1402,21 @@ async function reconcileUpdatedDependencies({
   runId,
   deps,
 }) {
+  // Hostující Modul (DEV-6694) je jen kontext: update ho fast-forwarduje, ale
+  // hostitel v jeho checkoutu nikdy neinstaluje závislosti ani nespouští jeho
+  // lifecycle skripty, a jeho repozitář proto nevstupuje do dependency fáze.
+  const contextOnlyRepoKeys = new Set(
+    repos.filter((repo) => repo.guest === true).map((repo) => repo.key),
+  );
   const changedRepoKeys = new Set(
     results
       .filter((result) => result.state === "updated" && sourceCheckoutChanged(result.actions))
-      .map((result) => result.repo_key),
+      .map((result) => result.repo_key)
+      .filter((key) => !contextOnlyRepoKeys.has(key)),
   );
   if (changedRepoKeys.size === 0) return { outcomes: new Map(), blocked: null, changedApps: [] };
 
-  const canonicalRepos = await Promise.all(repos.map(async (repo) => ({
+  const canonicalRepos = await Promise.all(repos.filter((repo) => repo.guest !== true).map(async (repo) => ({
     repo,
     root: await canonicalPath(repo.absolute_path),
   })));

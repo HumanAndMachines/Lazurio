@@ -117,6 +117,37 @@ describe("organization config validation", () => {
     );
   });
 
+  test("accepts guest Modules of another Organization beside the host's own slug (DEV-6694)", async () => {
+    const documents = withGuestSlots(createValidDocuments());
+
+    const result = await validateOrganizationDocuments(documents);
+
+    expect(result.failures).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects a guest declaring the host as its home Organization", async () => {
+    const documents = withGuestSlots(createValidDocuments(), { home: "FixtureOrg" });
+
+    const result = await validateOrganizationDocuments(documents);
+
+    expect(result.valid).toBe(false);
+    expect(result.failures.some((failure) => failure.includes("slot_home_organization_is_host"))).toBe(true);
+  });
+
+  test("rejects two guests with the same home Organization and slug", async () => {
+    const documents = withGuestSlots(createValidDocuments());
+    const twin = structuredClone(documents.modulesManifest.module_slots.at(-3));
+    twin.path = "workspace/HomeOrg_GEN3/knowledgebase-mirror";
+    documents.modulesManifest.module_slots.push(twin);
+    documents.companyConfig.modules.push({ ...structuredClone(documents.companyConfig.modules.at(-3)), path: twin.path });
+
+    const result = await validateOrganizationDocuments(documents);
+
+    expect(result.valid).toBe(false);
+    expect(result.failures).toContain("modules.manifest.json/module_slots: duplicitní slug homeorg/knowledgebase");
+  });
+
   test("rejects duplicate stable module slugs even when mount paths differ", async () => {
     const documents = createValidDocuments();
     documents.companyConfig.modules[1].slug = "knowledgebase";
@@ -1499,6 +1530,36 @@ function useActiveMissionControlTaskSources(documents) {
       authority: "mirror",
     },
   ];
+}
+
+// Hostující pár (DEV-6694) syntetické domovské Organizace HomeOrg v obou
+// dokumentech, jak ho promítá legacy compatibility projection.
+function withGuestSlots(documents, { home = "HomeOrg" } = {}) {
+  const guest = [
+    { slug: "knowledgebase", path: `workspace/${home}_GEN3/knowledgebase`, category: "knowledge", source_of_truth: "git-native", branch: "main" },
+    { slug: "mission-control", path: `workspace/${home}_GEN3/mission-control`, category: "planning", source_of_truth: "git-native", branch: "main" },
+    { slug: "mission-control-data", path: `workspace/${home}_GEN3/mission-control/db`, category: "planning-data", source_of_truth: "repository-db:v3", branch: "v3", materialization: "repository_db_mount" },
+  ];
+  for (const { branch, ...entry } of guest) {
+    const url = `git@github.com:${home}/${entry.slug}.git`;
+    documents.modulesManifest.module_slots.push({
+      ...entry,
+      home_organization: home,
+      default_access: "expected",
+      required_roles: ["*"],
+      status: "active",
+      git: { url, branch },
+    });
+    documents.companyConfig.modules.push({
+      ...entry,
+      home_organization: home,
+      repo: url,
+      branch,
+      status: "active",
+      access: { default: "expected", roles: ["*"] },
+    });
+  }
+  return documents;
 }
 
 function createValidDocuments() {

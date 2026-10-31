@@ -214,6 +214,25 @@ musí nejprve reviewovaně ustanovit cílovou deklaraci a přístup. Automatick�
 cross-Organization přesun by vyžadoval nový explicitní neměnný migration token;
 současný mechanismus jej z názvu, remote redirectu ani lokálního markeru nehádá.
 
+Jedinou výjimkou z pravidla o foreign owneru je hostující Modul (DEV-6694,
+decision 0221). Slot s `home_organization` leží přesně ve
+`workspace/<home_organization>_GEN3/<repozitář>` (data mount pod ním jako
+`…/<repozitář>/db`) a jeho remote vlastní právě `home_organization`, která se
+liší od hostitelské Organizace. Takový slot `lazurio update` klonuje
+a fast-forwarduje přístupem uživatele jako běžný Workspace slot a jeho
+repository-db potomka materializuje `lazurio organization install`; chybějící
+přístup zůstane slot-local `materialization_source_unavailable`. Hostitel ho
+nespouští, nevede nad ním worktrees ani location repair a nebere ho jako svou
+Knowledgebase ani Mission Control. Jeho identita je
+`<home_organization>/<slug>`, takže se se stejnojmenným vlastním slotem
+nesráží. Owner jiný než `home_organization` dostane `slot_remote_owner_mismatch`,
+neplatná `home_organization` `slot_home_organization_invalid`, shodná
+s hostitelem `slot_home_organization_is_host` a cesta mimo
+`workspace/<home_organization>_GEN3/` `slot_guest_path_invalid`; vždy izoluje
+jen dotčený slot. Chybějící checkout Doctor jen oznámí jako
+`guest_module_absent`. Workspace slot s cizím ownerem bez
+`home_organization` zůstává `slot_remote_owner_mismatch` jako dosud.
+
 Kanonické task worktrees mohou fyzicky ležet v `.worktrees/` svého owner repa,
 ale nejsou jeho zdrojová změna. Když `lazurio update` prokáže, že jde o skutečně
 registrovaný Git worktree tohoto repa, automaticky doplní lokální

@@ -5,7 +5,10 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
-import { normalizeOrganizationSlotPath } from "../lazurio/core/organization-slot-scope-lib.mjs";
+import {
+  normalizeOrganizationSlotPath,
+  organizationSlotDeclaresHomeOrganization,
+} from "../lazurio/core/organization-slot-scope-lib.mjs";
 
 export const PUBLICATION_QUESTION = "Mám změny Publikovat";
 export const ROOT_HANDOFF_HEADING = "Povinný handoff";
@@ -93,6 +96,9 @@ export function collectAgentsInstanceTargets(resource) {
   const seenKeys = new Set(["root:AGENTS.md"]);
 
   for (const slot of resource?.repository_inventory ?? []) {
+    // Knowledgebase a Mission Control Organizace jsou jen její vlastní sloty;
+    // AGENTS.md hostujícího Modulu (DEV-6694) drží domovská Organizace.
+    if (organizationSlotDeclaresHomeOrganization(slot)) continue;
     const kind = classifyAgentsInstanceSlot(slot);
     const path = normalizeOrganizationSlotPath(slot?.path);
     if (!kind || !path) continue;

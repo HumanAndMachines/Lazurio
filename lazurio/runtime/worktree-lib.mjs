@@ -55,7 +55,9 @@ export async function buildWorktreeIndex({
     }));
     const scanned = await scanCanonicalOrganizationWorktrees({ companiesRoot, organization: org });
     scanned.push(...await scanOwnerRepositoryWorktrees({ companiesRoot, organization: org,
-      repos: inventory.repos.filter((repo) => repo.organization === org.slug && repo.repo_kind === "module" && (!module || repo.module === module)),
+      // Hostující Modul (DEV-6694) se mění z checkoutu domovské Organizace;
+      // hostitel nad ním worktrees nevede.
+      repos: inventory.repos.filter((repo) => repo.organization === org.slug && repo.repo_kind === "module" && repo.guest !== true && (!module || repo.module === module)),
     }));
     for (const worktree of scanned) {
       if (module && worktree.module !== module) continue;

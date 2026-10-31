@@ -673,11 +673,18 @@ function selectedOrganizationProjection({
       const repo = repositoryByPath.get(declaration.path) ?? null;
       const repository = repositoryName(declaration.repo);
       return {
-        slug: declaration.slug,
+        // Hostující Modul nese identitu <home_organization>/<slug>; context ho
+        // vypisuje se slugem a výslovným home_organization (DEV-6694).
+        slug: declaration.home_organization
+          ? declaration.slug.slice(declaration.slug.lastIndexOf("/") + 1)
+          : declaration.slug,
         name: declaration.name,
         path: `${selected.path}/${declaration.path}`,
         space: declaration.space,
         teams: [...(declaration.teams ?? [])].sort((left, right) => left.localeCompare(right)),
+        ...(declaration.home_organization
+          ? { home_organization: declaration.home_organization, guest: true }
+          : {}),
         ...(repository ? { repository } : {}),
         ...(declaration.branch ? { declared_branch: declaration.branch } : {}),
         materialization: moduleMaterialization({
@@ -697,7 +704,11 @@ function selectedOrganizationProjection({
       };
     })
     .sort((left, right) => left.path.localeCompare(right.path));
-  const moduleBySlug = new Map(modules.map((module) => [module.slug, module]));
+  // Knowledgebase a Mission Control Organizace jsou vždy její vlastní sloty;
+  // hostující Modul jiné Organizace (DEV-6694) entrypointem nikdy není.
+  const moduleBySlug = new Map(modules
+    .filter((module) => module.guest !== true)
+    .map((module) => [module.slug, module]));
   const rootRepo = inventory.repos.find((repo) => repo.repo_kind === "organization_root") ?? null;
   const organizationRepository = repositoryName(selected.repository);
   const manifestPaths = observedOrganizationManifestPaths({

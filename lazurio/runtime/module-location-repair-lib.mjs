@@ -7,6 +7,7 @@ import {
   githubRepositoryCoordinate,
   normalizeOrganizationSlotPath,
   organizationRepositorySlotCollectionConflicts,
+  organizationSlotDeclaresHomeOrganization,
   organizationSlotRepositoryAliasIssues,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryRemote,
@@ -186,7 +187,10 @@ export async function checkModuleLocationRepair({
   }
 
   const manifestSlots = Array.isArray(organizationResource.repository_inventory)
-    ? organizationResource.repository_inventory.filter((slot) => slot?.slug === moduleSlug)
+    // Relokace patří jen vlastním Modulům hostitele; hostující slot se stejným
+    // slugem (DEV-6694) má identitu <home_organization>/<slug>.
+    ? organizationResource.repository_inventory.filter((slot) =>
+      slot?.slug === moduleSlug && !organizationSlotDeclaresHomeOrganization(slot))
     : [];
   const companySlots = manifestSlots;
   const allManifestSlots = organizationResource.repository_inventory ?? [];

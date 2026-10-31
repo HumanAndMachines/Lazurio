@@ -35,6 +35,8 @@ import {
   githubRepositoryCoordinate,
   isOrganizationRepositoryDbSlot,
   normalizeOrganizationSlotPath,
+  organizationGuestSlotDeclarationIssues,
+  organizationSlotHomeOrganization,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryRemote,
   organizationSlotScope,
@@ -681,6 +683,17 @@ async function validateOrganizationRepositoryDbMount({
   const coordinate = githubRepositoryCoordinate(remote);
   const sourceOfTruth = typeof slot?.source_of_truth === "string" ? slot.source_of_truth.trim() : "";
   const organizationLogin = source?.organization?.login;
+  // Hostující data mount (DEV-6694) patří domovské Organizaci: jeho remote
+  // vlastní home_organization, ne hostitel. Neplatná deklarace se neklonuje.
+  const guestDeclarationIssues = organizationGuestSlotDeclarationIssues(slot, { githubOrg: organizationLogin });
+  if (guestDeclarationIssues.length > 0) {
+    return providerFailure(
+      "repository_db_manifest_invalid",
+      `Hostující repository-db mount má neplatnou deklaraci: ${guestDeclarationIssues.map((issue) => issue.detail).join("; ")}.`,
+    );
+  }
+  const homeOrganization = organizationSlotHomeOrganization(slot);
+  const expectedOwner = homeOrganization ?? organizationLogin;
   const isMissionControlRepositoryDb = path === "mission-control/db";
   const isCanonicalWorkspaceRepositoryDb = typeof path === "string"
     && path.startsWith("workspace/")
@@ -702,7 +715,7 @@ async function validateOrganizationRepositoryDbMount({
     || typeof remote !== "string"
     || typeof branch !== "string"
     || !coordinate
-    || coordinate.owner.toLowerCase() !== String(organizationLogin).toLowerCase()
+    || coordinate.owner.toLowerCase() !== String(expectedOwner).toLowerCase()
     || coordinate.repository !== slot.slug
   ) {
     return providerFailure(
@@ -723,6 +736,7 @@ async function validateOrganizationRepositoryDbMount({
     !parentSlot
     || parentSlot.path !== parentSlotPath
     || parentSlot.status !== "active"
+    || (organizationSlotHomeOrganization(parentSlot) ?? "").toLowerCase() !== (homeOrganization ?? "").toLowerCase()
     || (isMissionControlRepositoryDb
       ? parentSlot.materialization !== "doctor_managed_nested_repo"
         || organizationSlotScope(parentSlot, parentSlotPath) !== "root"

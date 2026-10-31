@@ -10,13 +10,17 @@ import {
 } from "./discovery-lib.mjs";
 import {
   githubRepositoryCoordinate,
+  isCanonicalOrganizationRepositorySlot,
   isCanonicalOrganizationRepositorySlotPath,
   isOrganizationRepositoryDbSlot,
   isOrganizationRootSlotDescendantPath,
   isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
   normalizeOrganizationSlotRequiredRoles,
+  organizationGuestSlotDeclarationIssues,
   organizationRepositorySlotCollectionConflicts,
+  organizationSlotDeclaresHomeOrganization,
+  organizationSlotHomeOrganization,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryId,
   organizationSlotRepositoryMountIssue,
@@ -244,6 +248,21 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
     }
     for (const rawSlot of manifestSlots) {
       if (ambiguousSlots.has(rawSlot)) continue;
+      // Neplatný hostující slot (DEV-6694) izoluje jen sebe; hostitel běží dál.
+      const guestDeclarationIssues = organizationGuestSlotDeclarationIssues(rawSlot, { githubOrg });
+      if (guestDeclarationIssues.length > 0) {
+        for (const issue of guestDeclarationIssues) {
+          recordInventoryIssue({
+            inventoryIssues,
+            warnings,
+            organization: normalized,
+            code: issue.code,
+            message: `${normalized.path}: slot ${String(rawSlot?.path ?? "<missing>")} vynechán z Git akcí — ${issue.detail}`,
+            slot: rawSlot,
+          });
+        }
+        continue;
+      }
       const containmentIssue = organizationRelativePathIssue({
         organizationRoot,
         path: rawSlot?.path,
@@ -541,6 +560,9 @@ function locationIssueFromClassification({
 
 function moduleCandidateIdentity(slot) {
   if (!slot || typeof slot.path !== "string") return null;
+  // Marker hostujícího checkoutu patří domovské Organizaci; hostitel ho
+  // nehledá mezi kandidáty vlastních Modulů ani nerelokuje.
+  if (organizationSlotDeclaresHomeOrganization(slot)) return null;
   const path = normalizeOrganizationSlotPath(slot.path);
   if (
     !path
@@ -582,7 +604,7 @@ function recordInventoryIssue({
 }) {
   warnings.push(message);
   const path = typeof slot?.path === "string" ? normalizeOrganizationSlotPath(slot.path) : null;
-  const module = path && isCanonicalOrganizationRepositorySlotPath(slot.path)
+  const module = path && isCanonicalOrganizationRepositorySlot(slot)
     ? organizationSlotRepositoryId(slot, path)
     : null;
   const defaultAction = slot && module
@@ -852,6 +874,11 @@ function slotRecord({ organization, slot, companiesRoot }) {
     default_access: slot.default_access ?? null,
     required_roles: slot.required_roles ?? [],
     teams: slot.teams ?? [],
+    // Hostující Modul (DEV-6694) se klonuje a aktualizuje jako běžný
+    // Workspace slot, ale nikdy není worktree ani runtime cílem hostitele.
+    ...(slot.home_organization
+      ? { home_organization: slot.home_organization, guest: true }
+      : {}),
   };
 }
 
@@ -879,7 +906,7 @@ function normalizeModuleSlot(slot, organization) {
   return {
     path,
     module,
-    name: slot.name ?? humanizeSlug(module),
+    name: slot.name ?? humanizeSlug(module.slice(module.indexOf("/") + 1)),
     space,
     workspace: organizationSlotWorkspace(slot, path),
     teams: organizationSlotTeams(slot, path),
@@ -890,6 +917,7 @@ function normalizeModuleSlot(slot, organization) {
     status: slot.status ?? null,
     repo,
     branch,
+    home_organization: organizationSlotHomeOrganization(slot),
   };
 }
 
@@ -904,7 +932,7 @@ function slotPathBoundaryInventoryIssue(slot) {
   if (isOrganizationRootSlotDescendantPath(normalizedPath)) {
     return "cesta je uvnitř rezervované Organization root boundary a není samostatný root slot";
   }
-  if (!isCanonicalOrganizationRepositorySlotPath(slot.path)) {
+  if (!isCanonicalOrganizationRepositorySlot(slot)) {
     return "cesta není kanonická podporovaná Organization-relative repo boundary";
   }
   if (organizationSlotRepositoryId(slot, normalizedPath) === null) {

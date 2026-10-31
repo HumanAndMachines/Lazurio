@@ -16,13 +16,18 @@ import {
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import {
   githubRepositoryCoordinate,
+  isCanonicalOrganizationRepositorySlot,
   isCanonicalOrganizationRepositorySlotPath,
-  isNestedOrganizationRepositoryDbSlotPath,
+  isOrganizationGuestSlot,
   isOrganizationRepositoryDbSlot,
   isOrganizationRootSlotDescendantPath,
   isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
+  organizationGuestSlotDeclarationIssues,
+  organizationGuestSlotPathParts,
   organizationRepositorySlotCollectionConflicts,
+  organizationSlotHasRepositoryDbPath,
+  organizationSlotHomeOrganization,
   organizationSlotRepositoryAliasIssues,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryId,
@@ -282,7 +287,7 @@ export function organizationRepositoryPathCasingIssue({ declaredPath, observedPa
 async function organizationMountContract({ organizationRoot, mountRoot, organization, label, warnings }) {
   const fatalIssues = organizationMountStructureIssues({ organizationRoot, label });
   const slotIssues = new Map();
-  if (fatalIssues.length > 0) return { fatalIssues, slotIssues: [], quarantinedPaths: [] };
+  if (fatalIssues.length > 0) return { fatalIssues, slotIssues: [], quarantinedPaths: [], guestPaths: [] };
 
   const organizationBoundary = await inspectCanonicalPathBoundary({
     rootPath: mountRoot,
@@ -293,6 +298,7 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
       fatalIssues: [`${label}: Organization mount překračuje canonical root boundary`],
       slotIssues: [],
       quarantinedPaths: [],
+      guestPaths: [],
     };
   }
 
@@ -302,6 +308,7 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
       fatalIssues: [`${label}: Organization manifest konflikt (${organizationResolutionIssueDetails(resolution.issues).join(", ") || resolution.state})`],
       slotIssues: [],
       quarantinedPaths: [],
+      guestPaths: [],
     };
   }
   const resource = resolution.resource;
@@ -371,7 +378,11 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
       organization,
       label,
       manifestSlots: manifestSlots.filter((slot) =>
-        !ambiguousSlots.has(slot) && !unsafeBoundarySlots.has(slot)
+        !ambiguousSlots.has(slot)
+        && !unsafeBoundarySlots.has(slot)
+        // Hostující Modul nese marker domovské Organizace a nemá u hostitele
+        // žádné jiné kandidátní umístění; relokace mu nepřísluší.
+        && !organizationSlotDeclaresGuestIntent(slot)
       ),
       declaredModuleClaims: organizationModuleDeclarationClaims([
         ...manifestSlots.filter((slot) => !unsafeBoundarySlots.has(slot)),
@@ -392,7 +403,20 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
           ? [join(organizationRoot, issue.path)]
           : []
     ),
+    // Hostující checkouty hostitel nikdy nespouští: jejich package.json nejsou
+    // Apps hostitele, i když je domovská Organizace jako Apps deklaruje.
+    guestPaths: manifestSlots
+      .filter((slot) => !unsafeBoundarySlots.has(slot) && isOrganizationGuestSlot(slot))
+      .map((slot) => join(organizationRoot, normalizeOrganizationSlotPath(slot.path))),
   };
+}
+
+// Slot, který deklaruje home_organization nebo leží v hostující složce
+// workspace/<Home>_GEN3/, nikdy nevstupuje do hledání a relokace umístění
+// vlastních Modulů hostitele, platný i izolovaný.
+function organizationSlotDeclaresGuestIntent(slot) {
+  return (slot !== null && typeof slot === "object" && Object.hasOwn(slot, "home_organization"))
+    || organizationGuestSlotPathParts(normalizeOrganizationSlotPath(slot?.path)) !== null;
 }
 
 async function recordObservedModuleLocationIssues({
@@ -592,6 +616,9 @@ function recordDeclaredModuleIssue({
     "slot_remote_conflict",
     "slot_branch_conflict",
     "slot_branch_invalid",
+    "slot_home_organization_invalid",
+    "slot_home_organization_is_host",
+    "slot_guest_path_invalid",
   ]).has(issue.code)) {
     recordOrganizationSlotIssue(slotIssues, {
       organization,
@@ -616,7 +643,7 @@ function recordOrganizationSlotIssue(store, {
 }) {
   const rawPath = typeof slot?.path === "string" ? slot.path : null;
   const path = rawPath ? normalizeOrganizationSlotPath(rawPath) : null;
-  const module = path && isCanonicalOrganizationRepositorySlotPath(rawPath)
+  const module = path && isCanonicalOrganizationRepositorySlot(slot)
     ? organizationSlotRepositoryId(slot, path)
     : null;
   const key = `${module ?? ""}\0${path ?? rawPath ?? ""}\0${code}`;
@@ -629,6 +656,7 @@ function recordOrganizationSlotIssue(store, {
   const repairableLocation = code === "repository_location_mismatch"
     && module
     && organization.organization_kind !== "template"
+    && !organizationSlotDeclaresGuestIntent(slot)
     && (path?.startsWith("workspace/") || path?.startsWith("modules/"));
   const coordinate = githubRepositoryCoordinate(
     organizationSlotRepositoryRemote(slot, path),
@@ -667,7 +695,13 @@ function recordOrganizationSlotIssue(store, {
     expected_path: repairableLocation ? locationIssue.expected_path : null,
     next_action: locationIssue.next_action ?? genericAction,
     organization: organization.slug,
-    quarantine_path: Boolean(quarantinePath && path && isCanonicalOrganizationRepositorySlotPath(rawPath)),
+    // Hostující cesta je bezpečná, přesná Organization-relative boundary i u
+    // neplatné deklarace, takže její checkout se izoluje celý.
+    quarantine_path: Boolean(
+      quarantinePath
+      && path
+      && (isCanonicalOrganizationRepositorySlotPath(rawPath) || organizationGuestSlotPathParts(rawPath) !== null),
+    ),
   });
 }
 
@@ -701,7 +735,14 @@ async function validateDeclaredModule({
   }
   const path = slot.path;
 
-  if (!isCanonicalOrganizationRepositorySlotPath(path) && safelyLocalNoncanonicalSlotPath(path)) {
+  const guestDeclarationIssues = organizationGuestSlotDeclarationIssues(slot, { githubOrg });
+  if (guestDeclarationIssues.length > 0) {
+    for (const issue of guestDeclarationIssues) recordIssue(issue);
+    return;
+  }
+  const guest = isOrganizationGuestSlot(slot);
+
+  if (!isCanonicalOrganizationRepositorySlot(slot) && safelyLocalNoncanonicalSlotPath(path)) {
     recordIssue({
       code: "slot_path_noncanonical",
       detail: `.path "${path}" není kanonická podporovaná Organization-relative repo boundary`,
@@ -735,7 +776,7 @@ async function validateDeclaredModule({
     }
   }
 
-  if (!isCanonicalOrganizationRepositorySlotPath(path)) {
+  if (!isCanonicalOrganizationRepositorySlot(slot)) {
     recordIssue({ code: "slot_path_noncanonical", detail: `.path "${path}" není kanonická podporovaná Organization-relative repo boundary`, quarantinePath: false });
     return;
   }
@@ -762,8 +803,9 @@ async function validateDeclaredModule({
   }
   const repositoryMountIssue = organizationSlotRepositoryMountIssue(slot, canonicalPath);
   if (repositoryMountIssue) {
+    // Hostující checkout hostitel nerelokuje; rozpor jména opraví deklarace.
     recordIssue({
-      code: repositoryMountIssue.startsWith("repository mount basename ")
+      code: repositoryMountIssue.startsWith("repository mount basename ") && !guest
         ? "repository_location_mismatch"
         : "slot_repository_contract_invalid",
       detail: `.path ${repositoryMountIssue}`,
@@ -783,7 +825,10 @@ export function organizationModuleSlotScopedContractIssues({
   const issues = [];
   const path = normalizeOrganizationSlotPath(slot?.path);
   if (!(path?.startsWith("workspace/") || path?.startsWith("modules/"))) return issues;
-  if (isNestedOrganizationRepositoryDbSlotPath(path)) return issues;
+  if (organizationSlotHasRepositoryDbPath(slot, path)) return issues;
+  // Owner hostujícího slotu je domovská Organizace; jeho shodu (i u
+  // repository_db aliasů) drží organizationGuestSlotDeclarationIssues.
+  const home = organizationSlotHomeOrganization(slot);
   const aliasIssues = organizationSlotRepositoryAliasIssues(slot, path);
   issues.push(...aliasIssues);
   const remoteConflict = aliasIssues.some((issue) => issue.code === "slot_remote_conflict");
@@ -813,13 +858,14 @@ export function organizationModuleSlotScopedContractIssues({
   }
   if (
     coordinate
+    && home === null
     && typeof githubOrg === "string"
     && githubOrg.trim() !== ""
     && coordinate.owner.toLowerCase() !== githubOrg.trim().toLowerCase()
   ) {
     issues.push({
       code: "slot_remote_owner_mismatch",
-      detail: `má GitHub remote vlastníka "${coordinate.owner}", ale Organization deklaruje github_org "${githubOrg}"; modul zůstává izolovaný, dokud nebude přiřazen ke správné Organization access hranici`,
+      detail: `má GitHub remote vlastníka "${coordinate.owner}", ale Organization deklaruje github_org "${githubOrg}"; modul zůstává izolovaný, dokud nebude přiřazen ke správné Organization access hranici (Modul jiné Lazurio Organizace deklarujte jako hostující slot workspace/${coordinate.owner}_GEN3/${coordinate.repository} s home_organization "${coordinate.owner}")`,
     });
   }
   const branch = organizationSlotRepositoryBranch(slot, path);
@@ -2140,7 +2186,11 @@ async function walkMountPackages({
     await walkPackageJson(companiesRoot, companyRoot, packageEntries, company, {
       // Only the Organization-root output is generated; workspace/output can
       // be a real module and must still pass normal discovery validation.
-      excludedRoots: [...mountContract.quarantinedPaths, join(companyRoot, "output")],
+      excludedRoots: [
+        ...mountContract.quarantinedPaths,
+        ...mountContract.guestPaths,
+        join(companyRoot, "output"),
+      ],
     });
   }
 }

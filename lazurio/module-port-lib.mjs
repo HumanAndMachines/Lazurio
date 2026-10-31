@@ -11,6 +11,7 @@ import {
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
+import { organizationSlotDeclaresHomeOrganization } from "./core/organization-slot-scope-lib.mjs";
 
 const ignored = new Set([".git", ".worktrees", "personalspace", "node_modules", "dist", "build", ".next", "coverage", "generated"]);
 
@@ -82,7 +83,7 @@ export async function readAllModuleContracts(lazurioRoot) {
     const resolution = mutationSafeOrganizationResolution(organizationRoot);
     if (resolution === null) continue;
     for (const candidate of resolution.resource.repository_inventory ?? []) {
-      if (canonicalModulePath(candidate?.path, organizationRoot)) paths.add(candidate.path);
+      if (hostOwnedModulePath(candidate, organizationRoot)) paths.add(candidate.path);
     }
     for (const modulePath of paths) {
       const path = join(organizationRoot, modulePath, "lazurio.module.json");
@@ -146,7 +147,7 @@ async function declaredModuleRoots(root) {
     const resolution = mutationSafeOrganizationResolution(organizationRoot);
     if (resolution === null) continue;
     for (const candidate of resolution.resource.repository_inventory ?? []) {
-      if (canonicalModulePath(candidate?.path, organizationRoot)) {
+      if (hostOwnedModulePath(candidate, organizationRoot)) {
         roots.add(resolve(organizationRoot, candidate.path));
       }
     }
@@ -166,6 +167,15 @@ function mutationSafeOrganizationResolution(organizationRoot) {
     );
   }
   return resolution;
+}
+
+// Hostující Modul (DEV-6694) patří portům a leasům své domovské Organizace:
+// jeho lazurio.module.json se v hostiteli nečte, nevaliduje proti poolům ani
+// nedostává lease. Kde je domovská Organizace namountovaná sama, počítá se
+// jen její vlastní checkout.
+function hostOwnedModulePath(candidate, organizationRoot) {
+  return !organizationSlotDeclaresHomeOrganization(candidate)
+    && canonicalModulePath(candidate?.path, organizationRoot);
 }
 
 function canonicalModulePath(path, organizationRoot) {
