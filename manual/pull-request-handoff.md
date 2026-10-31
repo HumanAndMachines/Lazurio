@@ -7,8 +7,12 @@ samostatně a samotný tento dokument je nezapíná.
 
 ## Jeden mechanismus předání
 
+Lidé, Task Agenti a boti různých Prostředí, včetně Prostředí Henry (Pablo,
+Henryové Organizací), spolupracují na pull requestu jen přes GitHub.
 Reviewer request žádá o kontrolu. Přiřazení PR jako **assignee** předává
-odpovědnost za dotažení včetně dovoleného merge. Autor nebo současný
+odpovědnost za dotažení včetně dovoleného merge. Obojí platí jen pro pull
+request v Ready: Draft je rozpracovaný a review ani předání nedostane.
+Komentář s @zmínkou upozorní, když se nic neděje. Autor nebo současný
 odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
 musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
 Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
@@ -130,6 +134,8 @@ Převzetí úlohy není dokončené review ani merge.
 | --- | --- |
 | Ready PR je přiřazen oprávněným předávajícím | Jedna úloha k dotažení bez dalšího komentáře. |
 | Je požádáno pouze o review | Verdikt; žádný mandát k merge. |
+| Žádost o review nebo předání míří na Draft | Příjem úlohu nespustí a jednou do PR napíše, že čeká na Ready. |
+| Hodinu po žádosti na Ready PR není verdikt ani důvod | Autor ověří Ready, žádost a head a napíše svému uživateli do PR s @zmínkou; potichu nečeká. |
 | Assignee je odebrán nebo změněn | Původní příjemce nemerguje; nový má vlastní předání. |
 | Původ přiřazení či živá práva nejdou doložit | Viditelný blokátor; žádné odhadování mandátu. |
 | Fronta se přeruší před spuštěním review | Bezpečná obnova existující cestou nebo viditelná potřeba obnovy. |
