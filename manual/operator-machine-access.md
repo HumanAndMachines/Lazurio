@@ -128,7 +128,9 @@ záznamu. Do cizího Conglomerate vstupuje uživatel jen svým klientem
 přihlášeným do toho tailnetu; jeho osobní VM tam grant nemá a mezi tailnety se
 nestaví žádný most. Stanoviště LazurioDevelopment (0217) vstupuje do jiného
 tailnetu jen headless klientem svého člověka, kterého schválí Admin té
-Organizace, a mezi tailnety nic neroutuje.
+Organizace, a mezi tailnety nic neroutuje. Každý takový klient běží ve vlastním
+síťovém prostoru, všechny naráz, a vlákno tailnet volí u příkazu; globální
+profil na stanovišti není (dodatek 0217 z 2026-10-31).
 
 ## Identita a jména
 
@@ -159,8 +161,10 @@ Organizace, a mezi tailnety nic neroutuje.
   týž slug jako v bodech výše. Účet bez GitHubu (0192) použije štítek svého
   Headscale usera a GitHub se kvůli jménu uzlu nepropojuje. `<zařízení>` je
   krátký stálý štítek (`macbook`, `iphone`, `pixel`, `windows`), zvolený
-  jednou a stejný ve všech tailnetech. `-cli` je userspace `tailscaled` s
-  vlastním stavem a socketem, nejvýš jeden na zařízení a tailnet. Jméno nenese
+  jednou a stejný ve všech tailnetech. `-cli` je samostatný `tailscaled` s
+  vlastním stavem a socketem, nejvýš jeden na zařízení a tailnet: na počítači
+  člověka userspace, na stanovišti LazurioDevelopment v plném režimu ve vlastním
+  síťovém prostoru (dodatek 0217 z 2026-10-31). Jméno nenese
   Organizaci, roli ani personu: nezačíná `company_slug` ani `lazurio-`, které
   patří tagovaným uzlům a runnerům, a končí `-vm` jen u osobní VM. Je to
   konvence, kterou Machines nekontroluje: jméno nic neuděluje a existující

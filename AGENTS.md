@@ -248,6 +248,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   z modelu forku, a pracuješ podle `manual/forks.md`.
 - **Delegace:** self-report subagenta není důkaz; QA gate drží ten, kdo
   delegoval.
+- **Vlákna se mezi sebou nekoordinují** (dodatek 0218 z 2026-10-31). Zprávy
+  jiným vláknům neposíláš; každé vlákno má vlastní worktree, PR, ověření
+  a assignee. Co potřebuje pořadí nebo návaznost, zapíšeš na GitHub
+  (závislost, štítek, komentář s @zmínkou) a frontu drží Pablo.
 
 ## Pull request a Publikace
 
@@ -381,7 +385,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
    nepřepínáš, přepnul bys ho všem relacím. Má-li uživatel pro tailnet
    headless klienta (uzel `<login>-<zařízení>-cli`), jdeš jen přes něj
    (`ProxyCommand tailscale --socket=<socket> nc %h %p`) a tailnet ověříš na
-   stejném socketu; když neběží, řekneš to uživateli.
+   stejném socketu; když neběží, řekneš to uživateli. Na stanovišti
+   LazurioDevelopment má každý tailnet vlastní síťový prostor a volíš ho
+   u každého příkazu; síť samotného Prostředí nepřepínáš (dodatek 0217
+   z 2026-10-31).
 
 ## Launchpad a aplikace
 
