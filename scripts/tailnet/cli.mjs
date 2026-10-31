@@ -14,24 +14,29 @@ import {
   allocatePorts,
   CONFIG_SCHEMA,
   configPath,
+  containerMismatch,
   containerSpec,
   countProfiles,
+  daemonMismatch,
   defaultImage,
   entrypointScript,
   evaluateSystem,
   evaluateTailnet,
   isSameReleaseWarning,
-  LABEL,
+  labeledFor,
   listConfigs,
   networkCreateArgs,
   normalizeLoginServer,
   parseImage,
   parseListeners,
   pinnedReference,
+  publishedPorts,
   readConfig,
+  recordedPorts,
   resources,
   runArgv,
   runEnvScript,
+  showPorts,
   SPEC_LABEL,
   TAILNETS_ROOT,
   TailnetError,
@@ -253,7 +258,7 @@ function inspectContainer(ctx, container) {
 }
 
 function ours(found, kind, name, objectName) {
-  if (found && found[LABEL] !== name) throw new TailnetError(`a Docker ${kind} ${objectName} exists that this tool did not create; remove or rename it first`);
+  if (found && !labeledFor(found, name)) throw new TailnetError(`a Docker ${kind} ${objectName} exists that this tool did not create; remove or rename it first`);
 }
 
 function networkLabels(ctx, network) {
@@ -448,12 +453,13 @@ async function up(ctx, args) {
 function statusRow(ctx, config) {
   const r = resources(config.name);
   const container = inspectContainer(ctx, r.container);
-  const status = container?.running ? readStatus(ctx, r.container) : null;
+  const owned = labeledFor(container?.labels, config.name);
+  const status = container?.running && owned ? readStatus(ctx, r.container) : null;
   const peers = Object.values(status?.Peer ?? {});
   const backend = status?.BackendState ?? null;
   return {
     name: config.name,
-    container: container?.status ?? "missing",
+    container: container ? (owned ? container.status : "foreign") : "missing",
     backend,
     node: config.hostname,
     login_server: config.login_server,
@@ -487,18 +493,20 @@ function status(ctx, args) {
 async function gatherFacts(ctx, config, listeners) {
   const r = resources(config.name);
   const container = inspectContainer(ctx, r.container);
-  const inside = (argv) => (container?.running ? docker(ctx, ["exec", r.container, ...argv]) : null);
+  // Nothing runs in a container this tool did not create; `owner` fails it.
+  const enter = container?.running && labeledFor(container.labels, config.name);
+  const inside = (argv) => (enter ? docker(ctx, ["exec", container.id, ...argv]) : null);
   const text = (result) => (result && result.code === 0 ? result.stdout : null);
   return {
     container,
     status: jsonOf(inside(["tailscale", "status", "--json"])),
     prefs: jsonOf(inside(["tailscale", "debug", "prefs"])),
-    routes: container?.running
+    routes: enter
       ? { v4: text(inside(["ip", "-4", "route", "show", "type", "unreachable"])) ?? "", v6: text(inside(["ip", "-6", "route", "show", "type", "unreachable"])) ?? "" }
       : null,
     resolvConf: text(inside(["cat", "/etc/resolv.conf"])),
     listeners,
-    socks5: container?.running ? await ctx.socks5Answers(config.ports.socks5) : false,
+    socks5: enter ? await ctx.socks5Answers(config.ports.socks5) : false,
     socket: await ctx.socketConnects(r.socket),
   };
 }
@@ -538,12 +546,27 @@ async function doctor(ctx, args) {
 
 // --- run, proxy, ssh-proxy, down
 
+const readPrefs = (ctx, container) => jsonOf(docker(ctx, ["exec", container, "tailscale", "debug", "prefs"]));
+
+// The running container of a tailnet, if it is the one `up` made for the
+// name (lib.mjs, containerMismatch) and its daemon is the recorded node of
+// the recorded tailnet (daemonMismatch). The prefs come from the container
+// with that ID, whose PID `run` enters and RUN_SCRIPT checks again; a
+// mismatch is refused before anything runs in it or is handed out.
+function verifiedContainer(ctx, config, refusal) {
+  const container = inspectContainer(ctx, resources(config.name).container);
+  if (!container?.running) throw new TailnetError(`tailnet ${config.name} is not running; \`bun run tailnet -- up ${config.name} …\` starts it`);
+  const foreign = containerMismatch(config, container);
+  if (foreign) throw new TailnetError(`${foreign}; ${refusal}`);
+  const other = daemonMismatch(config, readPrefs(ctx, container.id));
+  if (other) throw new TailnetError(`the daemon of tailnet ${config.name} ${other}; ${refusal} (\`bun run tailnet -- doctor\`)`);
+  return container;
+}
+
 async function run(ctx, args) {
   if (args.length < 3 || args[1] !== "--") throw new TailnetError("usage: run <name> -- <command…>", USAGE);
   const name = validateName(args[0]);
-  requireConfig(ctx, name);
-  const container = inspectContainer(ctx, resources(name).container);
-  if (!container?.running) throw new TailnetError(`tailnet ${name} is not running; \`bun run tailnet -- up ${name} …\` starts it`);
+  const container = verifiedContainer(ctx, requireConfig(ctx, name), "nothing was run");
   if (!container.resolvConf) throw new TailnetError(`Docker reports no resolv.conf for tailnet ${name}`);
   const temporary = ctx.tempDir();
   try {
@@ -556,10 +579,20 @@ async function run(ctx, args) {
   }
 }
 
+// The proxies are loopback ports, so they are printed only while this
+// tailnet's container publishes exactly them.
 function proxy(ctx, args) {
   const { positionals, flags } = parseArgs(args, [], ["--json"]);
   const name = oneName(positionals, "proxy <name> [--json]");
-  const { socks5, http } = proxies(requireConfig(ctx, name));
+  const config = requireConfig(ctx, name);
+  const container = verifiedContainer(ctx, config, "no proxy printed");
+  const published = publishedPorts(container);
+  const recorded = recordedPorts(config);
+  if (JSON.stringify(published) !== JSON.stringify(recorded)) {
+    const expected = Object.values(recorded).flat().join(" and ");
+    throw new TailnetError(`container ${resources(name).container} publishes ${showPorts(published) || "nothing"}, not the recorded ${expected}; no proxy printed`);
+  }
+  const { socks5, http } = proxies(config);
   if (flags["--json"]) ctx.out(JSON.stringify({ name, socks5, http }));
   else {
     ctx.out(socks5);
@@ -578,17 +611,11 @@ async function sshProxy(ctx, args) {
   if (!/^\d{1,5}$/u.test(port) || Number(port) < 1 || Number(port) > 65535) throw new TailnetError(`not a port: ${JSON.stringify(port)}`, USAGE);
   const config = requireConfig(ctx, name);
   const { socket } = resources(name);
+  // The identity of the daemon behind the socket the connection goes through.
   const prefs = ctx.exec(["tailscale", `--socket=${socket}`, "debug", "prefs"]);
   if (prefs.code !== 0) throw new TailnetError(`tailnet ${name} does not answer on ${socket}: ${firstLine(prefs.stderr)}`);
-  let controlUrl = null;
-  try {
-    controlUrl = normalizeLoginServer(JSON.parse(prefs.stdout).ControlURL);
-  } catch {
-    controlUrl = null;
-  }
-  if (controlUrl !== config.login_server) {
-    throw new TailnetError(`the daemon on ${socket} is signed in to ${controlUrl ?? "nothing"}, not ${config.login_server}; not connecting`);
-  }
+  const other = daemonMismatch(config, jsonOf(prefs));
+  if (other) throw new TailnetError(`the daemon on ${socket} ${other}; not connecting`);
   return ctx.spawnInherit(["tailscale", `--socket=${socket}`, "nc", host, port], { dropStderr: isSameReleaseWarning });
 }
 

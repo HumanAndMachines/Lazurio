@@ -281,6 +281,71 @@ export function networkCreateArgs(name) {
   return ["network", "create", "--driver", "bridge", "--label", `${LABEL}=${name}`, resources(name).network];
 }
 
+// --- identity: what `run`, `proxy` and `ssh-proxy` reach must be this tailnet
+//
+// `down` keeps the config, so another container may take the name later,
+// and a daemon can be switched to another login server or node through its
+// socket. Either would carry a command, a proxy or a connection into the
+// wrong tailnet, so both are checked before anything runs or is handed out.
+
+// Whether Docker labels name this tailnet: `up` sets the label, and nothing
+// this tool did not label is entered, changed or removed.
+export const labeledFor = (labels, name) => labels?.[LABEL] === name;
+
+// Why a container is not the one `up` made for this config, or null. A spec
+// label from an older version of the tool is no reason: `up` recreates that
+// container and its state stays.
+export function containerMismatch(config, container) {
+  const { container: name } = resources(config.name);
+  if (!labeledFor(container?.labels, config.name)) return `container ${name} was not created by this tool for ${config.name}`;
+  if (container.image !== config.image) return `container ${name} runs ${container.image ?? "an unknown image"}, not the recorded ${config.image}`;
+  return null;
+}
+
+// Why a daemon is not this tailnet's node, or null: its ControlURL decides
+// the tailnet (AGENTS.md), the hostname `up` set the node. A login server
+// that is no clean URL is not repeated, it could carry credentials.
+export function daemonMismatch(config, prefs) {
+  if (!prefs) return "does not answer";
+  let controlUrl = null;
+  try {
+    controlUrl = normalizeLoginServer(prefs.ControlURL);
+  } catch {
+    controlUrl = null;
+  }
+  if (controlUrl !== config.login_server) {
+    const shown = controlUrl ?? (prefs.ControlURL ? "an invalid login server" : "no login server");
+    return `uses ${shown}, not the recorded ${config.login_server}`;
+  }
+  if (prefs.Hostname !== config.hostname) return `is node ${prefs.Hostname || "(none)"}, not the recorded ${config.hostname}`;
+  return null;
+}
+
+// The loopback proxies a container publishes and the ones the config
+// records, as `<container port>/tcp` -> host bindings.
+const bindingOf = (bindings) => (Array.isArray(bindings) ? bindings.map((b) => `${b?.HostIp ?? "?"}:${b?.HostPort ?? "?"}`) : []);
+
+export function publishedPorts(container) {
+  return Object.fromEntries(
+    Object.entries(container?.ports ?? {})
+      .filter(([, bindings]) => Array.isArray(bindings) && bindings.length > 0)
+      .map(([port, bindings]) => [port, bindingOf(bindings)])
+      .sort(([a], [b]) => (a < b ? -1 : 1)),
+  );
+}
+
+export function recordedPorts(config) {
+  return {
+    [`${CONTAINER_SOCKS5_PORT}/tcp`]: [`127.0.0.1:${config.ports.socks5}`],
+    [`${CONTAINER_HTTP_PORT}/tcp`]: [`127.0.0.1:${config.ports.http}`],
+  };
+}
+
+export const showPorts = (ports) =>
+  Object.entries(ports)
+    .map(([port, list]) => `${port}->${list.join(",")}`)
+    .join(" ");
+
 // The prefs `up` applies, run with the container's own CLI. --reset makes
 // them exactly this set, also for an adopted state. Nothing routes between
 // tailnets: no subnet routes, no exit node, no Tailscale SSH, shields up.
@@ -411,14 +476,14 @@ export function countProfiles(text) {
   return rows.length > 0 && /^ID\s/u.test(rows[0]) ? rows.length - 1 : null;
 }
 
-const bindingOf = (bindings) => (Array.isArray(bindings) ? bindings.map((b) => `${b?.HostIp ?? "?"}:${b?.HostPort ?? "?"}`) : []);
-
 // The verdicts for one tailnet, from facts cli.mjs gathered. A required check
 // that fails makes `doctor` fail; an advisory one only reports.
 export function evaluateTailnet(config, facts) {
   const checks = [];
   const check = (id, ok, detail, level = "required") => checks.push({ id, level, ok: Boolean(ok), detail });
   const { container, prefs, status, routes, listeners } = facts;
+  const owned = labeledFor(container?.labels, config.name);
+  check("owner", owned, owned ? "created by this tool" : container ? "not created by this tool" : "missing");
   check("container", container?.running, container ? container.status : "missing");
   check("restart_policy", container?.restartPolicy === "unless-stopped", container?.restartPolicy ?? "unknown");
   check("image", container?.image === config.image, container?.image ?? "unknown");
@@ -444,18 +509,8 @@ export function evaluateTailnet(config, facts) {
   check("unreachable_cgnat", v4, v4 ? CGNAT_IPV4 : "missing");
   const v6 = /^unreachable fd7a:115c:a1e0::\/48(?:\s|$)/mu.test(routes?.v6 ?? "");
   check("unreachable_tailscale_ipv6", v6, v6 ? TAILSCALE_IPV6 : "missing (no IPv6 in the container)", "advisory");
-  const published = Object.fromEntries(
-    Object.entries(container?.ports ?? {})
-      .filter(([, bindings]) => Array.isArray(bindings) && bindings.length > 0)
-      .map(([port, bindings]) => [port, bindingOf(bindings)])
-      .sort(([a], [b]) => (a < b ? -1 : 1)),
-  );
-  const expected = {
-    [`${CONTAINER_SOCKS5_PORT}/tcp`]: [`127.0.0.1:${config.ports.socks5}`],
-    [`${CONTAINER_HTTP_PORT}/tcp`]: [`127.0.0.1:${config.ports.http}`],
-  };
-  const shown = Object.entries(published).map(([port, list]) => `${port}->${list.join(",")}`).join(" ");
-  check("published_loopback_only", JSON.stringify(published) === JSON.stringify(expected), shown || "none");
+  const published = publishedPorts(container);
+  check("published_loopback_only", JSON.stringify(published) === JSON.stringify(recordedPorts(config)), showPorts(published) || "none");
   if (listeners) {
     const ours = listeners.filter((l) => l.port === config.ports.socks5 || l.port === config.ports.http);
     check("listeners_loopback_only", ours.every((l) => l.address === "127.0.0.1"), ours.map((l) => `${l.address}:${l.port}`).join(" ") || "no host listener");
