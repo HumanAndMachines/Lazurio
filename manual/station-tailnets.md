@@ -31,7 +31,7 @@ Každý cizí tailnet `<name>` (`^[a-z0-9][a-z0-9-]{0,38}$`) má:
 | Co | Kde |
 | --- | --- |
 | `tailscaled` v plném režimu (`--tun=tailscale0`) | kontejner `lazurio-tailnet-<name>`, `--restart unless-stopped`, `NET_ADMIN`, `NET_RAW`, `/dev/net/tun` |
-| vlastní síť | Docker bridge `lazurio-tailnet-<name>`; kontejnery různých tailnetů na sebe nevidí |
+| vlastní síť | Docker bridge `lazurio-tailnet-<name>`; kontejnery různých tailnetů na sebe nevidí; `--dns-search .`, aby krátká jména nedoplňovala doména tailnetu Prostředí z `resolv.conf` hostu |
 | image | oficiální `tailscale/tailscale:v<verze>` připnutý digestem; výchozí verze je `tailscale version` hostu |
 | stav (klíče uzlu) | `/var/lib/lazurio-tailnets/<name>/state` (root, `0700`) → `/var/lib/tailscale` |
 | socket | `/var/lib/lazurio-tailnets/<name>/run/tailscaled.sock` → `/var/run/tailscale` |
@@ -122,14 +122,14 @@ headless klienty s jejich omezením DNS.
 2. Přes `sudo` a `nsenter --net` vstoupí do síťového namespace tailnetu
    a `unshare --mount --propagation private` mu dá soukromý mount namespace,
    takže nic z dalších kroků nevidí zbytek Mašiny.
-3. Přes `/etc/resolv.conf` připojí `resolv.conf` kontejneru (Docker
-   `ResolvConfPath`; `tailscaled` ho přepisuje na místě) a přes
-   `/run/tailscale` socket tailnetu. Holé `tailscale` uvnitř `run` tak mluví
-   s tímto tailnetem, ne s vlastním tailnetem Prostředí.
+3. Přes `/etc/resolv.conf` připojí `resolv.conf` tak, jak ho vidí kontejner
+   (`/proc/<pid>/root/etc/resolv.conf`), a přes `/run/tailscale` socket
+   tailnetu. Holé `tailscale` uvnitř `run` tak mluví s tímto tailnetem, ne
+   s vlastním tailnetem Prostředí.
 4. `setpriv` vrátí uživatele a jeho skupiny. Přesné prostředí volajícího,
    umask a `LAZURIO_TAILNET=<name>` přenese soubor `0600`, který se hned
-   po načtení smaže; `sudo` by jinak přepsalo `PATH`, `USER` a `HOME`
-   a zahodilo proměnné jako `PYTHONPATH` nebo `LD_LIBRARY_PATH`.
+   po načtení smaže; `sudo` by jinak prostředí resetovalo (`PATH`, `USER`,
+   `LOGNAME`) a zahodilo proměnné jako `PYTHONPATH` nebo `LD_LIBRARY_PATH`.
 5. Pracovní adresář, stdin, stdout a návratový kód zůstávají příkazu.
 
 ## Záruky

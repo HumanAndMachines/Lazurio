@@ -200,6 +200,7 @@ describe("container", () => {
       "--device /dev/net/tun:/dev/net/tun",
       "--publish 127.0.0.1:10550:1055/tcp",
       "--publish 127.0.0.1:10551:1056/tcp",
+      "--dns-search .",
       `--mount type=bind,source=${TAILNETS_ROOT}/example-org/state,target=/var/lib/tailscale`,
       `--mount type=bind,source=${TAILNETS_ROOT}/example-org/run,target=/var/run/tailscale`,
       "--mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly",
@@ -256,7 +257,6 @@ describe("run", () => {
       name: "example-org",
       pid: 4242,
       containerId: "c0ffee",
-      resolvConf: "/var/lib/docker/containers/c0ffee/resolv.conf",
       uid: 1000,
       gid: 1000,
       envFile: "/tmp/lazurio-tailnet-x/env.sh",
@@ -267,7 +267,6 @@ describe("run", () => {
       "lazurio-tailnet-run",
       "4242",
       "c0ffee",
-      "/var/lib/docker/containers/c0ffee/resolv.conf",
       `${TAILNETS_ROOT}/example-org/run`,
       "1000",
       "1000",
@@ -276,11 +275,11 @@ describe("run", () => {
       "-sS",
       "https://app.example.lazurio.io",
     ]);
-    expect(RUN_SCRIPT).toContain("mount --bind -- \"$resolv_conf\" /etc/resolv.conf");
+    expect(RUN_SCRIPT).toContain('mount --bind -- "/proc/$pid/root/etc/resolv.conf" /etc/resolv.conf');
     expect(RUN_SCRIPT).toContain('mount --bind -- "$socket_dir" /run/tailscale');
     expect(RUN_SCRIPT).toContain('setpriv --reuid="$uid" --regid="$gid" --init-groups');
-    expect(() => runArgv({ name: "example-org", pid: 4242, containerId: "c", resolvConf: "/r", uid: 1, gid: 1, envFile: "/e", command: [] })).toThrow(TailnetError);
-    expect(() => runArgv({ name: "example-org", pid: 0, containerId: "c", resolvConf: "/r", uid: 1, gid: 1, envFile: "/e", command: ["id"] })).toThrow(TailnetError);
+    expect(() => runArgv({ name: "example-org", pid: 4242, containerId: "c", uid: 1, gid: 1, envFile: "/e", command: [] })).toThrow(TailnetError);
+    expect(() => runArgv({ name: "example-org", pid: 0, containerId: "c", uid: 1, gid: 1, envFile: "/e", command: ["id"] })).toThrow(TailnetError);
   });
 
   // Root, namespaces and mounts are proven on a Linux station (manual). Here
@@ -315,7 +314,7 @@ describe("run", () => {
     writeFileSync(envFile, runEnvScript(callerEnv, "example-org", 0o027), { mode: 0o600 });
     const log = join(dir, "stub.log");
     const command = ["/bin/sh", "-c", 'umask; pwd; read line; echo "stdin=$line"; /usr/bin/env; exit 7'];
-    const argv = ["sh", "-c", RUN_SCRIPT, "lazurio-tailnet-run", "4242", "c0ffee", "/resolv.conf", `${TAILNETS_ROOT}/example-org/run`, "1000", "1000", envFile, ...command];
+    const argv = ["sh", "-c", RUN_SCRIPT, "lazurio-tailnet-run", "4242", "c0ffee", `${TAILNETS_ROOT}/example-org/run`, "1000", "1000", envFile, ...command];
     // What sudo hands over: a reset environment, as on the station.
     const result = Bun.spawnSync(argv, { cwd: work, env: { PATH: `${bin}:/usr/bin:/bin`, STUB_LOG: log, SUDO_USER: "station-user" }, stdin: Buffer.from("hello\n") });
     expect(result.exitCode).toBe(7);
@@ -329,7 +328,7 @@ describe("run", () => {
     expect(env).not.toContain("SUDO_USER");
     expect(env).not.toContain("STUB_LOG");
     expect(existsSync(envFile)).toBe(false);
-    expect(readFileSync(log, "utf8")).toContain("mount --bind -- /resolv.conf /etc/resolv.conf");
+    expect(readFileSync(log, "utf8")).toContain("mount --bind -- /proc/4242/root/etc/resolv.conf /etc/resolv.conf");
   });
 
   test("the env script quotes every value and skips names env cannot carry", () => {
