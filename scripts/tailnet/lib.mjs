@@ -315,6 +315,16 @@ export function usesStatedir(argv, directory) {
   return false;
 }
 
+// The host CLI comes from the distribution's package, the daemon from the
+// official image: the same release in two builds, so every CLI call prints
+// a version warning. `ssh-proxy` drops it only when the releases match, so a
+// real mismatch still shows.
+export function isSameReleaseWarning(line) {
+  const match = /^Warning: client version "([^"]+)" != tailscaled server version "([^"]+)"$/u.exec(String(line).trim());
+  const release = (version) => version.split("-")[0];
+  return Boolean(match) && release(match[1]) === release(match[2]);
+}
+
 // --- run: a command inside one tailnet
 
 const shellQuote = (value) => `'${String(value).replaceAll("'", `'\\''`)}'`;
