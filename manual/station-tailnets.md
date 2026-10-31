@@ -122,10 +122,15 @@ headless klienty s jejich omezením DNS.
 2. Přes `sudo` a `nsenter --net` vstoupí do síťového namespace tailnetu
    a `unshare --mount --propagation private` mu dá soukromý mount namespace,
    takže nic z dalších kroků nevidí zbytek Mašiny.
-3. Přes `/etc/resolv.conf` připojí `resolv.conf` tak, jak ho vidí kontejner
-   (`/proc/<pid>/root/etc/resolv.conf`), a přes `/run/tailscale` socket
-   tailnetu. Holé `tailscale` uvnitř `run` tak mluví s tímto tailnetem, ne
-   s vlastním tailnetem Prostředí.
+3. Přes `/etc/resolv.conf` připojí `resolv.conf` kontejneru (soubor hostu,
+   který do kontejneru připojuje Docker, `ResolvConfPath`; `tailscaled` ho
+   přepisuje na místě) a porovná ho s tím, co vidí kontejner; když se liší,
+   příkaz nespustí. Cesta `/proc/<pid>/root/etc/resolv.conf` nefunguje:
+   `mount` ji kanonizuje na vlastní soubor hostu a připojí ho bez chyby, bez
+   kanonizace jádro bind z jiného mount namespace odmítne (ověřeno na
+   stanovišti). Přes `/run/tailscale` připojí socket tailnetu, takže holé
+   `tailscale` uvnitř `run` mluví s tímto tailnetem, ne s vlastním tailnetem
+   Prostředí.
 4. `setpriv` vrátí uživatele a jeho skupiny. Přesné prostředí volajícího,
    umask a `LAZURIO_TAILNET=<name>` přenese soubor `0600`, který se hned
    po načtení smaže; `sudo` by jinak prostředí resetovalo (`PATH`, `USER`,

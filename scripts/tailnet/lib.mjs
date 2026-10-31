@@ -321,23 +321,31 @@ const shellQuote = (value) => `'${String(value).replaceAll("'", `'\\''`)}'`;
 
 // Run as root through sudo, inside the tailnet's network namespace and a
 // private mount namespace. It checks that the PID still belongs to the
-// container, binds the container's own resolv.conf (as the container sees it)
-// over /etc/resolv.conf and the tailnet's socket directory over
-// /run/tailscale (so a bare `tailscale` talks to this tailnet, not to the
-// Environment's own), and drops to the user.
+// container, binds the container's resolv.conf over /etc/resolv.conf and the
+// tailnet's socket directory over /run/tailscale (so a bare `tailscale` talks
+// to this tailnet, not to the Environment's own), and drops to the user.
+//
+// The resolv.conf source is the host file Docker bind-mounts into the
+// container (ResolvConfPath), which tailscaled rewrites in place. Binding
+// /proc/<pid>/root/etc/resolv.conf instead does not work: mount(8)
+// canonicalizes that path to the host's own /etc/resolv.conf and binds it
+// without an error, and without canonicalization the kernel refuses a bind
+// from another mount namespace (both seen on the station). So the result is
+// compared with what the container sees before anything runs.
 export const RUN_SCRIPT = [
   "set -eu",
-  'pid=$1 container_id=$2 socket_dir=$3 uid=$4 gid=$5 env_file=$6',
-  "shift 6",
+  'pid=$1 container_id=$2 resolv_conf=$3 socket_dir=$4 uid=$5 gid=$6 env_file=$7',
+  "shift 7",
   'grep -q -- "$container_id" "/proc/$pid/cgroup" || { echo "lazurio-tailnet: the container restarted; run the command again" >&2; exit 125; }',
-  'mount --bind -- "/proc/$pid/root/etc/resolv.conf" /etc/resolv.conf',
+  'mount --bind -- "$resolv_conf" /etc/resolv.conf',
+  'cmp -s /etc/resolv.conf "/proc/$pid/root/etc/resolv.conf" || { echo "lazurio-tailnet: /etc/resolv.conf does not match the container; not running the command" >&2; exit 125; }',
   `if [ -d ${SYSTEM_SOCKET_DIR} ]; then mount --bind -- "$socket_dir" ${SYSTEM_SOCKET_DIR}; fi`,
   `exec setpriv --reuid="$uid" --regid="$gid" --init-groups -- /bin/sh -c '. "$0"' "$env_file" "$@"`,
 ].join("\n");
 
 // sudo, nsenter and unshare keep the working directory, stdin, stdout and
 // the exit code; the environment travels in envFile because sudo resets it.
-export function runArgv({ name, pid, containerId, uid, gid, envFile, command }) {
+export function runArgv({ name, pid, containerId, resolvConf, uid, gid, envFile, command }) {
   if (!Number.isInteger(pid) || pid <= 1) throw new TailnetError(`tailnet ${name} has no running process`);
   if (!Array.isArray(command) || command.length === 0) throw new TailnetError("run needs a command after --", USAGE);
   const r = resources(name);
@@ -346,7 +354,7 @@ export function runArgv({ name, pid, containerId, uid, gid, envFile, command }) 
     "nsenter", `--target=${pid}`, "--net", "--",
     "unshare", "--mount", "--propagation", "private", "--",
     "/bin/sh", "-c", RUN_SCRIPT, "lazurio-tailnet-run",
-    String(pid), containerId, r.socketDir, String(uid), String(gid), envFile,
+    String(pid), containerId, resolvConf, r.socketDir, String(uid), String(gid), envFile,
     ...command,
   ];
 }
