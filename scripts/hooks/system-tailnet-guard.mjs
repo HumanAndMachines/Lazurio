@@ -29,12 +29,15 @@
 // file. A variable, a substitution, a glob, an unknown directory, a link
 // loop or a component the guard may not read leave the target unknown.
 //
-// Commands are read with the parser of scripts/custody/shell-taint.mjs,
-// through sudo/env/timeout-like wrappers, `sh -c`, `su -c`, `eval`, a `trap`
-// action, command substitutions and code fed to a shell on stdin. Not seen: commands put
-// together at run time, scripts run by path, links the command itself makes,
-// and commands that run elsewhere (ssh, docker exec), which do not reach this
-// Environment's tailscaled.
+// Every command is parsed, with no text shortcut, since the shell joins
+// quoted fragments of a name (`ta''ilscale`). Commands are read with the
+// parser of scripts/custody/shell-taint.mjs, through sudo/env/timeout-like
+// wrappers, `sh -c`, `su -c`, `eval`, a `trap` action, command substitutions
+// and code fed to a shell on stdin. A command name that glob or brace
+// expansion completes is denied, since it could be tailscale. Not seen:
+// commands whose name comes from a variable or a substitution, scripts run by
+// path, links the command itself makes, and commands that run elsewhere (ssh,
+// docker exec), which do not reach this Environment's tailscaled.
 import { lstatSync, readlinkSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, posix } from "node:path";
@@ -458,8 +461,17 @@ function nestedCode(program, args, stdinCode) {
   }
 }
 
+// A command name the shell completes by glob or brace expansion when it runs
+// (`tailscal?`, `{tailscale,down}`): which program it starts is not known
+// before the command runs. Quoted parts stay literal.
+function nameExpands(token) {
+  const text = (token?.parts ?? []).map((part) => (part.k === "lit" && !part.q ? part.v : "\u0000")).join("");
+  return /[*?]|\[[^\]]+\]|\{[^{}]*(?:,|\.\.)[^{}]*\}/u.test(text);
+}
+
 function judge(run, scene) {
   if (run.unparsed !== undefined) return coarse(run.unparsed, scene.system);
+  if (run.nameExpands) return "a command whose name glob or brace expansion completes when it runs, which could be `tailscale`";
   switch (run.program) {
     case "tailscale":
       return judgeTailscale(run.args, scene);
@@ -514,7 +526,14 @@ function* runsIn(src, depth) {
     const program = word ? basename(word.replace(/^=/u, "")) : null;
     const args = command.words.slice(at + 1);
     // `dynamic`: the command's name is known only when it runs (`$cmd …`).
-    yield { program, args, moves, wrappers: names, dynamic: at < command.words.length && word === null };
+    yield {
+      program,
+      args,
+      moves,
+      wrappers: names,
+      dynamic: at < command.words.length && word === null,
+      nameExpands: nameExpands(command.words[at]?.token),
+    };
     const code = program ? nestedCode(program, args, command.stdinCode) : null;
     if (typeof code !== "string") continue;
     let nested;
@@ -550,9 +569,22 @@ function reasonIn(src, { cwd, home: hookHome, system }) {
 
 // Last resort when the command cannot be parsed: a changing `tailscale`
 // subcommand passes only on an absolute, plainly written socket that leads
-// elsewhere.
+// elsewhere. The text is read as written and as the shell joins it without
+// quotes and backslashes (`ta''ilscale`). When `$'…'` holds an escape that can
+// spell a letter (octal, \x, \u, \U, \c), any name is possible, and a
+// changing verb anywhere is enough.
 function coarse(command, system) {
   const flat = command.replace(/\\\n/gu, " ");
+  for (const text of [flat, flat.replace(/['"\\]/gu, "")]) {
+    const reason = coarseIn(text, system);
+    if (reason) return reason;
+  }
+  const verb = /(?:^|[^\w-])(up|down|login|logout|switch|set|set-operator|serve|funnel|update|stop|restart|try-restart|reload-or-restart|kill|disable|mask)(?=$|[^\w-])/u.exec(flat);
+  if (/\$'(?:[^'\\]|\\[^0-7xuUc])*\\[0-7xuUc]/u.test(flat) && verb) return `\`${verb[1]}\` with $'…' quoting in a command that could not be parsed exactly`;
+  return null;
+}
+
+function coarseIn(flat, system) {
   const tailscale = /(?:^|[\s;&|(`'"])(?:\S*\/)?tailscale((?:\s+-{1,2}[\w-]+(?:=\S*|\s+(?!-)\S+)?)*)\s+(up|down|login|logout|switch|set|set-operator|serve|funnel|update)(?=$|[\s;&|)`'"])/u.exec(flat);
   if (tailscale && !/\s--?list\b/u.test(flat)) {
     const socket = /-{1,2}socket(?:=|\s+)(\S*)/u.exec(tailscale[1])?.[1];
@@ -624,7 +656,9 @@ function homeMayChange(src, runs) {
 export function tailnetReason(input, { home = homedir(), systemSockets = SYSTEM_SOCKETS } = {}) {
   if (input?.tool_name !== "Bash" && input?.tool_name !== "Monitor") return null;
   const command = input?.tool_input?.command;
-  if (typeof command !== "string" || !/tail|systemctl|service|kill/u.test(command)) return null;
+  // No textual shortcut before parsing: the shell joins quoted fragments of a
+  // name (`ta''ilscale`), so only the parsed command shows what runs.
+  if (typeof command !== "string") return null;
   const cwd = typeof input?.cwd === "string" && posix.isAbsolute(input.cwd) ? input.cwd : null;
   const system = lazy(() => systemTargets(systemSockets));
   try {
