@@ -41,7 +41,9 @@ změna Lazuria, ale kandidát na plugin nebo obsah Organizace.
   Velké přepisy a refactory bez předchozí domluvy se zavírají.
 - Pracuj v dedikovaném worktree, nikdy v primárním checkoutu — ten zůstává
   na `main` a slouží jako referenční strom. Worktree zakládej kanonickou lane
-  `bun run worktrees:create -- --plan <KOD-XXXX>`; postup a guardy drží skill
+  `bun run worktrees:create -- --plan <KOD-XXXX>`, jeden na každý pull
+  request (další PR téhož plánu přidej s `--name <kebab-case>`); postup
+  a guardy drží skill
   `.agents/skills/worktree-development-discipline/SKILL.md`, správnost hlídá
   `bun run worktrees:check`. Dlouhodobá lokální větev na mašině je
   zakázaný stav; práce, která nemíří do PR, do Lazuria nepatří.

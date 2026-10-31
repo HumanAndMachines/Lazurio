@@ -113,6 +113,97 @@ test("accepts an authority-backed exact Mission Control plan", async () => {
   });
 });
 
+test("accepts several pull-request environments of one plan next to its canonical environment", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  await addPlanEnvironment(fixture, "CAC-0007-second-pr");
+  await addPlanEnvironment(fixture, "CAC-0007-review-fixes", { publishFeatureBranch: false });
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  for (const [environmentId, branch] of [
+    ["CAC-0007-contract", "codex/CAC-0007-contract"],
+    ["CAC-0007-second-pr", "agent/CAC-0007-second-pr"],
+    ["CAC-0007-review-fixes", "agent/CAC-0007-review-fixes"],
+  ]) {
+    expect(worktreeNamed(report, environmentId)).toMatchObject({
+      path_class: "canonical",
+      branch,
+      sidecar_valid: true,
+      sidecar_error: null,
+      lifecycle: "active",
+    });
+  }
+  expect(report.summary).toMatchObject({ canonical: 3, invalid_sidecars: 0 });
+  expect(report.violations).toEqual([]);
+});
+
+test("still rejects environment basenames outside <plan-basename> and <plan-code>-<kebab-case-name>", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const rejected = [
+    "CAC-0007",
+    "CAC-0008-other-plan",
+    "CAC-0007-Second-PR",
+    "CAC-0007_second-pr",
+    "CAC-0007--second-pr",
+    "second-pr",
+  ];
+  for (const environmentId of rejected) {
+    await addPlanEnvironment(fixture, environmentId, { branch: `agent/CAC-0007/${environmentId}` });
+  }
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  expect(worktreeNamed(report, "CAC-0007-contract").sidecar_valid).toBe(true);
+  for (const environmentId of rejected) {
+    expect(worktreeNamed(report, environmentId)).toMatchObject({
+      sidecar_valid: false,
+      sidecar_error: "worktree basename is neither the canonical plan basename nor <plan-code>-<kebab-case-name>",
+      lifecycle: "needs_attention",
+    });
+  }
+  expect(report.summary.invalid_sidecars).toBe(rejected.length);
+  expect(report.violations.filter((violation) => violation.includes("invalid sidecar"))).toHaveLength(rejected.length);
+}, platformTestTimeout(45_000));
+
+test("environment lifecycle follows its own state, never the plan status or sibling environments", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const { path: second } = await addPlanEnvironment(fixture, "CAC-0007-second-pr");
+  await writeFile(join(second, "draft.txt"), "uncommitted pull-request work\n");
+
+  const lifecycles = async () => {
+    const report = await auditRepository(fixture.root, {
+      authorityRoot: fixture.authorityRoot,
+    });
+    return ["CAC-0007-contract", "CAC-0007-second-pr"].map((environmentId) => {
+      const worktree = worktreeNamed(report, environmentId);
+      return [environmentId, worktree.sidecar_valid, worktree.dirty, worktree.lifecycle];
+    });
+  };
+  const expected = [
+    ["CAC-0007-contract", true, false, "active"],
+    ["CAC-0007-second-pr", true, true, "needs_attention"],
+  ];
+  expect(await lifecycles()).toEqual(expected);
+  for (const status of ["done", "archived"]) {
+    await writeFile(
+      fixture.planPath,
+      validPlanContents.replace("status: in_progress", `status: ${status}`),
+    );
+    expect(await lifecycles()).toEqual(expected);
+  }
+});
+
 test("human inventory exposes the self-reported machine, harness, and thread recovery hint", async () => {
   const fixture = await createFixture({
     authorityAvailable: true,
@@ -898,13 +989,30 @@ async function createFixture({
   git(root, ["push", "-u", "origin", "main"]);
 
   const basename = "CAC-0007-contract";
-  const canonical = join(root, ".worktrees", "root", basename);
-  git(root, ["worktree", "add", "-b", `codex/${basename}`, canonical, "main"]);
+  const fixture = { root, authorityRoot, remote, planPath, planRelativePath };
+  const { path: canonical, branch } = await addPlanEnvironment(fixture, basename, {
+    branch: `codex/${basename}`,
+    publishFeatureBranch,
+    sidecarOverrides,
+  });
+
+  return { ...fixture, canonical, branch };
+}
+
+// Adds a linked worktree plus sidecar for one more environment of the fixture
+// plan; every pull request of a plan gets its own environment like this.
+async function addPlanEnvironment(fixture, environmentId, {
+  branch = `agent/${environmentId}`,
+  publishFeatureBranch = true,
+  sidecarOverrides = {},
+} = {}) {
+  const path = join(fixture.root, ".worktrees", "root", environmentId);
+  git(fixture.root, ["worktree", "add", "-b", branch, path, "main"]);
   if (publishFeatureBranch) {
-    git(canonical, ["push", "-u", "origin", `codex/${basename}`]);
+    git(path, ["push", "-u", "origin", branch]);
   }
   await writeFile(
-    join(root, ".worktrees", "root", `${basename}.worktree.json`),
+    join(fixture.root, ".worktrees", "root", `${environmentId}.worktree.json`),
     `${JSON.stringify({
       schema_version: "companiesascode.worktree.v1",
       organization: "TestProvider",
@@ -914,10 +1022,10 @@ async function createFixture({
       module_path: ".",
       repo_kind: "root_repo",
       base_branch: "main",
-      branch: `codex/${basename}`,
+      branch,
       mission_control_plan_code: "CAC-0007",
-      mission_control_plan_path: planRelativePath,
-      worktree_path: `.worktrees/root/${basename}`,
+      mission_control_plan_path: fixture.planRelativePath,
+      worktree_path: `.worktrees/root/${environmentId}`,
       created_at: "2026-07-18T00:00:00Z",
       created_by: "contract-test",
       last_touched: "2026-07-18T00:00:00Z",
@@ -928,14 +1036,13 @@ async function createFixture({
       ...sidecarOverrides,
     }, null, 2)}\n`,
   );
+  return { path, branch };
+}
 
-  return {
-    root,
-    authorityRoot,
-    remote,
-    canonical,
-    branch: `codex/${basename}`,
-  };
+function worktreeNamed(report, environmentId) {
+  return report.worktrees.find(
+    (item) => item.path.replaceAll("\\", "/").split("/").at(-1) === environmentId,
+  );
 }
 
 function canonicalWorktree(report) {

@@ -6,8 +6,10 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { existsSync, writeFileSync } from "node:fs";
 import {
+  isPlanEnvironmentId,
   parseWorktreeCreateArgs,
   PLAN_CODE_PATTERN,
+  planEnvironmentId,
 } from "./worktree-create-contract.mjs";
 import { auditRepository } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
 
@@ -76,6 +78,134 @@ test.each([
   expect(() => parseWorktreeCreateArgs(argv)).toThrow(message);
 });
 
+test("parses --name for an additional pull-request environment of a plan", () => {
+  expect(parseWorktreeCreateArgs(["--plan", "CAC-0007", "--name", "second-pr-2"])).toEqual({
+    plan: "CAC-0007",
+    name: "second-pr-2",
+    dryRun: false,
+  });
+});
+
+test.each([
+  "",
+  "Second-PR",
+  "second_pr",
+  "second pr",
+  "-second",
+  "second-",
+  "second--pr",
+  "nested/name",
+  "x".repeat(65),
+])("rejects non-kebab-case --name %p", (name) => {
+  expect(() => parseWorktreeCreateArgs(["--plan", "CAC-0007", "--name", name])).toThrow("--name musí být kebab-case");
+});
+
+test("environment ID is the plan basename by default and <code>-<name> per extra pull request", () => {
+  const plan = { planBasename: "CAC-0007-create-lane", planCode: "CAC-0007" };
+  expect(planEnvironmentId(plan)).toBe("CAC-0007-create-lane");
+  expect(planEnvironmentId({ ...plan, name: "second-pr" })).toBe("CAC-0007-second-pr");
+  for (const environmentId of ["CAC-0007-create-lane", "CAC-0007-second-pr", "CAC-0007-x"]) {
+    expect(isPlanEnvironmentId(environmentId, plan)).toBe(true);
+  }
+  for (const environmentId of [
+    "CAC-0007",
+    "CAC-0008-second-pr",
+    "CAC-0007-Second-PR",
+    "CAC-0007_second-pr",
+    "CAC-0007--second",
+    "cac-0007-second-pr",
+    "second-pr",
+    "",
+  ]) {
+    expect(isPlanEnvironmentId(environmentId, plan)).toBe(false);
+  }
+});
+
+test("dry-run with --name derives environment, branch and sidecar from <code>-<name>", async () => {
+  const fixture = await createLaneFixture({
+    plans: [["2026/07/CAC-0007-create-lane.yaml", validPlan]],
+  });
+  const result = runCreateLane({ ...fixture, name: "second-pr" });
+  expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+  const stdout = result.stdout.replaceAll("\\", "/");
+  expect(stdout).toContain("ok - dry-run: plán data/mission-control/plans/2026/07/CAC-0007-create-lane.yaml");
+  expect(stdout).toContain("/.worktrees/root/CAC-0007-second-pr\n");
+  expect(stdout).toContain("ok - dry-run: branch agent/CAC-0007-second-pr z origin/main");
+  expect(stdout).toContain("/.worktrees/root/CAC-0007-second-pr.worktree.json");
+
+  const explicitBranch = runCreateLane({ ...fixture, name: "second-pr", branch: "codex/CAC-0007-review-fixes" });
+  expect({ status: explicitBranch.status, stderr: explicitBranch.stderr }).toMatchObject({ status: 0 });
+  expect(explicitBranch.stdout).toContain("ok - dry-run: branch codex/CAC-0007-review-fixes z origin/main");
+});
+
+test("rejects an invalid --name before resolving the plan or mutating anything", async () => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const result = runCreateLane({
+    ...fixture,
+    repository: "organizations/TestOrganization_GEN3",
+    name: "Second_PR",
+    dryRun: false,
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("--name musí být kebab-case");
+  expect(existsSync(join(fixture.root, ".worktrees"))).toBe(false);
+  expect(existsSync(join(fixture.organizationRoot, ".worktrees"))).toBe(false);
+  expect(git(fixture.organizationRoot, ["branch", "--list", "agent/*"])).toBe("");
+});
+
+test("one plan owns several pull-request environments; conflicts are per environment ID", async () => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const repository = "organizations/TestOrganization_GEN3";
+  const canonical = runCreateLane({ ...fixture, repository, dryRun: false });
+  expect({ status: canonical.status, stderr: canonical.stderr }).toMatchObject({ status: 0 });
+  const second = runCreateLane({ ...fixture, repository, name: "second-pr", dryRun: false });
+  expect({ status: second.status, stderr: second.stderr }).toMatchObject({ status: 0 });
+
+  const canonicalSidecarPath = join(fixture.organizationRoot, ".worktrees/root/CAC-0007.worktree.json");
+  const secondSidecarPath = join(fixture.organizationRoot, ".worktrees/root/CAC-0007-second-pr.worktree.json");
+  const canonicalSidecar = JSON.parse(await Bun.file(canonicalSidecarPath).text());
+  const secondSidecarSource = await Bun.file(secondSidecarPath).text();
+  const secondSidecar = JSON.parse(secondSidecarSource);
+  expect(canonicalSidecar).toMatchObject({
+    branch: "agent/CAC-0007",
+    worktree_path: "organizations/TestOrganization_GEN3/.worktrees/root/CAC-0007",
+  });
+  expect(secondSidecar).toMatchObject({
+    branch: "agent/CAC-0007-second-pr",
+    worktree_path: "organizations/TestOrganization_GEN3/.worktrees/root/CAC-0007-second-pr",
+    mission_control_plan_code: canonicalSidecar.mission_control_plan_code,
+    mission_control_plan_path: canonicalSidecar.mission_control_plan_path,
+    mission_control_authority_path: canonicalSidecar.mission_control_authority_path,
+  });
+  expect(git(join(fixture.organizationRoot, ".worktrees/root/CAC-0007-second-pr"), ["branch", "--show-current"]))
+    .toBe("agent/CAC-0007-second-pr");
+
+  // The same environment ID is a conflict even though its plan already has
+  // another environment; nothing of the existing one is rewritten.
+  const repeated = runCreateLane({ ...fixture, repository, name: "second-pr", dryRun: false });
+  expect(repeated.status).toBe(1);
+  expect(repeated.stderr).toContain("worktree už existuje");
+  expect(repeated.stderr).toContain("--name");
+  expect(await Bun.file(secondSidecarPath).text()).toBe(secondSidecarSource);
+
+  git(fixture.organizationRoot, ["remote", "set-url", "origin", fixture.organizationRemote]);
+  const audit = await auditRepository(fixture.organizationRoot);
+  const environments = audit.worktrees
+    .filter((entry) => entry.path_class === "canonical")
+    .map((entry) => ({
+      environment: entry.path.replaceAll("\\", "/").split("/").at(-1),
+      branch: entry.branch,
+      sidecar_valid: entry.sidecar_valid,
+      lifecycle: entry.lifecycle,
+    }))
+    .sort((left, right) => left.environment.localeCompare(right.environment));
+  expect(environments).toEqual([
+    { environment: "CAC-0007", branch: "agent/CAC-0007", sidecar_valid: true, lifecycle: "active" },
+    { environment: "CAC-0007-second-pr", branch: "agent/CAC-0007-second-pr", sidecar_valid: true, lifecycle: "active" },
+  ]);
+  expect(audit.violations).toEqual([]);
+});
+
 test("dry-run accepts a unique exact-code plan only after canonical validation", async () => {
   const fixture = await createLaneFixture({
     plans: [["CAC-0007.yaml", validPlan]],
@@ -139,6 +269,24 @@ test("overlapping invocations retain their own create-lock ownership", async () 
   const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3", overlap: true });
   expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
   expect(existsSync(join(fixture.root, ".worktrees/.worktree-create.lock"))).toBe(false);
+});
+
+test("a concurrent create of another environment of the same plan fails fast on the shared lock, then succeeds", async () => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const result = runCreateLane({
+    ...fixture,
+    repository: "organizations/TestOrganization_GEN3",
+    overlap: true,
+    overlapArgs: ["--name", "second-pr"],
+    dryRun: false,
+  });
+  expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+  expect(existsSync(join(fixture.root, ".worktrees/.worktree-create.lock"))).toBe(false);
+  for (const environmentId of ["CAC-0007", "CAC-0007-second-pr"]) {
+    expect(existsSync(join(fixture.organizationRoot, ".worktrees/root", `${environmentId}.worktree.json`))).toBe(true);
+    expect(git(join(fixture.organizationRoot, ".worktrees/root", environmentId), ["branch", "--show-current"]))
+      .toBe(`agent/${environmentId}`);
+  }
 });
 
 test.each([
@@ -633,9 +781,12 @@ function runCreateLane({
   mutation = null,
   productionTransport = false,
   overlap = false,
+  overlapArgs = [],
   authorityOverride = null,
   includeTaskAgentIdentity = true,
   repository = null,
+  name = null,
+  branch = null,
   dryRun = true,
 }) {
   const env = { ...process.env };
@@ -670,6 +821,7 @@ const run = (cwd, args) => {
   return { status: r.status, stdout: r.stdout.trim(), stderr: r.stderr.trim() };
 };
 const overlap = ${JSON.stringify(overlap)};
+const overlapArgs = ${JSON.stringify(overlapArgs)};
 let reachedRemote, resumeRemote;
 const reached = new Promise(resolve => { reachedRemote = resolve; });
 const resume = new Promise(resolve => { resumeRemote = resolve; });
@@ -694,13 +846,19 @@ try {
     const lockPath = join(${JSON.stringify(root)}, ".worktrees", ".worktree-create.lock");
     const ownerPath = join(lockPath, "owner.json");
     const ownedLock = readFileSync(ownerPath, "utf8");
+    const firstArgv = process.argv;
+    // The first invocation parsed its argv synchronously; the second may ask
+    // for another environment of the same plan.
+    process.argv = [...firstArgv, ...overlapArgs];
     let secondRejected = false;
-    try { await runWorktreeCreate(dependencies); } catch { secondRejected = true; }
+    try { await runWorktreeCreate(dependencies); } catch (error) { secondRejected = error.message.includes("create lock"); }
     const preserved = existsSync(ownerPath) && readFileSync(ownerPath, "utf8") === ownedLock;
     resumeRemote();
     await first;
     if (!secondRejected || !preserved) throw new Error("Overlapping call released another invocation's lock");
     if (existsSync(lockPath)) throw new Error("Owner did not release its own lock");
+    if (overlapArgs.length > 0) await runWorktreeCreate(dependencies);
+    process.argv = firstArgv;
   } else {
     await runWorktreeCreate(dependencies);
   }
@@ -713,6 +871,8 @@ try {
   ];
   if (dryRun) args.push("--dry-run");
   if (repository) args.push("--repository", repository);
+  if (name !== null) args.push("--name", name);
+  if (branch) args.push("--branch", branch);
   return spawnSync(process.execPath, args, {
     cwd: root,
     encoding: "utf8",

@@ -29,10 +29,16 @@ Aktuální podporovaný create kontrakt je:
 
 ```sh
 bun run worktrees:create -- --plan DEV-6500 --dry-run
+bun run worktrees:create -- --plan DEV-6500 --name exports-retry --dry-run
 bun run worktrees:create -- --plan DEV-6500 \
   --repository organizations/ExampleOrg_GEN3 \
   --dry-run
 ```
+
+Jeden worktree patří jednomu pull requestu. Bez `--name` vznikne kanonický
+environment plánu; každý další pull request téhož plánu dostane
+`--name <kebab-case>` a s ním vlastní environment `<KOD>-<name>`, branch
+`agent/<KOD>-<name>` a sidecar (oddíl Environment ID níže).
 
 Bez `--repository` je edit targetem Lazurio Root. Selector přijme pouze exact
 `organizations/<Org-mount>`, jehož nesymlinkovaná cesta, samostatný Git root,
@@ -63,28 +69,43 @@ vytvoří kanonický filesystem, zapíše metadata, Launchpad jej načte ze stej
 read modelu a cleanup později vyhodnotí live Git/PR/Mission Control/runtime
 evidence.
 
-Environment ID se nevymýšlí v CLI. Je přesně basename kanonického Mission
-Control plan souboru bez `.yaml`, například
-`DEV-6500-installations-history`. Doctor plán najde podle unikátního kódu,
-ověří tvar `<PREFIX>-<čtyři číslice>-<kebab-case>` a použije basename jako
-adresář i sidecar prefix. Jeden plán tak může mít v jednom scope právě jeden
-environment. Opakované vytvoření stejné specifikace je idempotentní; stejný
-plán s jinou specifikací skončí vysvětleným konfliktem a vyžádá explicitní
-`hydrate`, `add-edit` nebo nový Mission Control plán.
+Environment ID se volně nevymýšlí a slouží jako adresář i sidecar prefix.
+Environment patří jednomu pull requestu, ne celému plánu, a ID má jeden ze
+dvou tvarů:
+
+- kanonický environment plánu: přesně basename kanonického Mission Control
+  plan souboru bez `.yaml`, například `DEV-6500-installations-history`.
+  Doctor plán najde podle unikátního kódu, ověří tvar
+  `<PREFIX>-<čtyři číslice>-<kebab-case>` a basename použije;
+- další pull request téhož plánu: `<KOD>-<name>`, kde `<KOD>` je kód plánu
+  a `<name>` kebab-case jméno do 64 znaků zvolené při create
+  (`--name exports-retry` → `DEV-6500-exports-retry`, branch
+  `agent/DEV-6500-exports-retry`). Sidecar odkazuje na tentýž plán (kód
+  i kanonickou cestu) a drží vlastní branch.
+
+Jeden plán tak smí v jednom scope vlastnit několik environmentů a souběžná
+vlákna jednoho plánu na sebe nečekají. Konflikt i idempotence se posuzují
+podle Environment ID, nikdy podle plánu: opakované vytvoření stejné
+specifikace téhož ID je idempotentní, totéž ID s jinou specifikací skončí
+vysvětleným konfliktem a vyžádá explicitní `hydrate`, `add-edit` nebo nové
+`--name`. Aktivní `worktrees:create` lane existující environment nikdy
+nepřepíše: přerušený create téhož ID bezpečně naváže na branch, kterou
+prokazatelně vlastní, a hotový environment skončí vysvětleným konfliktem.
 
 Environment ID je po vytvoření neměnné. Přejmenování nebo přesun Mission
-Control plan souboru je blokovaný, dokud vlastní živý environment. Pokud k
-renamu dojde mimo guarded flow, Doctor environment označí `needs_attention`;
-teprve explicitní `adopt --path <environment> --plan <code>` po ověření kódu,
-historie a nového locatoru smí vazbu opravit. Adopce nikdy sama nepřejmenuje
-adresář ani branch.
+Control plan souboru je blokovaný, dokud na něj odkazuje živý environment.
+Pokud k renamu dojde mimo guarded flow, Doctor environment označí
+`needs_attention`; teprve explicitní `adopt --path <environment> --plan <code>`
+po ověření kódu, historie a nového locatoru smí vazbu opravit. Adopce nikdy
+sama nepřejmenuje adresář ani branch.
 
 ## Neměnné invarianty
 
 1. Primární Lazurio, Organization a module checkouty jsou reference pro
    `main`; feature práci do nich nezapisujeme.
-2. Jedna Organization feature práce má jeden plan-owned Organization
-   environment.
+2. Každý pull request má vlastní plan-owned environment (u Organizace
+   Organization environment). Jeden plán jich smí vlastnit několik; každý
+   vzniká, žije a končí se svým pull requestem, ne s plánem.
 3. Organization environment drží přirozený tvar celé Organizace, ale každý
    nested repo zůstává samostatná Git historie a access hranice.
 4. Editovaný modul je skutečný Git worktree na plan-code branchi. Dependency
@@ -120,16 +141,16 @@ vlastní primary checkout. Pro změnu uvnitř jediného takového repa je kanoni
 cesta:
 
 ```text
-<repo>/.worktrees/root/<canonical-plan-basename>/
-<repo>/.worktrees/root/<canonical-plan-basename>.worktree.json
+<repo>/.worktrees/root/<environment-id>/
+<repo>/.worktrees/root/<environment-id>.worktree.json
 ```
 
 Agent nesmí založit sibling složku `<repo>-worktrees`, worktree v home,
 `~/.hermes/worktrees`, `/tmp` ani worktree jednoho repa uvnitř `.worktrees`
-jiného repa. Jeden cross-repo plán smí vlastnit po jednom environmentu v každém
-dotčeném repu, ale každý zůstává samostatná Git historie, branch a PR. Sidecar
-v consumer repu odkazuje na authority-relative Mission Control plán; samotný
-consumer repo nezačne držet jeho kopii.
+jiného repa. Jeden cross-repo plán smí vlastnit environmenty v každém
+dotčeném repu, vždy jeden na pull request; každý zůstává samostatná Git
+historie, branch a PR. Sidecar v consumer repu odkazuje na authority-relative
+Mission Control plán; samotný consumer repo nezačne držet jeho kopii.
 
 Dokud CAC-0065 nedodá guarded Doctor create akci, agent smí pro top-level repo
 použít ruční `git worktree add` jen na této cestě, se sidecarem a následnou
@@ -188,8 +209,8 @@ merge, protože main i review evidence mohly mezitím zestárnout.
 Kanonická cesta:
 
 ```text
-<Lazurio>/.worktrees/root/<canonical-plan-basename>/
-<Lazurio>/.worktrees/root/<canonical-plan-basename>.worktree.json
+<Lazurio>/.worktrees/root/<environment-id>/
+<Lazurio>/.worktrees/root/<environment-id>.worktree.json
 ```
 
 Je to linked worktree veřejného Lazurio root repozitáře. Doctor z něj
@@ -207,8 +228,8 @@ Organization environment s vlastním plánem/access hranicí.
 Kanonická cesta:
 
 ```text
-organizations/<Org-mount>/.worktrees/root/<canonical-plan-basename>/
-organizations/<Org-mount>/.worktrees/root/<canonical-plan-basename>.worktree.json
+organizations/<Org-mount>/.worktrees/root/<environment-id>/
+organizations/<Org-mount>/.worktrees/root/<environment-id>.worktree.json
 ```
 
 Příklad pro změnu Installations a jeho test/build dependencies:
@@ -573,6 +594,11 @@ Report per environment obsahuje:
 
 ## Lifecycle a cleanup state
 
+Lifecycle se počítá pro každý environment zvlášť a sleduje jeho pull
+request. Stav Mission Control plánu ani ostatní environmenty téhož plánu ho
+neovlivňují: environment mergnutého PR se uklízí hned, i když plán dál běží
+v jiných environmentech.
+
 Jednotná cleanup taxonomie:
 
 | Stav | Význam |
@@ -598,8 +624,9 @@ Environment je `ready_to_delete`, jen když současně platí:
    recovery bundle;
 6. žádný runtime proces nepoužívá environment path;
 7. žádný active/handoff writer environment stále nevlastní;
-8. Mission Control plán je terminální (`done` nebo explicitně `archived` /
-   abandoned podle kontraktu);
+8. o úklidu rozhoduje pull request environmentu (guard 9), ne Mission Control
+   plán: stav plánu cleanup nepodmiňuje ani neautorizuje a plán smí mít další
+   živé environmenty;
 9. každý edit member splní právě jednu PR větev: (a) vůbec nevytvořil změnu —
    `HEAD == base_sha`, strom je clean a nemá outgoing commit — takže PR není
    potřeba; (b) jeho exact-head PR je `MERGED`; nebo (c) je `CLOSED` bez merge

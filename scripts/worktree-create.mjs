@@ -3,8 +3,13 @@
 // worktree + branch + schema-validní sidecar jedním příkazem, aby worktrees
 // vznikaly správně už konstrukcí a Launchpad/doctor s nimi uměly pracovat.
 //
+// Jeden worktree patří jednomu pull requestu. Bez --name vznikne kanonický
+// environment <plan-basename>; každý další pull request téhož plánu dostane
+// --name <kebab-case>, tedy environment <KOD>-<name> s branchí agent/<KOD>-<name>.
+//
 // Použití:
-//   bun run worktrees:create -- --plan CAC-0085 [--branch agent/<basename>]
+//   bun run worktrees:create -- --plan CAC-0085 [--name <kebab-case>]
+//     [--branch agent/<environment-id>]
 //     [--repository organizations/<Org-mount>]
 //     [--purpose "..."] [--surface claude-code] [--agent-label "Claude Code"]
 //     [--task-agent-id <opaque-id>] [--created-by <id>] [--dry-run]
@@ -18,6 +23,7 @@ import { trustedGitExecutable } from "./agent-skills-entrypoint.mjs";
 import {
   parseWorktreeCreateArgs,
   PLAN_CODE_PATTERN,
+  planEnvironmentId,
 } from "./worktree-create-contract.mjs";
 import {
   allocateOwnedWorktreeBranch,
@@ -431,9 +437,10 @@ async function main({ remoteGit = git } = {}, invocation) {
     fail(`plán ${plan.relative} deklaruje dev_code ${String(planData.dev_code)}, očekáváno ${planCode}.`);
   }
   const planBasename = basename(plan.path, ".yaml");
-  const worktreePath = join(primaryRoot, ".worktrees", "root", planBasename);
-  const sidecarPath = join(primaryRoot, ".worktrees", "root", `${planBasename}.worktree.json`);
-  const branch = options.branch ?? `agent/${planBasename}`;
+  const environmentId = planEnvironmentId({ planBasename, planCode, name: options.name ?? null });
+  const worktreePath = join(primaryRoot, ".worktrees", "root", environmentId);
+  const sidecarPath = join(primaryRoot, ".worktrees", "root", `${environmentId}.worktree.json`);
+  const branch = options.branch ?? `agent/${environmentId}`;
   if (!branch.includes(planCode)) {
     fail(`branch ${branch} neobsahuje kód plánu ${planCode}.`);
   }
@@ -451,7 +458,14 @@ async function main({ remoteGit = git } = {}, invocation) {
   }
   invocation.createLock = acquiredLock.lock;
 
-  if (existsSync(worktreePath)) fail(`worktree už existuje: ${worktreePath}`);
+  // Konflikt se posuzuje podle Environment ID, ne podle plánu: jiné
+  // environmenty téhož plánu create nebrzdí.
+  if (existsSync(worktreePath)) {
+    fail(
+      `worktree už existuje: ${worktreePath}; pokračuj v něm, nebo pro další pull request `
+      + `plánu ${planCode} zvol jiné --name <kebab-case>.`,
+    );
+  }
   // Osiřelý sidecar bez worktree může nést recovery handoff přerušené práce —
   // nikdy ho tiše nepřepisuj.
   if (existsSync(sidecarPath)) fail(`sidecar už existuje: ${sidecarPath}; zkontroluj jeho recovery_handoff a odstraň ho vědomě.`);
@@ -529,14 +543,14 @@ async function main({ remoteGit = git } = {}, invocation) {
     ...(authorityPath ? { mission_control_authority_path: authorityPath } : {}),
     mission_control_plan_path: plan.relative,
     worktree_path: editRepository.repoKind === "root_repo"
-      ? `.worktrees/root/${planBasename}`
-      : `${editRepository.organizationPath}/.worktrees/root/${planBasename}`,
+      ? `.worktrees/root/${environmentId}`
+      : `${editRepository.organizationPath}/.worktrees/root/${environmentId}`,
     created_at: now,
     created_by: options["created-by"] ?? `${taskAgentLocator.surface}-for-${userInfo().username}@${hostname()}`,
     last_touched: now,
     status: "active",
     pr_url: null,
-    purpose: options.purpose ?? `Práce na plánu ${planCode} (${planBasename}).`,
+    purpose: options.purpose ?? `Práce na plánu ${planCode} (${environmentId}).`,
     conversation_origin: {
       machine_ref: machineRef,
       surface: taskAgentLocator.surface,
