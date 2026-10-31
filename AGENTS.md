@@ -252,8 +252,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jiným vláknům neposíláš, pokud si to tvůj uživatel výslovně nepřeje; každé
   vlákno má vlastní worktree, PR, ověření a assignee. Co potřebuje pořadí
   nebo návaznost, zapíšeš na GitHub (závislost, štítek, komentář
-  s @zmínkou). Frontu drží v repozitářích vývoje Lazuria Pablo, v ostatních
-  repozitářích Organizace její Henry. Každý tvůj text na GitHubu končí
+  s @zmínkou). Frontu drží v repozitářích vývoje Lazuria Pablo (roadmapa
+  v Mission Controlu LazurioDevelopment), v ostatních repozitářích
+  Organizace její Henry. Každý tvůj text na GitHubu končí
   podpisem `Agent: environment <UUID> · T3 thread <UUID>` (bot: UUID bota),
   bez jména Prostředí.
 
