@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +42,8 @@ async function fixture() {
   const root = join(sandbox, "Dashboard");
   git(sandbox, ["init", "-q", "-b", "main", root]);
   await writeFile(join(root, "README.md"), "fixture\n");
-  git(root, ["add", "README.md"]);
+  await writeFile(join(root, ".gitignore"), "node_modules/\n");
+  git(root, ["add", "README.md", ".gitignore"]);
   git(root, ["commit", "-q", "-m", "fixture"]);
   return { root, head: git(root, ["rev-parse", "HEAD"]) };
 }
@@ -140,4 +141,38 @@ test("keeps a checkout that moved off the reviewed head and refuses paths outsid
   await expect(removeReviewCheckout({ root, target: join(root, ".worktrees", "root", "x") })).rejects.toThrow(
     "not a review checkout",
   );
+});
+
+test("removes a checkout whose only extra files are ignored ones, such as installed dependencies", async () => {
+  const { root, head } = await fixture();
+  const created = await createReviewCheckout({ root, pullRequest: pullRequest(head), repository });
+  await mkdir(join(created.path, "node_modules", "pkg"), { recursive: true });
+  await writeFile(join(created.path, "node_modules", "pkg", "index.js"), "module.exports = 1;\n");
+  await removeReviewCheckout({ root, target: created.path });
+  expect(existsSync(created.path)).toBe(false);
+  expect(existsSync(created.sidecarPath)).toBe(false);
+});
+
+test("keeps a checkout with modified, staged or untracked files", async () => {
+  const { root, head } = await fixture();
+  const created = await createReviewCheckout({ root, pullRequest: pullRequest(head), repository });
+  await writeFile(join(created.path, "README.md"), "changed\n");
+  await expect(removeReviewCheckout({ root, target: created.path })).rejects.toThrow("changes or untracked files");
+  git(created.path, ["add", "README.md"]);
+  await expect(removeReviewCheckout({ root, target: created.path })).rejects.toThrow("changes or untracked files");
+  git(created.path, ["checkout", "HEAD", "--", "README.md"]);
+  await writeFile(join(created.path, "notes.txt"), "unsaved\n");
+  await expect(removeReviewCheckout({ root, target: created.path })).rejects.toThrow("changes or untracked files");
+  expect(existsSync(join(created.path, "notes.txt"))).toBe(true);
+  expect(existsSync(created.sidecarPath)).toBe(true);
+});
+
+test("keeps a checkout whose sidecar is missing or unreadable, because its head cannot be proven", async () => {
+  const { root, head } = await fixture();
+  const created = await createReviewCheckout({ root, pullRequest: pullRequest(head), repository });
+  await rm(created.sidecarPath);
+  await expect(removeReviewCheckout({ root, target: created.path })).rejects.toThrow("cannot prove the checkout holds no work");
+  await writeFile(created.sidecarPath, "{not json");
+  await expect(removeReviewCheckout({ root, target: created.path })).rejects.toThrow("cannot prove the checkout holds no work");
+  expect(existsSync(created.path)).toBe(true);
 });

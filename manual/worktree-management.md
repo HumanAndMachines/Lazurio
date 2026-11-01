@@ -182,8 +182,10 @@ které reviewuje pull requesty víc Organizací. Inventura vede takový worktree
 jako `review` a `worktrees:check` ho odmítne bez sidecaru, na branchi nebo
 mimo reviewovaný head; vnořenou cestu pod `.worktrees/review/` bere jako
 legacy. Po verdiktu ho reviewer smaže
-`bun run worktrees:review -- --remove <PR URL>`; příkaz checkout, který
-odjel z reviewovaného headu, nesmaže. Když v pull requestu začne měnit, jde to
+`bun run worktrees:review -- --remove <PR URL>`. Příkaz nesmaže checkout,
+který odjel z reviewovaného headu, má změněné, staged nebo netrackované
+soubory, nebo jehož sidecar chybí či se nedá přečíst; ignorované soubory
+(nainstalované závislosti) zachování nebrání. Když v pull requestu začne měnit, jde to
 přes create lane jako každá změna.
 
 ## Aktivní freshness gate před taskem a PR pushem

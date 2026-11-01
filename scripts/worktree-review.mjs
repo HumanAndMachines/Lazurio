@@ -124,17 +124,27 @@ export async function removeReviewCheckout({ root, target }) {
   }
   const sidecarPath = `${path}.worktree.json`;
   if (existsSync(path)) {
-    let reviewedHead = null;
+    let sidecar = null;
     try {
-      reviewedHead = JSON.parse(readFileSync(sidecarPath, "utf8")).head_sha ?? null;
+      sidecar = JSON.parse(readFileSync(sidecarPath, "utf8"));
     } catch {
-      reviewedHead = null;
+      sidecar = null;
+    }
+    const error = sidecar
+      ? validateReviewSidecar(sidecar, { worktreeRelativePath: relative(root, path).split(sep).join("/") })
+      : "the sidecar is missing or not JSON";
+    if (error) {
+      throw new Error(`cannot prove the checkout holds no work (${error}); inspect ${path} and remove it by hand`);
     }
     const head = git(path, ["rev-parse", "HEAD"]).stdout;
-    if (reviewedHead && head !== reviewedHead) {
+    if (head !== sidecar.head_sha) {
       throw new Error(`the checkout moved from the reviewed head to ${head.slice(0, 12)}; keep it and save that work first`);
     }
-    const removed = git(root, ["worktree", "remove", "--force", path]);
+    const status = git(path, ["status", "--porcelain=v1", "--untracked-files=all"]);
+    if (!status.ok || status.stdout !== "") {
+      throw new Error(`the checkout has changes or untracked files; keep it and save that work first: ${path}`);
+    }
+    const removed = git(root, ["worktree", "remove", path]);
     if (!removed.ok) throw new Error(`git worktree remove failed: ${removed.stderr}`);
   }
   git(root, ["worktree", "prune"]);
