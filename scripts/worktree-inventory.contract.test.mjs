@@ -7,6 +7,7 @@ import {
   formatHuman,
   resolveAuthorityPlanPath,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
+import { createReviewCheckout } from "./worktree-review.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 
 const cleanupPaths = [];
@@ -139,6 +140,116 @@ test("accepts several pull-request environments of one plan next to its canonica
   }
   expect(report.summary).toMatchObject({ canonical: 3, invalid_sidecars: 0 });
   expect(report.violations).toEqual([]);
+});
+
+test("accepts a detached review checkout under .worktrees/review whose sidecar names the pull request's plan", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: false,
+    planAvailable: false,
+  });
+  const created = await createReviewCheckout({
+    root: fixture.root,
+    pullRequest: {
+      url: "https://github.com/TestProvider/Dashboard/pull/42",
+      headSha: revParse(fixture.root, "main"),
+      headRefName: "agent/CAC-0007-contract",
+      title: "Contract fixture (CAC-0007)",
+    },
+    repository: { owner: "TestProvider", repo: "Dashboard" },
+    createdBy: "contract-test",
+  });
+  expect(created.planCode).toBe("CAC-0007");
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  expect(worktreeNamed(report, "Dashboard-pr-42")).toMatchObject({
+    path_class: "review",
+    lifecycle: "review",
+    branch: null,
+    sidecar_exists: true,
+    sidecar_valid: true,
+  });
+  expect(report.summary).toMatchObject({ review: 1, legacy: 0 });
+  expect(report.orphan_entries).toEqual([]);
+  expect(report.violations.filter((line) => line.includes(".worktrees/review"))).toEqual([]);
+});
+
+test("rejects a review checkout without its sidecar", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const reviewPath = join(fixture.root, ".worktrees", "review", "Dashboard-pr-45");
+  git(fixture.root, ["worktree", "add", "--detach", reviewPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const review = worktreeNamed(report, "Dashboard-pr-45");
+  expect(review).toMatchObject({ path_class: "review", sidecar_exists: false });
+  expect(report.violations).toContain(`review worktree is missing its sidecar: ${review.path}`);
+});
+
+test("rejects a review checkout that moved off its reviewed head", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const created = await createReviewCheckout({
+    root: fixture.root,
+    pullRequest: {
+      url: "https://github.com/TestProvider/Dashboard/pull/46",
+      headSha: revParse(fixture.root, "main"),
+      headRefName: "agent/CAC-0007-contract",
+      title: "Contract fixture",
+    },
+    repository: { owner: "TestProvider", repo: "Dashboard" },
+  });
+  git(created.path, ["commit", "--allow-empty", "-m", "an edit in a review checkout"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const review = worktreeNamed(report, "Dashboard-pr-46");
+  expect(review).toMatchObject({ path_class: "review", sidecar_valid: false });
+  expect(report.violations.some((line) =>
+    line.startsWith(`review worktree has an invalid sidecar: ${review.path} (checkout is at `)
+  )).toBe(true);
+});
+
+test("rejects a review checkout that is on a branch", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const reviewPath = join(fixture.root, ".worktrees", "review", "Dashboard-pr-43");
+  git(fixture.root, ["worktree", "add", "-b", "review/pr-43", reviewPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const review = worktreeNamed(report, "Dashboard-pr-43");
+  expect(review).toMatchObject({ path_class: "review", branch: "review/pr-43" });
+  expect(report.violations).toContain(
+    `review worktree is on branch review/pr-43, expected a detached head: ${review.path}`,
+  );
+});
+
+test("still treats a nested path under .worktrees/review as legacy", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const nestedPath = join(fixture.root, ".worktrees", "review", "group", "Dashboard-pr-44");
+  git(fixture.root, ["worktree", "add", "--detach", nestedPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const nested = worktreeNamed(report, "Dashboard-pr-44");
+  expect(nested).toMatchObject({ path_class: "legacy" });
+  expect(report.violations).toContain(`legacy worktree: ${nested.path}`);
 });
 
 test("still rejects environment basenames outside <plan-basename> and <plan-code>-<kebab-case-name>", async () => {
@@ -1037,6 +1148,15 @@ async function addPlanEnvironment(fixture, environmentId, {
     }, null, 2)}\n`,
   );
   return { path, branch };
+}
+
+function revParse(cwd, ref) {
+  const result = Bun.spawnSync(["git", "-C", cwd, "rev-parse", ref], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: sanitizedEnv(),
+  });
+  return result.stdout.toString().trim();
 }
 
 function worktreeNamed(report, environmentId) {

@@ -8,7 +8,7 @@ import {
   hasRepositoryDbAuthorityMarker,
   readMissionControlRepositoryDbAuthority,
 } from "../../../../scripts/repository-db-authority-contract.mjs";
-import { isPlanEnvironmentId } from "../../../../scripts/worktree-create-contract.mjs";
+import { isPlanEnvironmentId, PLAN_CODE_PATTERN } from "../../../../scripts/worktree-create-contract.mjs";
 import { readOrganizationRoot } from "../../../../lazurio/core/organization-root-reader-lib.mjs";
 
 const GIT_TIMEOUT_MS = 10_000;
@@ -58,7 +58,9 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
       ? null
       : join(dirname(record.path), `${basename(record.path)}.worktree.json`);
     const sidecarExists = sidecarPath ? await pathExists(sidecarPath) : false;
-    const sidecar = sidecarExists
+    const sidecar = sidecarExists && pathClass === "review"
+      ? await readReviewSidecar(primaryRoot, record, sidecarPath)
+      : sidecarExists
       ? await validateSidecar(
           primaryRoot,
           authorityRoot,
@@ -161,6 +163,15 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
     if (worktree.path_class === "legacy" || worktree.path_class === "external") {
       violations.push(`${worktree.path_class} worktree: ${worktree.path}`);
     }
+    if (worktree.path_class === "review" && worktree.branch) {
+      violations.push(`review worktree is on branch ${worktree.branch}, expected a detached head: ${worktree.path}`);
+    }
+    if (worktree.path_class === "review" && !worktree.sidecar_exists) {
+      violations.push(`review worktree is missing its sidecar: ${worktree.path}`);
+    }
+    if (worktree.path_class === "review" && worktree.sidecar_exists && !worktree.sidecar_valid) {
+      violations.push(`review worktree has an invalid sidecar: ${worktree.path} (${worktree.sidecar_error})`);
+    }
     if (worktree.path_class === "canonical" && !worktree.sidecar_exists) {
       violations.push(`canonical worktree is missing sidecar: ${worktree.path}`);
     }
@@ -221,6 +232,7 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
     summary: {
       registered: enriched.length,
       canonical: enriched.filter((item) => item.path_class === "canonical").length,
+      review: enriched.filter((item) => item.path_class === "review").length,
       legacy: enriched.filter((item) => item.path_class === "legacy").length,
       external: enriched.filter((item) => item.path_class === "external").length,
       dirty: enriched.filter((item) => item.dirty === true).length,
@@ -275,6 +287,15 @@ export function classifyWorktreePath(primaryRoot, worktreePath) {
   ) {
     return "canonical";
   }
+  const reviewRelative = relative(join(primary, ".worktrees", "review"), target);
+  if (
+    reviewRelative !== ""
+    && !reviewRelative.startsWith("..")
+    && !isAbsolute(reviewRelative)
+    && !reviewRelative.includes(sep)
+  ) {
+    return "review";
+  }
   if (isWithin(join(primary, ".worktrees"), target)) return "legacy";
   return "external";
 }
@@ -310,6 +331,43 @@ export function parseWorktreePorcelain(output) {
     .filter((record) => record.path);
 }
 
+export const REVIEW_SIDECAR_SCHEMA = "companiesascode.review-checkout.v1";
+const REVIEW_PULL_REQUEST = /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/pull\/[1-9][0-9]*$/;
+const REVIEW_HEAD = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+// A review checkout is owned by the plan of the pull request it reviews (decision 0049): its sidecar names the plan
+// code taken from the pull request, its URL and the exact head. The plan's Mission Control need not be attached,
+// because the checkout changes nothing.
+export function validateReviewSidecar(data, { worktreeRelativePath, head } = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return "sidecar is not a JSON object";
+  if (data.schema_version !== REVIEW_SIDECAR_SCHEMA) return `schema_version is not ${REVIEW_SIDECAR_SCHEMA}`;
+  if (!PLAN_CODE_PATTERN.test(data.mission_control_plan_code ?? "")) return "mission_control_plan_code is not a plan code";
+  if (!REVIEW_PULL_REQUEST.test(data.pull_request ?? "")) return "pull_request is not a GitHub pull request URL";
+  if (!REVIEW_HEAD.test(data.head_sha ?? "")) return "head_sha is not a full commit SHA";
+  if (worktreeRelativePath !== undefined && data.worktree_path !== worktreeRelativePath) {
+    return `worktree_path is not ${worktreeRelativePath}`;
+  }
+  if (typeof data.created_at !== "string" || Number.isNaN(Date.parse(data.created_at))) return "created_at is not a timestamp";
+  if (head && head !== data.head_sha) return `checkout is at ${head.slice(0, 12)}, not at the reviewed head ${data.head_sha.slice(0, 12)}`;
+  return null;
+}
+
+async function readReviewSidecar(primaryRoot, record, sidecarPath) {
+  let data;
+  try {
+    data = JSON.parse(await readFile(sidecarPath, "utf8"));
+  } catch {
+    return { valid: false, error: "sidecar is not valid JSON", planPath: null };
+  }
+  const error = validateReviewSidecar(data, {
+    worktreeRelativePath: relative(primaryRoot, record.path).split(sep).join("/"),
+    head: record.head ?? null,
+  });
+  return error
+    ? { valid: false, error, planPath: null }
+    : { valid: true, error: null, planPath: null, planCode: data.mission_control_plan_code };
+}
+
 function classifyLifecycle({
   pathClass,
   exists,
@@ -320,6 +378,7 @@ function classifyLifecycle({
 }) {
   if (pathClass === "primary") return "reference";
   if (!exists) return "missing_path";
+  if (pathClass === "review") return "review";
   if (
     pathClass !== "canonical"
     || !sidecarValid
@@ -1029,9 +1088,14 @@ async function scanLocalOrphans(primaryRoot, commonDir, records, options = {}) {
       skippedNames: new Set(),
     },
     {
+      path: join(primaryRoot, ".worktrees", "review"),
+      pathClass: "review",
+      skippedNames: new Set(),
+    },
+    {
       path: join(primaryRoot, ".worktrees"),
       pathClass: "legacy",
-      skippedNames: new Set(["root"]),
+      skippedNames: new Set(["root", "review"]),
       ownerOnly: false,
     },
     {
@@ -1700,7 +1764,7 @@ export function formatHuman(report) {
   const lines = [
     `Worktree audit: ${report.repository_root}`,
     `Canonical root: ${report.canonical_root}`,
-    `Registered: ${report.summary.registered} · canonical ${report.summary.canonical} · legacy ${report.summary.legacy} · external ${report.summary.external}`,
+    `Registered: ${report.summary.registered} · canonical ${report.summary.canonical} · review ${report.summary.review} · legacy ${report.summary.legacy} · external ${report.summary.external}`,
   ];
   if (report.summary.disk_bytes !== null) {
     const qualifier = report.summary.disk_scan_complete ? "" : " (partial lower bound)";
