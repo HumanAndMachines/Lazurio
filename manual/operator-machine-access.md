@@ -43,7 +43,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží pracovní laptop uživatele nebo jeho osobní strana.
      Výjimkou je SSH z Pracovního Prostředí člověka do Týmových Prostředí jeho
-     Teamů v téže Organizaci (0224 bod 2b) a Správcovský přístup
+     Teamů v téže Organizaci (0224 bod 2b; druhé `ssh` spuštěné v Pracovním
+     Prostředí jeho klíčem) a Správcovský přístup
      z Pracovního Prostředí Admina do všech ostatních Prostředí jeho
      Organizace (0202, 0224 bod 2c). Ke službám servisní Mašiny svého serveru (AI pool a další)
      jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
@@ -60,19 +61,20 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    z něj jde přes vlastní Pracovní Prostředí. HTTPS a jiný dosah dál drží
    0192: schválené zařízení a grant.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
-   na osobní VM ani na osobní laptop. Jedinou výjimkou je zařízení vědomě
-   deklarované v obou zónách podle pravidla 8.
+   na osobní VM, a to bez výjimky. Na osobní laptop nebo jiné zařízení dosáhne
+   Prostředí jen Přístupem na zařízení podle pravidla 8 (0224 bod 2e).
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc uživatelů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
    nevzniká druhý roster. Příchozí SSH přijímá i z Pracovních Prostředí členů
    Teamu (0224 bod 2b). Výjimkou je servisní SSH z jmenovaného Pracovního
    Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
-   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM;
-   ke službám servisní Mašiny svého serveru, které jí Deployment Repo povolí,
-   jde po vnitřní síti serveru, ne přes Headscale (0209). Na zařízení dosáhne
-   jen Přístupem na zařízení, který zapne Owner zařízení (0224 bod 2e); jinak
-   by agenti jednoho člena došli na laptop jiného.
+   uzel a adresa), i když Admin není členem toho Teamu. Odchozí grant na jiné VM
+   nikdy nemá; ke službám servisní Mašiny svého serveru, které jí Deployment
+   Repo povolí, jde po vnitřní síti serveru, ne přes Headscale (0209). Na
+   zařízení dosáhne jen Přístupem na zařízení podle pravidla 8, tedy jen když
+   ho pro toto Týmové Prostředí zapne Owner zařízení; jinak by agenti jednoho
+   člena došli na laptop jiného.
 5. **Mezi uživateli nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
@@ -85,43 +87,40 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    klienta svého člověka, jen u Organizace, jejímž je živým Ownerem, a jen
    jak to deklaruje overlay hostu (dodatek 0217 z 2026-10-28).
 
-8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
-   Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
-   být deklarované v obou zónách, ale jen při splnění všech podmínek:
-   - **Owner a uživatel jsou tatáž osoba.** Neměnné GitHub ID vlastníka
-     zařízení je zároveň Owner té Organizace, jejíž pracovní Mašiny na ně mají
-     dosáhnout. Pravidlo „z pracovní do osobní nikdy“ chrání uživatele před
-     autoritou Organizace a jejích pracovních VM. Výjimka tu ochranu neruší;
-     uživatel, který je sám Ownerem, ji vědomě a výslovně vzdává pro jedno své
-     zařízení a přijímá důsledek popsaný níže. Rozhodnutí je jeho, protože se
-     týká jeho vlastního zařízení.
-   - **Výslovná deklarace, nikdy odvození.** Dvojí zařazení se zapisuje v infra
-     u konkrétního zařízení spolu s Organizacemi, kterých se týká. Neodvozuje se
-     z jména uzlu, popisu, Headscale usera ani z toho, že je někdo Owner.
-   - **Jen jmenovaná Organizace.** Grant dostanou pouze pracovní Mašiny
-     deklarovaných Organizací. Ostatní Organizace téhož Conglomerate ani cizí
-     uživatelé z toho nic nezískávají.
-   - **Vědomý důsledek.** Autorita Organization Hostu a Conglomerate Hostu tím
-     dostane technickou cestu do zařízení, na kterém uživatel pracuje i
-     soukromě. Ta autorita nepatří jen jemu: mají ji všichni Owneři té
-     Organizace a každý, kdo smí spouštět práci na jejích pracovních VM, včetně
-     agentních účtů. To je přijatý důsledek; proto tuhle výjimku nesmí dostat
-     zařízení nikoho jiného než Ownera a vždy jen jeho vlastním rozhodnutím.
-   - **Osobní VM výjimku nedostává.** Dvojí zařazení platí pro klientské
-     zařízení, ne pro osobní VM. Ta zůstává výhradně v osobní zóně (0153) a
-     pracovní VM na ni nikdy nedosáhne. Mezi zakladatelovým notebookem, jeho
-     osobní VM a jeho pracovní VM je to jediná zakázaná cesta.
-   - **Mechanismus až po deklaraci.** Dokud Machines neumí dvojí zařazení
-     výslovně deklarovat, platí přísné pravidlo 3 i pro zakladatelovo zařízení
-     a žádná pracovní VM na deklarovaného osobního klienta nedosáhne.
+8. **Přístup na zařízení (0224 bod 2e).** Prostředí smí SSH na konkrétní
+   zařízení, například na laptop svého člověka nebo na pracovní stanici
+   Organizace s aplikacemi, na kterých mají agenti pracovat, jen při splnění
+   všech podmínek:
+   - **Zapíná ho Owner zařízení.** Osobní zařízení zapíná jeho člověk a vybere
+     ze svých Prostředí (Osobního i Pracovních), která na ně smějí. Zařízení
+     Organizace zapíná její Admin a vybere Prostředí té Organizace, která na ně
+     smějí. Nikdo jiný přístup na cizí zařízení nezapne.
+   - **Výslovně, pro každé zařízení zvlášť, nikdy odvozením.** Souhlas se váže
+     na konkrétní zařízení a vybraná Prostředí. Neodvozuje se ze jména uzlu,
+     popisu, Headscale usera, role Owner ani z toho, že zařízení smí do
+     Prostředí. Owner ho může kdykoli odvolat; nová spojení pak do 5 minut
+     selžou.
+   - **Jen vybraná Prostředí.** Ostatní Prostředí, Organizace téhož
+     Conglomerate ani cizí uživatelé z toho nic nezískávají.
+   - **Vědomý důsledek.** Zpřístupní-li člověk svůj osobní počítač Pracovnímu
+     Prostředí, dostane technickou cestu do zařízení, na kterém pracuje
+     i soukromě, i autorita nad tímto Prostředím: Owneři a Admini Organizace,
+     Správcovský přístup a každý, kdo smí na Prostředí spouštět práci, včetně
+     agentních účtů. Proto rozhoduje jen Owner zařízení a souhlas jde odvolat.
+   - **Osobní VM nikdy.** Přístup na zařízení platí pro klientská zařízení, ne
+     pro osobní VM. Ta zůstává výhradně v osobní zóně (0153) a pracovní VM na
+     ni nikdy nedosáhne.
+   - **Mechanismus.** Souhlasy převádí na hrany služba na Conglomerate Hostu
+     (0224 bod 3, plán DEV-6687). Dokud nepoběží, vzniká Přístup na zařízení
+     jen výslovnou výjimkou v Deployment Repu a bez ní žádné Prostředí na
+     zařízení nedosáhne.
 
 **Vědomý důsledek pracovního laptopu:** pracovní laptop dostává SSH do
 pracovního Environmentu, který je přidělený témuž uživateli; opačný směr pracovní
-VM → laptop se obecně nedává (0182). Pracovní VM vlastní Organizace a nad ní
-stojí autorita Organization Hostu a Conglomerate Hostu, takže hrana VM →
-zařízení by této vyšší autoritě dala technickou cestu do laptopu. Proto ji
-dostává jen výslovně deklarované zařízení Ownera podle pravidla 8, třída `work`
-se nikdy neodvozuje a osobní laptop ji dostat nesmí.
+VM → laptop vzniká jen Přístupem na zařízení podle pravidla 8. Pracovní VM
+vlastní Organizace a nad ní stojí autorita Organization Hostu a Conglomerate
+Hostu, takže hrana VM → zařízení dává této vyšší autoritě technickou cestu do
+laptopu. Proto o ní rozhoduje jen Owner zařízení a nikdy se neodvozuje.
 
 ## Hranice jednoho Conglomerate
 
@@ -241,18 +240,16 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 | Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě, HumanAndMachine-ai a Lumbio |
 | Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě |
 
-Matěj a Anička mají osobní laptop, takže jejich pracovní VM na laptop nesmí.
-Matouš je Owner Macano-Techu a rozhodl, že jeho Windows notebook má být podle
-pravidla 8 v obou zónách pro Macano-Tech. **Dnes to ještě neplatí:** Machines
-dvojí zařazení zatím neumí výslovně deklarovat, takže podle přísného pravidla 3
-pracovní VM Macano-Techu na notebook nedosáhne a notebook je v příkladu jen v
-osobní zóně. Pracovní VM na něj dosáhne teprve po třech krocích: schopnost
-Machines deklarovat dvojí zařazení, výslovná deklarace v `Macano-Tech/infra` a
-běžné nasazení s Plánem a Permitem. Pak se notebook objeví v obou sloupcích.
-Do osobní zóny jiných uživatelů ani jiných Organizací se tím nic neotevírá.
-Uživatel s pracovním laptopem Organizace má SSH z pracovního laptopu do
-přiděleného pracovního Environmentu; opačný směr jen u výslovně deklarovaného
-zařízení Ownera podle pravidla 8.
+Pracovní VM na osobní laptop nesmí, dokud Owner laptopu nezapne Přístup na
+zařízení podle pravidla 8. Matouš je Owner Macano-Techu a chce, aby jeho Windows
+notebook byl dosažitelný z pracovního Prostředí Macano-Techu; podle pravidla 8
+to zapne sám jako Owner zařízení. **Dnes to ještě neplatí:** služba, která
+souhlasy převádí na hrany, zatím neběží, takže bez výslovné výjimky
+v `Macano-Tech/infra` pracovní VM Macano-Techu na notebook nedosáhne a notebook
+je v příkladu jen v osobní zóně. Do osobní zóny jiných uživatelů ani jiných
+Organizací se tím nic neotevírá. Uživatel s pracovním laptopem Organizace má SSH
+z pracovního laptopu do přiděleného pracovního Environmentu; opačný směr jen
+Přístupem na zařízení podle pravidla 8.
 
 Realizace a stav: Mission Control DEV-6614. Konkrétní instance pro Matouše
 drží `Macano-Tech/infra` v `machines/macano-tech-conglomerate-host/operator-device-access.md`.
