@@ -57,7 +57,7 @@ v mezeře před schválením. SSH ze schváleného zařízení do pracovního
 Environmentu, který je přidělený témuž uživateli, je pravidlo: vzniká spolu
 se schválením zařízení a při změně přidělení, odvolání zařízení nebo konci
 členství se přidá nebo odebere odvozením z téže pravdy, bez další žádosti
-(dodatek 0192 z 2026-10-31, HumanAndMachines/Lazurio#652). Opačný směr (Environment →
+(dodatek 0192 z 2026-11-01, HumanAndMachines/Lazurio#652). Opačný směr (Environment →
 zařízení) se obecně nedává a jde o samostatné rozhodnutí (0182); jiné SSH
 vyžaduje vlastní oprávnění, kromě SSH z Osobního Environmentu do pracovních
 Environmentů přidělených témuž uživateli ve stejném tailnetu: i to je pravidlo
@@ -84,7 +84,7 @@ záznam, ne vstup, a je jedinou výjimkou z pravidla, že se Deployment Repo
 mění jen pull requestem (0205 bod 2). Při výpadku služby je záložní cestou reviewovaná změna
 v Deployment Repu a služba takové schválení po obnově převezme. Přesun
 záznamu do Auth je samostatná migrace bez období dvou zapisovatelů
-(dodatek 0192 z 2026-10-31, HumanAndMachines/Lazurio#652).
+(dodatek 0192 z 2026-11-01, HumanAndMachines/Lazurio#652).
 
 ## Kdo může přístup spravovat
 
@@ -281,7 +281,7 @@ organizačního bota samy neomezují práva takto vloženého účtu.
 |---|---|
 | Lazurio účty, propojené identity, členství a oprávnění ke vstupu | Auth na standardním identity provideru; Dashboard je spravuje, nevytváří druhý seznam ACL. |
 | Technická existence, vlastník a nasazené verze Environmentu; konfigurace a důkazy sítě | Deployment Repo vlastníka a řízený apply Machines. |
-| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Jednotlivá schválení: služba na Conglomerate Hostu jako jediný zapisovatel, ovládaná Adminem z Dashboardu (své zařízení smí odebrat i sám člověk), s auditem a automatickou projekcí do Deployment Repa bez review; pravidla schvalování a dosahu: Deployment Repo vlastníka hostu a řízený apply Machines; cílově Auth spravovaný z Dashboardu (dodatek 0192 z 2026-10-31, HumanAndMachines/Lazurio#652). |
+| Schválení zařízení pro Organizaci (jen Organizace s tailnetem; u Organizace s veřejným DNS podle 0213 se zařízení neschvalují) | Jednotlivá schválení: služba na Conglomerate Hostu jako jediný zapisovatel, ovládaná Adminem z Dashboardu (své zařízení smí odebrat i sám člověk), s auditem a automatickou projekcí do Deployment Repa bez review; pravidla schvalování a dosahu: Deployment Repo vlastníka hostu a řízený apply Machines; cílově Auth spravovaný z Dashboardu (dodatek 0192 z 2026-11-01, HumanAndMachines/Lazurio#652). |
 | Přidělení uživatele a delegované sdílení | Jeden autoritativní account/access kontrakt Auth spravovaný přes Dashboard. Dosavadní infra assignment je migrační vstup, ne druhý nezávislý writer. |
 | Repozitáře, Team capability, schválení PR a branch rules | GitHub. |
 | Tajné hodnoty | Příslušný trezor/custody; ostatní vrstvy drží reference. |
@@ -326,7 +326,7 @@ Změny infrastruktury dál používají řízené plánování, apply a evidenci
 Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale. Jedinou
 výjimkou jsou jednotlivá schválení zařízení, která jdou přes službu na
 Conglomerate Hostu podle pravidel z Deployment Repa (dodatek 0192
-z 2026-10-31, HumanAndMachines/Lazurio#652). To neznamená nutnost osobního GitHub účtu nebo dalšího
+z 2026-11-01, HumanAndMachines/Lazurio#652). To neznamená nutnost osobního GitHub účtu nebo dalšího
 kliknutí Admina pro každé dovolené interní sdílení. Servisní vykonavatel smí
 mít jen rozsah schválené operace a nesmí vytvářet vlastní přístupovou
 autoritu.
@@ -368,7 +368,7 @@ Admin každé Organizace schválí konkrétní zařízení. Schválené zaříze
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
 dál rozhoduje brána Environmentu. Laptop člověka dosáhne do všech jeho
 vlastních Environmentů na HTTPS 443 i SSH 22, telefon jen na 443, dokud ho
-aplikace nepotřebuje na 22 (dodatek 0192 z 2026-10-31,
+aplikace nepotřebuje na 22 (dodatek 0192 z 2026-11-01,
 HumanAndMachines/Lazurio#652). SSH zůstává u přesných grantů: zařízení →
 Environment přidělený témuž uživateli vzniká spolu se schválením zařízení a sleduje
 změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně (SSH z Osobního
