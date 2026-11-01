@@ -108,11 +108,14 @@ Bezprostředně před merge Pablo ověří, že:
 
 Mandát nepokrývá productionspace, přístupy, secrets a billing. Z Release
 pokrývá jen finální verzi LazurioPlatform ověřeného kandidáta, který prošel
-Ringem 0, zaznamenaným smoke testem jako testovací účet se zeleným světlem
-a zelenou kvalifikací (0166 s dodatkem z 2026-10-31). Finální tag je na
-commitu kandidáta, nebo na commitu, který se od něj liší jen
-v `qualification/` a `docs/evidence/`, kam záznam smoke testu přibude po
-kandidátovi. Delší pozorování konkrétního kandidáta smí vyžádat Matěj.
+Ringem 0, zelenou kvalifikací a záznamem, který vyžaduje kontrola v jeho
+stromu (0166 s dodatkem z 2026-10-31): kandidát vyříznutý po změně kontroly,
+tedy od verze 0.1.19, zaznamenaným smoke testem jako testovací účet se
+zeleným světlem, dříve vyříznutý kandidát celým osmihodinovým canary (u
+`v0.1.14-rc.2` tříhodinovým) se záznamem `lazurio.canary.v1`. Finální tag je
+na commitu kandidáta, nebo na commitu, který se od něj liší jen v
+`qualification/` a `docs/evidence/`, kam záznam přibude po kandidátovi.
+Delší pozorování konkrétního kandidáta smí vyžádat Matěj.
 Z Deployment Repos pokrývá jen Ring 0 lane LazurioExampleOrganization, které
 po merge aplikuje runner, a jen když Plan-only vznikl nejvýš hodinu před
 merge, schválení Planu je odeslané po head commitu, lane nemá zámek obnovy a
@@ -127,7 +130,7 @@ request předá jako assignee podle tohoto kontraktu.
 | Po schválení přibude commit | Nové review na novém headu; dřívější schválení se nepočítá. |
 | Repozitář vyžaduje aktuální větev a merge queue nemá | Pablo merguje jeden pull request po druhém a každý před merge aktualizuje a znovu ověří. |
 | Pull request patří do jiného Deployment Repa, nebo jde o Release jiné linky | Mimo mandát: Pablo drží pořadí, merge nebo Release dělá člověk. |
-| Kandidát LazurioPlatform nemá zelené světlo smoke testu nebo zelenou kvalifikaci, Matěj vyžádal delší pozorování, nebo by se finální tag od kandidáta lišil i mimo `qualification/` a `docs/evidence/` | Pablo finální verzi nevydá a počká, nebo požádá člověka. |
+| Kandidát LazurioPlatform nemá záznam, který vyžaduje kontrola v jeho stromu (od verze 0.1.19 zelené světlo smoke testu, u dříve vyříznutého celý canary), nebo zelenou kvalifikaci, Matěj vyžádal delší pozorování, nebo by se finální tag od kandidáta lišil i mimo `qualification/` a `docs/evidence/` | Pablo finální verzi nevydá a počká, nebo požádá člověka. |
 | Ring 0 lane: Plan-only je starší než hodina, nebo na lane běží jiný apply | Pablo nemerguje; pořídí nový Plan, nebo počká na END. |
 | Lane LazurioExampleOrganization potřebuje lokální apply operátora | Mimo mandát: merge a apply dělá operátor. |
 
