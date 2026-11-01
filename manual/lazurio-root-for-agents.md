@@ -72,6 +72,33 @@ Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby uživatele jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
 
+## Bun aplikací v `lazurio update`
+
+Na počítači `lazurio update` po synchronizaci checkoutů a před obnovou balíčků
+stáhne předem do mezipaměti runtime Lazuria
+(`~/.local/share/lazurio/runtimes/bun/`, na Windows
+`%LOCALAPPDATA%\Lazurio\runtimes\bun\`) každou přesnou verzi Bunu, kterou root
+po synchronizaci vidí připnutou: pin CLI z `lazurio/package.json#packageManager`,
+`tools.bun.default` z `lazurio/toolchain.json` a pin každé App namountovaných
+Organizací včetně jejich worktrees (decision 0171 s dodatkem z 2026-10-24,
+bod 5). Verzi, kterou přesně hlásí Bun uživatele, nestahuje. Verze bere jednu
+po druhé stejným resolverem jako start App; první registr npm, který
+neodpoví, stahování pro tento běh ukončí a zbylé verze se stáhnou při prvním
+startu. Update kvůli tomu nikdy neselže: výsledek každé verze je v sekci
+`tools` jeho reportu a stažení, které neprojde kontrolou integrity, je navíc
+upozornění. V Prostředí na serveru tento krok neběží.
+
+Každé použití verze z mezipaměti zapíše čas do značky
+`~/.local/share/lazurio/runtimes/bun.used/<verze>` vedle mezipaměti, nikdy do
+adresáře verze. Update k tomu přidá přehled mezipaměti: u každé verze buď
+`would_remove`, nebo všechny důvody, proč zůstává (`cli_pin`, `default`,
+`pinned_by_apps: N`, `used_recently: <čas>` za posledních 14 dní,
+`held_by_process`, a `unknown: …`, když root něco neví: verze ještě nemá
+značku, inventář App není úplný, kontrola procesů selhala nebo na Windows
+chybí). **Zatím se nic nemaže.** Mazání přijde samostatným vydáním s branami
+z #640, až reporty z veřejné referenční Organizace a jednoho počítače potvrdí
+očekávané důvody. Agent proto mezipaměť ručně neuklízí.
+
 ## Toolchain musí přežít instalační relaci
 
 Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
