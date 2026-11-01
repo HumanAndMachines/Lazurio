@@ -275,6 +275,52 @@ odpovědnost drží proces. Také v týmovém browseru platí, že dodatečně
 vložené osobní přihlášení je dostupné všem uživatelům s plným přístupem; ochrany
 organizačního bota samy neomezují práva takto vloženého účtu.
 
+## Přístupy v Conglomerate (0224)
+
+Tato tabulka je jediný výčet přístupů mezi lidmi, zařízeními a Prostředími.
+Co v ní není, nevzniká automaticky; to je výjimka z bodu „Výjimky“ níže.
+
+| Přístup | Odkud → kam | Vzniká z | Jak |
+|---|---|---|---|
+| **Pracovní přístup** | Osobní Prostředí → Pracovní Prostředí přidělená jeho Ownerovi ve všech Organizacích jeho Conglomerate | přidělení Prostředí a živé členství | automaticky, SSH, jen tímto směrem |
+| **Týmová Prostředí přes Pracovní** | Pracovní Prostředí člověka → Týmová Prostředí jeho Teamů v téže Organizaci | členství v Teamu | automaticky, SSH; z Osobního Prostředí přes vlastní Pracovní (`ProxyJump`), nikdy napřímo |
+| **Správcovský přístup** (0202) | Pracovní Prostředí Admina → všechna ostatní Prostředí jeho Organizace (Pracovní, Týmová, Henry, Služby serveru) | živá role Admina | automaticky, SSH; z Osobního Prostředí Admina přes jeho Pracovní |
+| **Přístup ze zařízení** | schválené zařízení člověka → jeho Prostředí | schválení zařízení Adminem (dodatek 0192 z 2026-11-01) | automaticky po schválení, 443 a 22, telefon 443 |
+| **Přístup na zařízení** | Prostředí → konkrétní počítač (vlastní laptop, pracovní stanice Organizace) | souhlas Ownera zařízení: osobní počítač jeho člověk, počítač Organizace její Admin s výběrem Prostředí | volitelně, pro každé zařízení zvlášť, odvolatelně, SSH |
+| **Výjimky** | cokoli jiného | reviewovaný PR do Deployment Repa s důvodem a ownerem | výjimečně |
+
+Opačné směry nevznikají: Pracovní → Osobní, Týmové → Pracovní, jiné
+Prostředí → Prostředí Admina. Produkt 1 bez tailnetu (0207) tyto přístupy
+nemá.
+
+**Kdo přístup uděluje.** Admin Organizace svými rozhodnutími: přidělí
+Prostředí, zařadí člověka do Teamu, jmenuje Admina, schválí zařízení. Vstup
+Organizace do Conglomerate je souhlas jejího Admina s Pracovním přístupem
+členů a s osobním kontextem níže. Zvláštní SSH grant se nezakládá.
+
+**Jak vzniká.** Fakta průběžně převádí služba na Conglomerate Hostu, tatáž,
+která schvaluje zařízení. Mění politiku Headscale bez restartu, doručí klíč
+zdrojového Prostředí do cílového účtu (`from=` adresa zdroje, bez
+přeposílání), dá zdrojovému Prostředí seznam cílů s pinnutými klíči
+hostitele a vede audit s projekcí do Deployment Repa bez review. Pravidla
+zůstávají v Gitu a mění se PR. Po odebrání faktu zmizí pravidlo i klíč do
+5 minut. Nová spojení pak selžou a běžící relace smějí doběhnout.
+
+**Jak to agenti vědí.** Osobní Prostředí má od Lazuria seznam svých cílů
+a výsledek posledního ověření (`ssh <id Prostředí> true`). Onboarding
+i doctor každou cestu vyzkouší a chybějící cesta k přidělenému Pracovnímu
+Prostředí je nedokončený onboarding. Buddy a agenti nepoužívají ruční
+aliasy. Když cesta chybí, řeknou to.
+
+**Data v osobním kontextu.** Conglomerate sdružuje spřátelené Organizace
+a Osobní Prostředí patří právě jednomu. V osobním kontextu se data těchto
+Organizací smějí potkat, protože se potkávají v člověku, který je členem
+každé z nich, a Buddy z nich smí skládat výstupy pro svého uživatele.
+V kontextu Organizace se data nemíchají a z Osobního Prostředí se nic
+nepřenáší do jiné Organizace. Každá Organizace má vlastní server jen se
+svými Prostředími; Osobní Prostředí sdílejí server poolu, pod Conglomeráty
+odděleně od Osobních Prostředí bez tailnetu.
+
 ## Autority a mapa Conglomerate
 
 | Pravda | Vlastník |
@@ -313,20 +359,20 @@ flowchart LR
 ```
 
 Síťová pravidla jsou odvozený nasazený výstup schválené politiky a konkrétního
-zařízení. Výjimkou je SSH z Osobního Prostředí do Pracovních Prostředí jeho
-Ownera ve stejném tailnetu: Osobní Prostředí není zařízení a toto pravidlo se
-odvozuje z přidělení Pracovního Prostředí a živého členství, bez schválení
-zařízení (dodatek 0192 z 2026-10-26). Diagram výše ukazuje vstup lidí a jejich
+zařízení. Výjimkou jsou přístupy mezi Prostředími a na zařízení z oddílu
+Přístupy v Conglomerate (0224): Osobní Prostředí není zařízení a jeho
+Pracovní přístup se odvozuje z přidělení Pracovního Prostředí a živého
+členství, bez schválení zařízení. Diagram výše ukazuje vstup lidí a jejich
 zařízení, ne úplný model zdrojů SSH. Každá SSH hrana mezi Prostředími má
 kromě grantu v síti i klíč zdrojového Prostředí, který cíl přijímá jen
 z adresy zdroje (`from=`), jen k přidělenému účtu a bez přeposílání, a který
 se přidá a odebere se stejným přidělením nebo rolí; chyba v síťových
 pravidlech tak sama SSH neotevře.
 Změny infrastruktury dál používají řízené plánování, apply a evidenci;
-Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale. Jedinou
-výjimkou jsou jednotlivá schválení zařízení, která jdou přes službu na
-Conglomerate Hostu podle pravidel z Deployment Repa (dodatek 0192
-z 2026-11-01, HumanAndMachines/Lazurio#652). To neznamená nutnost osobního GitHub účtu nebo dalšího
+Dashboard nesmí obejít tyto kontroly přímým zápisem do Headscale. Výjimkou
+jsou jednotlivá schválení zařízení (dodatek 0192 z 2026-11-01,
+HumanAndMachines/Lazurio#652) a přístupy odvozené z faktů podle 0224: obojí
+jde přes službu na Conglomerate Hostu podle pravidel z Deployment Repa. To neznamená nutnost osobního GitHub účtu nebo dalšího
 kliknutí Admina pro každé dovolené interní sdílení. Servisní vykonavatel smí
 mít jen rozsah schválené operace a nesmí vytvářet vlastní přístupovou
 autoritu.

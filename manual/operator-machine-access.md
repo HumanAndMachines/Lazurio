@@ -36,15 +36,16 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      Grant se odvozuje z aktuálního stavu (schválené zařízení × právě přidělené
      Environmenty) bez samostatné žádosti a sleduje změny přidělení, zařízení
      i členství (dodatek 0192 z 2026-10-07).
-     Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní
-     a týmové Environmenty včetně Prostředí Henry na zařízení nedosáhnou, kromě
-     výslovně deklarovaného zařízení Ownera podle pravidla 8.
+     Opačný směr (Prostředí → zařízení) je Přístup na zařízení: vznikne jen
+     tehdy, když ho zapne Owner zařízení, pro každé zařízení zvlášť (0224
+     bod 2e, nahrazuje 0182 bod 3).
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží pracovní laptop uživatele nebo jeho osobní strana.
-     Výjimkou je servisní SSH z jmenovaného Pracovního Prostředí Ownera
-     nebo Admina do Pracovních a Týmových Prostředí členů téže Organizace
-     (0202). Ke službám servisní Mašiny svého serveru (AI pool a další)
+     Výjimkou je SSH z Pracovního Prostředí člověka do Týmových Prostředí jeho
+     Teamů v téže Organizaci (0224 bod 2b) a Správcovský přístup
+     z Pracovního Prostředí Admina do všech ostatních Prostředí jeho
+     Organizace (0202, 0224 bod 2c). Ke službám servisní Mašiny svého serveru (AI pool a další)
      jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
      Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
      Druhou výjimkou jsou stanoviště Organizace LazurioDevelopment (0217).
@@ -52,22 +53,26 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      Organizací, ve kterých pracuje, drží jako jeho klient, stejně jako jeho
      počítač.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
-   téhož uživatele: SSH + HTTPS. Z Osobního Prostředí je automatické a vždy
-   zapnuté jen SSH do Pracovních Prostředí přidělených jeho Ownerovi ve stejném
-   tailnetu, bez schválení zařízení (dodatek 0192 z 2026-10-26). HTTPS a jiný
-   dosah dál drží 0192: schválené zařízení a grant.
+   téhož uživatele: SSH + HTTPS. Z Osobního Prostředí je automatický a vždy
+   zapnutý jen Pracovní přístup: SSH do Pracovních Prostředí přidělených jeho
+   Ownerovi ve všech Organizacích jeho Conglomerate, bez schválení zařízení
+   (0224 bod 2a). Do Týmových Prostředí a ostatních Prostředí Organizace se
+   z něj jde přes vlastní Pracovní Prostředí. HTTPS a jiný dosah dál drží
+   0192: schválené zařízení a grant.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
    na osobní VM ani na osobní laptop. Jedinou výjimkou je zařízení vědomě
    deklarované v obou zónách podle pravidla 8.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc uživatelů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
-   nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
+   nevzniká druhý roster. Příchozí SSH přijímá i z Pracovních Prostředí členů
+   Teamu (0224 bod 2b). Výjimkou je servisní SSH z jmenovaného Pracovního
    Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
    uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM;
    ke službám servisní Mašiny svého serveru, které jí Deployment Repo povolí,
-   jde po vnitřní síti serveru, ne přes Headscale (0209). Pracovní zóna nemá hranu
-   z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
+   jde po vnitřní síti serveru, ne přes Headscale (0209). Na zařízení dosáhne
+   jen Přístupem na zařízení, který zapne Owner zařízení (0224 bod 2e); jinak
+   by agenti jednoho člena došli na laptop jiného.
 5. **Mezi uživateli nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která

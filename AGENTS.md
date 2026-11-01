@@ -33,7 +33,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   člen kterékoli Organizace, kterou host obsluhuje, ale data, členství,
   schválení zařízení ani granty se mezi Organizacemi nepřenášejí a vstup do
   jejich Prostředí dál drží členství a grant dané Organizace (0184
-  s dodatkem z 2026-10-23, 0192).
+  s dodatkem z 2026-10-23, 0192). Výjimkou je osobní kontext: v Osobním
+  Prostředí se data Organizací jeho Conglomerate smějí potkat ve výstupech
+  pro jeho člověka, nikdy v jiné Organizaci (0224).
 - Organizace jsou lokální gitignored nested repa v `organizations/<org>/`
   (root trackuje jen `organizations/README.md`); `personalspace/` je
   gitignored privátní kontext mimo GitHub organizace.
@@ -187,8 +189,14 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   z webu (0207) a Headscale mu nezakládej. Osobní Prostředí, které v tailnetu
   už je (piloty, Produkt 2), je výhradně nodem Headscale tailnetu Conglomerate
   Hostu pod osobním Headscale userem svého uživatele. Samostatný VPN,
-  WireGuard tunel, veřejný port ani DNAT pro něj nezakládej (0154). Osobní
-  přístup a SSH do Prostředí Organizace přes Headscale mají oddělené granty.
+  WireGuard tunel, veřejný port ani DNAT pro něj nezakládej (0154).
+- **Pracovní přístup** (0224): z Osobního Prostředí vede automaticky SSH do
+  Pracovních Prostředí jeho člověka ve všech Organizacích Conglomerate; do
+  Týmových Prostředí a jako Admin do ostatních Prostředí Organizace se jde
+  dál přes vlastní Pracovní Prostředí. Přístup na zařízení zapíná jeho
+  Owner. Používáš jen cesty, které zapsalo Lazurio, a chybějící cestu
+  nahlásíš; ruční alias ani nový grant nezakládáš. Tabulku přístupů drží
+  `manual/environment-access-model.md`.
 - Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
   `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
   lowercase login zmrazený při přidělení Prostředí (0153, 0154, 0216,
