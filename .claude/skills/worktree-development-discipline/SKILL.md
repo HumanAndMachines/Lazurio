@@ -64,14 +64,16 @@ autoritu.
    Branch obsahuje kód plánu. Vlastník edit checkoutu a vlastník Mission
    Control plánu smějí být dvě různé Organizace; sidecar drží obě identity
    a plán se nekopíruje.
-   Review cizího pull requestu, ve kterém nic neměníš, plán nepotřebuje:
-   udělej ho v odpojeném checkoutu přesného headu
-   `git worktree add --detach .worktrees/review/<repo>-pr-<číslo> <head>`
-   v owner repu, bez sidecaru, a po verdiktu ho smaž (`git worktree remove`,
-   `git worktree prune`). Inventura ho vede jako `review` a odmítne ho, když
-   stojí na branchi. Mission Control Organizace, které plán patří, k tomu
-   nemusí být připojený. Když v pull requestu začneš měnit, jde to přes create
-   lane a plán jako každá jiná změna.
+   Review cizího pull requestu, ve kterém nic neměníš, založ
+   `bun run worktrees:review -- <PR URL>`: vznikne odpojený checkout
+   přesného headu v `.worktrees/review/<repo>-pr-<číslo>/` a sidecar, který
+   jmenuje plán pull requestu (z jeho branche nebo titulku), URL a head.
+   Worktree tak patří plánu jako každý jiný, ale Mission Control Organizace,
+   které plán patří, připojený být nemusí. Po verdiktu ho smaž
+   `bun run worktrees:review -- --remove <PR URL>`. Inventura ho vede jako
+   `review` a odmítne ho bez sidecaru, na branchi nebo mimo reviewovaný head.
+   Když v pull requestu začneš měnit, jde to přes create lane jako každá jiná
+   změna.
 4. Sidecar `<environment-id>.worktree.json` (schema
    `companiesascode.worktree.v1`) generuje create lane — zkontroluj ho,
    nevytvářej podruhé a nepřepisuj odvozená identity/path pole; doplň jen

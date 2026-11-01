@@ -162,21 +162,29 @@ dlouhodobý action layer.
 
 ### Review checkout
 
-Review cizího pull requestu, ve kterém reviewer nic nemění, není změna
-a plán nepotřebuje. Reviewer, člověk, Task Agent i Steward persony,
-udělá odpojený checkout přesného headu v owner repu:
+Review cizího pull requestu patří k plánu toho pull requestu, ale nic nemění.
+Reviewer, člověk, Task Agent i Steward persony, založí jeho checkout jedním
+příkazem:
 
 ```text
-<repo>/.worktrees/review/<repo>-pr-<číslo>/   # detached na headu, bez sidecaru
+bun run worktrees:review -- https://github.com/<owner>/<repo>/pull/<číslo>
+<repo>/.worktrees/review/<repo>-pr-<číslo>/              # detached na headu
+<repo>/.worktrees/review/<repo>-pr-<číslo>.worktree.json # plán, URL, head
 ```
 
-`git worktree add --detach .worktrees/review/<repo>-pr-<číslo> <head>`
-nevyžaduje Mission Control autoritu, takže review jde i v Prostředí, kde plán
-pull requestu leží v Mission Controlu jiné Organizace. Inventura vede takový
-worktree jako `review`. `worktrees:check` ho odmítne, když stojí na branchi,
-a vnořenou cestu pod `.worktrees/review/` bere jako legacy. Po verdiktu
-reviewer worktree smaže (`git worktree remove`, `git worktree prune`). Když
-v pull requestu začne měnit, jde to přes create lane a plán jako každá změna.
+Příkaz přečte pull request přes `gh`, ověří, že patří repozitáři z `origin`,
+vezme kód plánu z jeho branche (`agent/<KÓD>-…`), jinak z titulku
+(`(<KÓD>)`), a bez plánu odmítne. Sidecar
+(`companiesascode.review-checkout.v1`) drží kód plánu, URL a přesný head,
+takže worktree patří plánu jako každý jiný (0049). Mission Control
+Organizace, které plán patří, připojený být nemusí: review jde i v Prostředí,
+které reviewuje pull requesty víc Organizací. Inventura vede takový worktree
+jako `review` a `worktrees:check` ho odmítne bez sidecaru, na branchi nebo
+mimo reviewovaný head; vnořenou cestu pod `.worktrees/review/` bere jako
+legacy. Po verdiktu ho reviewer smaže
+`bun run worktrees:review -- --remove <PR URL>`; příkaz checkout, který
+odjel z reviewovaného headu, nesmaže. Když v pull requestu začne měnit, jde to
+přes create lane jako každá změna.
 
 ## Aktivní freshness gate před taskem a PR pushem
 
@@ -624,7 +632,7 @@ Jednotná cleanup taxonomie:
 | `active` | Práce nebo review pokračuje. |
 | `handoff` | Branch je pushnutá a čeká na převzetí jiným ownerem. |
 | `needs_attention` | Nejasný owner/PR, dirty dependency, orphan, missing path nebo jiný blocker. |
-| `review` | Odpojený review checkout v `.worktrees/review/`; maže ho reviewer po verdiktu. |
+| `review` | Odpojený review checkout v `.worktrees/review/` se sidecarem plánu; maže ho reviewer po verdiktu. |
 | `ready_to_delete` | Všechny níže uvedené guardy právě prošly. |
 | `missing_path` | Sidecar nebo Git registrace ukazuje na neexistující cestu; kandidát na repair/prune, ne běžný cleanup. |
 | `invalid` | Kontrakt nebo containment je porušený; žádná runtime/destruktivní akce. |
