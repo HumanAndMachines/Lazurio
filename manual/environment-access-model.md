@@ -283,15 +283,20 @@ Co v ní není, nevzniká automaticky; to je výjimka z bodu „Výjimky“ ní�
 | Přístup | Odkud → kam | Vzniká z | Jak |
 |---|---|---|---|
 | **Pracovní přístup** | Osobní Prostředí → Pracovní Prostředí přidělená jeho Ownerovi ve všech Organizacích jeho Conglomerate | přidělení Prostředí a živé členství | automaticky, SSH, jen tímto směrem |
-| **Týmová Prostředí přes Pracovní** | Pracovní Prostředí člověka → Týmová Prostředí jeho Teamů v téže Organizaci | členství v Teamu | automaticky, SSH; z Osobního Prostředí přes vlastní Pracovní (`ProxyJump`), nikdy napřímo |
-| **Správcovský přístup** (0202) | Pracovní Prostředí Admina → všechna ostatní Prostředí jeho Organizace (Pracovní, Týmová, Henry, Služby serveru) | živá role Admina | automaticky, SSH; z Osobního Prostředí Admina přes jeho Pracovní |
+| **Týmová Prostředí přes Pracovní** | Pracovní Prostředí člověka → Týmová Prostředí jeho Teamů v téže Organizaci | členství v Teamu | automaticky, SSH klíčem Pracovního Prostředí; z Osobního Prostředí dvěma kroky: `ssh` do vlastního Pracovního Prostředí a odtud druhé `ssh`, nikdy napřímo |
+| **Správcovský přístup** (0202) | Pracovní Prostředí Admina → všechna ostatní Prostředí jeho Organizace (Pracovní, Týmová, Henry, Služby serveru) | živá role Admina | automaticky, SSH klíčem Pracovního Prostředí Admina; z Osobního Prostředí Admina stejně dvěma kroky přes jeho Pracovní |
 | **Přístup ze zařízení** | schválené zařízení člověka → jeho Prostředí | schválení zařízení Adminem (dodatek 0192 z 2026-11-01) | automaticky po schválení, 443 a 22, telefon 443 |
 | **Přístup na zařízení** | Prostředí → konkrétní počítač (vlastní laptop, pracovní stanice Organizace) | souhlas Ownera zařízení: osobní počítač jeho člověk, počítač Organizace její Admin s výběrem Prostředí | volitelně, pro každé zařízení zvlášť, odvolatelně, SSH |
 | **Výjimky** | cokoli jiného | reviewovaný PR do Deployment Repa s důvodem a ownerem | výjimečně |
 
-Opačné směry nevznikají: Pracovní → Osobní, Týmové → Pracovní, jiné
-Prostředí → Prostředí Admina. Produkt 1 bez tailnetu (0207) tyto přístupy
-nemá.
+Žádná hrana nevzniká jako opačný směr jiné: Pracovní → Osobní ani Týmové →
+Pracovní nevznikají a cíl Správcovského přístupu tím na Prostředí Admina
+nedosáhne. Pracovní Prostředí jiného Admina téže Organizace je cílem
+Správcovského přístupu jako každé jiné; dva Admini tak dosáhnou jeden na
+druhého, každý ze své role. Klíč zdrojového Prostředí se nepřeposílá
+a nikam dál nevede: krok z Pracovního do Týmového Prostředí dělá druhý
+`ssh` spuštěný v Pracovním Prostředí s jeho vlastním klíčem. Produkt 1 bez
+tailnetu (0207) tyto přístupy nemá.
 
 **Kdo přístup uděluje.** Admin Organizace svými rozhodnutími: přidělí
 Prostředí, zařadí člověka do Teamu, jmenuje Admina, schválí zařízení. Vstup
