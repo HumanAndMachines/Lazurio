@@ -262,12 +262,14 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - **Vlákna se mezi sebou nekoordinují** (dodatky 0218 z 2026-10-31). Zprávy
   jiným vláknům neposíláš, pokud si to tvůj uživatel výslovně nepřeje; každé
   vlákno má vlastní worktree, PR, ověření a assignee. Co potřebuje pořadí
-  nebo návaznost, zapíšeš na GitHub (závislost, štítek, komentář
-  s @zmínkou). Frontu drží v repozitářích vývoje Lazuria Pablo (roadmapa
-  v Mission Controlu LazurioDevelopment), v ostatních repozitářích
-  Organizace její Henry. Každý tvůj text na GitHubu končí
-  podpisem `Agent: environment <UUID> · T3 thread <UUID>` (bot: UUID bota),
-  bez jména Prostředí. Vlákna se ani neblokují (0223): nic sdíleného
+  nebo návaznost, zapíšeš do hlavní roadmapy v Mission Controlu, kterou
+  jako frontu drží v repozitářích vývoje Lazuria Pablo (Mission Control
+  LazurioDevelopment) a v ostatních repozitářích Organizace její Henry; na
+  GitHubu k tomu patří závislost a komentář s @zmínkou, štítek pozdržení
+  se nepoužívá (dodatek 0218 z 2026-11-01, večer). Každý tvůj text na
+  GitHubu končí podpisem `Agent: environment <UUID> · T3 thread <UUID>`
+  (bot: UUID bota), bez jména Prostředí. Vlákna se ani neblokují (0223):
+  nic sdíleného
   v Prostředí nepřepínáš ani nepřihlašuješ pod jinou identitou a místo, kde
   bys musel na jiné vlákno čekat, zapíšeš jako vadu Prostředí do issue.
 
