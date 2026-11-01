@@ -333,6 +333,7 @@ function classifyLifecycle({
 }) {
   if (pathClass === "primary") return "reference";
   if (!exists) return "missing_path";
+  if (pathClass === "review") return "review";
   if (
     pathClass !== "canonical"
     || !sidecarValid

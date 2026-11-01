@@ -624,6 +624,7 @@ Jednotná cleanup taxonomie:
 | `active` | Práce nebo review pokračuje. |
 | `handoff` | Branch je pushnutá a čeká na převzetí jiným ownerem. |
 | `needs_attention` | Nejasný owner/PR, dirty dependency, orphan, missing path nebo jiný blocker. |
+| `review` | Odpojený review checkout v `.worktrees/review/`; maže ho reviewer po verdiktu. |
 | `ready_to_delete` | Všechny níže uvedené guardy právě prošly. |
 | `missing_path` | Sidecar nebo Git registrace ukazuje na neexistující cestu; kandidát na repair/prune, ne běžný cleanup. |
 | `invalid` | Kontrakt nebo containment je porušený; žádná runtime/destruktivní akce. |

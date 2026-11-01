@@ -154,6 +154,7 @@ test("accepts a detached review checkout under .worktrees/review without a plan 
   });
   expect(worktreeNamed(report, "Dashboard-pr-42")).toMatchObject({
     path_class: "review",
+    lifecycle: "review",
     branch: null,
     sidecar_path: null,
   });
