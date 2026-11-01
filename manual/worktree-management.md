@@ -160,6 +160,24 @@ Git zachování, ale jeho PASS není cleanup autorizace bez živého
 PR/runtime/writer gate. Toto je přechodový bootstrap, ne druhý
 dlouhodobý action layer.
 
+### Review checkout
+
+Review cizího pull requestu, ve kterém reviewer nic nemění, není změna
+a plán nepotřebuje. Reviewer, člověk, Task Agent i Steward persony,
+udělá odpojený checkout přesného headu v owner repu:
+
+```text
+<repo>/.worktrees/review/<repo>-pr-<číslo>/   # detached na headu, bez sidecaru
+```
+
+`git worktree add --detach .worktrees/review/<repo>-pr-<číslo> <head>`
+nevyžaduje Mission Control autoritu, takže review jde i v Prostředí, kde plán
+pull requestu leží v Mission Controlu jiné Organizace. Inventura vede takový
+worktree jako `review`. `worktrees:check` ho odmítne, když stojí na branchi,
+a vnořenou cestu pod `.worktrees/review/` bere jako legacy. Po verdiktu
+reviewer worktree smaže (`git worktree remove`, `git worktree prune`). Když
+v pull requestu začne měnit, jde to přes create lane a plán jako každá změna.
+
 ## Aktivní freshness gate před taskem a PR pushem
 
 Před převzetím každého tasku agent spustí v primárním Lazurio checkoutu:

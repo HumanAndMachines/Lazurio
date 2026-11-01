@@ -383,6 +383,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
    v něm neměníš; každá změna jde přes task worktree podle skillu
    `worktree-development-discipline` (`bun run worktrees:status`,
    `bun run worktrees:check` a před každým pushem `bun run pr:preflight`).
+   Review cizího PR bez změn děláš v odpojeném checkoutu jeho přesného headu
+   v `.worktrees/review/`, bez plánu a sidecaru, a po verdiktu ho smažeš.
 5. **SSH na Mašiny v tailnetu.** Tailscale profil je na mašině jeden pro
    všechny relace a adresy `100.64.0.x` se v každém tailnetu opakují.
    Nepřipojuj se na holou adresu ani přes obecný `~/.ssh/known_hosts`:

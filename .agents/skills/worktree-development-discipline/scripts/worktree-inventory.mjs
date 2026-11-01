@@ -54,7 +54,7 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
   const enriched = await mapLimit(records, MAX_PARALLEL_GIT_CHECKS, async (record) => {
     const pathClass = classifyWorktreePath(primaryRoot, record.path);
     const exists = await pathExists(record.path);
-    const sidecarPath = pathClass === "primary"
+    const sidecarPath = pathClass === "primary" || pathClass === "review"
       ? null
       : join(dirname(record.path), `${basename(record.path)}.worktree.json`);
     const sidecarExists = sidecarPath ? await pathExists(sidecarPath) : false;
@@ -161,6 +161,9 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
     if (worktree.path_class === "legacy" || worktree.path_class === "external") {
       violations.push(`${worktree.path_class} worktree: ${worktree.path}`);
     }
+    if (worktree.path_class === "review" && worktree.branch) {
+      violations.push(`review worktree is on branch ${worktree.branch}, expected a detached head: ${worktree.path}`);
+    }
     if (worktree.path_class === "canonical" && !worktree.sidecar_exists) {
       violations.push(`canonical worktree is missing sidecar: ${worktree.path}`);
     }
@@ -221,6 +224,7 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
     summary: {
       registered: enriched.length,
       canonical: enriched.filter((item) => item.path_class === "canonical").length,
+      review: enriched.filter((item) => item.path_class === "review").length,
       legacy: enriched.filter((item) => item.path_class === "legacy").length,
       external: enriched.filter((item) => item.path_class === "external").length,
       dirty: enriched.filter((item) => item.dirty === true).length,
@@ -274,6 +278,15 @@ export function classifyWorktreePath(primaryRoot, worktreePath) {
     && !canonicalRelative.includes(sep)
   ) {
     return "canonical";
+  }
+  const reviewRelative = relative(join(primary, ".worktrees", "review"), target);
+  if (
+    reviewRelative !== ""
+    && !reviewRelative.startsWith("..")
+    && !isAbsolute(reviewRelative)
+    && !reviewRelative.includes(sep)
+  ) {
+    return "review";
   }
   if (isWithin(join(primary, ".worktrees"), target)) return "legacy";
   return "external";
@@ -1029,9 +1042,14 @@ async function scanLocalOrphans(primaryRoot, commonDir, records, options = {}) {
       skippedNames: new Set(),
     },
     {
+      path: join(primaryRoot, ".worktrees", "review"),
+      pathClass: "review",
+      skippedNames: new Set(),
+    },
+    {
       path: join(primaryRoot, ".worktrees"),
       pathClass: "legacy",
-      skippedNames: new Set(["root"]),
+      skippedNames: new Set(["root", "review"]),
       ownerOnly: false,
     },
     {
@@ -1700,7 +1718,7 @@ export function formatHuman(report) {
   const lines = [
     `Worktree audit: ${report.repository_root}`,
     `Canonical root: ${report.canonical_root}`,
-    `Registered: ${report.summary.registered} · canonical ${report.summary.canonical} · legacy ${report.summary.legacy} · external ${report.summary.external}`,
+    `Registered: ${report.summary.registered} · canonical ${report.summary.canonical} · review ${report.summary.review} · legacy ${report.summary.legacy} · external ${report.summary.external}`,
   ];
   if (report.summary.disk_bytes !== null) {
     const qualifier = report.summary.disk_scan_complete ? "" : " (partial lower bound)";

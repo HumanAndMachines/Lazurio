@@ -141,6 +141,61 @@ test("accepts several pull-request environments of one plan next to its canonica
   expect(report.violations).toEqual([]);
 });
 
+test("accepts a detached review checkout under .worktrees/review without a plan or sidecar", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const reviewPath = join(fixture.root, ".worktrees", "review", "Dashboard-pr-42");
+  git(fixture.root, ["worktree", "add", "--detach", reviewPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  expect(worktreeNamed(report, "Dashboard-pr-42")).toMatchObject({
+    path_class: "review",
+    branch: null,
+    sidecar_path: null,
+  });
+  expect(report.summary).toMatchObject({ review: 1, legacy: 0 });
+  expect(report.orphan_entries).toEqual([]);
+  expect(report.violations).toEqual([]);
+});
+
+test("rejects a review checkout that is on a branch", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const reviewPath = join(fixture.root, ".worktrees", "review", "Dashboard-pr-43");
+  git(fixture.root, ["worktree", "add", "-b", "review/pr-43", reviewPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const review = worktreeNamed(report, "Dashboard-pr-43");
+  expect(review).toMatchObject({ path_class: "review", branch: "review/pr-43" });
+  expect(report.violations).toContain(
+    `review worktree is on branch review/pr-43, expected a detached head: ${review.path}`,
+  );
+});
+
+test("still treats a nested path under .worktrees/review as legacy", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+  });
+  const nestedPath = join(fixture.root, ".worktrees", "review", "group", "Dashboard-pr-44");
+  git(fixture.root, ["worktree", "add", "--detach", nestedPath, "main"]);
+
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+  const nested = worktreeNamed(report, "Dashboard-pr-44");
+  expect(nested).toMatchObject({ path_class: "legacy" });
+  expect(report.violations).toContain(`legacy worktree: ${nested.path}`);
+});
+
 test("still rejects environment basenames outside <plan-basename> and <plan-code>-<kebab-case-name>", async () => {
   const fixture = await createFixture({
     authorityAvailable: true,
