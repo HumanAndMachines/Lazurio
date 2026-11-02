@@ -4,8 +4,15 @@
 // uniqueItems, lokální JSON Pointer $ref (#/definitions/..., #/$defs/... i
 // rekurzivní kořenové "#"), allOf, anyOf, contains, minLength, if/then/else, not,
 // dependentRequired a booleovská podschémata (`true` přijme každou hodnotu,
-// `false` žádnou; schéma Organizace z LazurioPlatform jimi zakazuje pole).
+// `false` žádnou) všude, kde stojí podschéma: v kořeni, properties, items,
+// if/then/else, not, contains, propertyNames, allOf a anyOf. Schéma Organizace
+// z LazurioPlatform jimi zakazuje pole.
 // Vrací pole chybových hlášek (prázdné = validní).
+
+// A subschema is an object or a boolean (JSON Schema 2020-12).
+function isSchema(node) {
+  return node === true || node === false || (node !== null && typeof node === "object");
+}
 
 export function validateAgainstSchema(value, schema, label = "$") {
   const failures = [];
@@ -60,16 +67,16 @@ function validateNode(value, node, path, failures, rootSchema) {
   if (Array.isArray(node.allOf)) {
     for (const sub of node.allOf) validateNode(value, sub, path, failures, rootSchema);
   }
-  if (node.if && typeof node.if === "object") {
+  if (isSchema(node.if)) {
     const conditionFailures = [];
     validateNode(value, node.if, path, conditionFailures, rootSchema);
     const selectedBranch =
       conditionFailures.length === 0 ? node.then : node.else;
-    if (selectedBranch && typeof selectedBranch === "object") {
+    if (isSchema(selectedBranch)) {
       validateNode(value, selectedBranch, path, failures, rootSchema);
     }
   }
-  if (node.not && typeof node.not === "object") {
+  if (isSchema(node.not)) {
     const branchFailures = [];
     validateNode(value, node.not, path, branchFailures, rootSchema);
     if (branchFailures.length === 0) {
@@ -108,7 +115,7 @@ function validateNode(value, node, path, failures, rootSchema) {
       }
     }
   }
-  if (objectValue && node.propertyNames && typeof node.propertyNames === "object") {
+  if (objectValue && isSchema(node.propertyNames)) {
     for (const key of Object.keys(value)) {
       validateNode(key, node.propertyNames, `${path}.${key}#propertyName`, failures, rootSchema);
     }
@@ -128,7 +135,7 @@ function validateNode(value, node, path, failures, rootSchema) {
       }
     }
   }
-  if (node.contains && typeof node.contains === "object" && Array.isArray(value)) {
+  if (isSchema(node.contains) && Array.isArray(value)) {
     const anyMatch = value.some((item) => {
       const itemFailures = [];
       validateNode(item, node.contains, path, itemFailures, rootSchema);
@@ -182,7 +189,7 @@ function validateNode(value, node, path, failures, rootSchema) {
         }
       });
     }
-    if (node.items) {
+    if (isSchema(node.items)) {
       value.forEach((item, index) => validateNode(item, node.items, `${path}[${index}]`, failures, rootSchema));
     }
     return;
