@@ -169,8 +169,11 @@ test("Organization manifest schema literals stay pinned to their Core authoritie
   const organizationBinding = organizationManifestSchema.$defs.organizationForgeBinding.properties;
   const repositoryBinding = organizationManifestSchema.$defs.repositoryForgeBinding.properties;
   expect(organizationBinding.locator.pattern).toBe(ORGANIZATION_GITHUB_LOGIN_PATTERN.source);
-  expect(organizationBinding.organization_id.pattern).toBe(ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.source);
-  expect(repositoryBinding.repository_id.pattern).toBe(ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.source);
+  // The schema pinned from LazurioPlatform names one GitHub ID definition.
+  const githubId = organizationManifestSchema.$defs.githubId;
+  expect(organizationBinding.organization_id).toEqual({ $ref: "#/$defs/githubId" });
+  expect(repositoryBinding.repository_id).toEqual({ $ref: "#/$defs/githubId" });
+  expect(githubId.pattern).toBe(ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.source);
   expect(organizationManifestSchema.properties.organization.properties.metadata.propertyNames.not.enum)
     .toEqual(ORGANIZATION_LEGACY_COMPANY_RESERVED_FIELDS);
   expect(organizationManifestSchema.properties.extensions.properties.legacy.propertyNames.not.enum)
@@ -702,7 +705,7 @@ test("Organization settings ride next to the resource and never touch projection
     status: "valid",
     source: "lazurio.organization.json",
     values: { integrations: { composio: { allowed: false } } },
-    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, { key: "workspace.tabs", governed: false, value: null }],
     issues: [],
   });
   expect(plain.settings).toMatchObject({ status: "absent", source: "lazurio.organization.json", values: {} });

@@ -21,6 +21,7 @@ const microsoftKeys = [
   "integrations.microsoft365.callbacks",
 ];
 const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
+const ungovernedTabs = { key: "workspace.tabs", governed: false, value: null };
 const tenantId = "11111111-2222-4333-8444-aaaaaaaaaaaa";
 const clientId = "11111111-2222-4333-8444-bbbbbbbbbbbb";
 const callback = "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback";
@@ -43,7 +44,12 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       "settings_type_invalid",
       "settings_value_invalid",
     ]);
-    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys, "integrations.chatgpt_apps.allowed"]);
+    expect(ORGANIZATION_SETTINGS_KEYS).toEqual([
+      "integrations.composio.allowed",
+      ...microsoftKeys,
+      "integrations.chatgpt_apps.allowed",
+      "workspace.tabs",
+    ]);
     expect(ORGANIZATION_SETTINGS_DASHBOARD_KEYS).toEqual(["access_requests.enabled"]);
     expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
     expect(Object.isFrozen(ORGANIZATION_SETTINGS_KEYS)).toBe(true);
@@ -56,7 +62,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: canonicalSource,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
       issues: [],
     });
   });
@@ -68,7 +74,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
         issues: [],
       });
     }
@@ -79,7 +85,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
         issues: [],
       });
     }
@@ -96,7 +102,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         effective: [
           { key: "integrations.composio.allowed", governed: false, value: null },
           ...ungovernedMicrosoft,
-          { key: "integrations.chatgpt_apps.allowed", governed: true, value: allowed },
+          { key: "integrations.chatgpt_apps.allowed", governed: true, value: allowed }, ungovernedTabs,
         ],
         issues: [],
       });
@@ -179,7 +185,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: null,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
       issues: [],
     });
     for (const input of [
@@ -215,7 +221,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     expect(newOrganizationSettings()).toEqual({ integrations: { composio: { allowed: false } } });
     expect(settingsOf(manifest(newOrganizationSettings()))).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
     });
   });
 
@@ -232,7 +238,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
-        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null },
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs,
       ],
       issues: [],
     });
@@ -312,7 +318,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
         issues: [],
       });
     }
@@ -332,7 +338,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
-        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null },
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs,
       ],
       issues: [],
     });
@@ -368,10 +374,9 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
   test("the manifest schema and Core pin one settings contract", () => {
     expect(organizationManifestSchema.properties.settings).toEqual({ $ref: "#/$defs/organizationSettings" });
     expect(organizationManifestSchema.required).not.toContain("settings");
-    expect(schemaLeafKeys(organizationManifestSchema.$defs.organizationSettings, [])).toEqual([
-      ...ORGANIZATION_SETTINGS_KEYS,
-      ...ORGANIZATION_SETTINGS_DASHBOARD_KEYS,
-    ]);
+    expect(schemaLeafKeys(organizationManifestSchema.$defs.organizationSettings, []).sort()).toEqual(
+      [...ORGANIZATION_SETTINGS_KEYS, ...ORGANIZATION_SETTINGS_DASHBOARD_KEYS].sort(),
+    );
     expect(validateAgainstSchema(manifest(), organizationManifestSchema, "organization")).toEqual([]);
 
     const documents = [
@@ -409,11 +414,57 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       { access_requests: { enabled: "yes" } },
       { access_requests: { enabled: true, team: "guests" } },
       { access_requests: true },
+      { workspace: { tabs: [{ name: "Prodej", modules: ["crm", "deals"] }, { name: "Provoz", modules: [] }] } },
+      { workspace: { tabs: [] } },
+      { workspace: {} },
+      { workspace: { tabs: [{ name: " Prodej", modules: [] }] } },
+      { workspace: { tabs: [{ name: "Prodej" }] } },
+      { workspace: { tabs: [{ name: "Prodej", modules: ["CRM"] }] } },
+      { workspace: { tabs: [{ name: "Prodej", modules: [], icon: "x" }] } },
+      { workspace: { tabs: Array.from({ length: 13 }, (_, index) => ({ name: `Tab ${index}`, modules: [] })) } },
     ];
     for (const settings of documents) {
       const coreValid = settingsOf(manifest(settings)).status === "valid";
       const schemaValid = validateAgainstSchema(manifest(settings), organizationManifestSchema, "organization").length === 0;
       expect(schemaValid, JSON.stringify(settings)).toBe(coreValid);
+    }
+  });
+});
+
+describe("Workspace tabs of GEN4's Apps (LazurioPlatform F32, addendum 2026-10-16)", () => {
+  test("valid tabs are kept and reported as one setting, beside every other setting", () => {
+    const tabs = [
+      { name: "Prodej", modules: ["crm", "deals"] },
+      { name: "Provoz", modules: [] },
+    ];
+    const settings = { integrations: { composio: { allowed: true } }, workspace: { tabs } };
+    const result = settingsOf(manifest(settings));
+    expect(result.status).toBe("valid");
+    expect(result.values).toEqual(settings);
+    expect(result.effective.find((entry) => entry.key === "workspace.tabs")).toEqual({
+      key: "workspace.tabs",
+      governed: true,
+      value: tabs,
+    });
+    expect(result.effective.find((entry) => entry.key === "integrations.composio.allowed").value).toBe(true);
+  });
+
+  test("what the closed tree cannot say: unique names ignoring letter case, a module in one tab at most", () => {
+    const cases = [
+      [
+        [{ name: "Prodej", modules: [] }, { name: "PRODEJ", modules: [] }],
+        [issue("settings_value_invalid", "/settings/workspace/tabs/1/name")],
+      ],
+      [
+        [{ name: "Prodej", modules: ["crm"] }, { name: "Provoz", modules: ["crm"] }],
+        [issue("settings_value_invalid", "/settings/workspace/tabs/1/modules/0")],
+      ],
+      [[{ name: "Prodej", modules: ["crm", "crm"] }], [issue("settings_value_invalid", "/settings/workspace/tabs/0/modules/1")]],
+    ];
+    for (const [tabs, issues] of cases) {
+      const result = settingsOf(manifest({ workspace: { tabs } }));
+      expect(result.status, JSON.stringify(tabs)).toBe("invalid");
+      expect(result.issues, JSON.stringify(tabs)).toEqual(issues);
     }
   });
 });
@@ -430,13 +481,23 @@ function issue(code, path) {
   return { code, path };
 }
 
-// Leaf keys of the JSON schema settings tree, in declaration order, so the
-// published schema cannot gain or lose a setting without Core. The Dashboard's
-// own settings are declared last, after the ones Environments report.
+// Leaf keys of the JSON schema settings tree, local `$ref`s followed, so the
+// schema pinned from LazurioPlatform cannot gain or lose a setting without
+// Core; the comparison ignores declaration order.
 function schemaLeafKeys(node, prefix) {
-  if (node.type !== "object") return [prefix.join(".")];
+  const resolved = resolveRef(node);
+  if (resolved.type !== "object") return [prefix.join(".")];
+  node = resolved;
   expect(node.additionalProperties).toBe(false);
   return Object.entries(node.properties).flatMap(([key, child]) => schemaLeafKeys(child, [...prefix, key]));
+}
+
+function resolveRef(node) {
+  if (typeof node.$ref !== "string") return node;
+  return node.$ref
+    .replace(/^#\//, "")
+    .split("/")
+    .reduce((target, key) => target[key], organizationManifestSchema);
 }
 
 function manifest(settings) {

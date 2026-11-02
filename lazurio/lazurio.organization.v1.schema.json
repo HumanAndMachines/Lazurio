@@ -1,100 +1,48 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lazurio.local/schema/lazurio.organization.v1.schema.json",
-  "title": "Lazurio Organization manifest v1",
+  "$id": "https://lazurio.io/schemas/lazurio.organization.v1.schema.json",
+  "title": "lazurio.organization.json — the manifest of one Organization",
+  "description": "The authored Organization manifest of docs/organization-contract.md, written in LazurioPlatform from that contract and its readers in src/organizations/ (decision 0225). The readers also enforce what a schema cannot state; the contract lists those rules.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "kind",
-    "organization",
-    "manifests",
-    "extensions",
-    "compatibility"
-  ],
+  "required": ["schema_version", "kind", "organization", "manifests", "extensions", "compatibility"],
   "properties": {
     "schema_version": { "const": "lazurio.organization.v1" },
-    "kind": { "enum": ["organization", "template"] },
+    "kind": { "description": "A template is a valid declaration for inspection and conversion preview and never runs.", "enum": ["organization", "template"] },
     "organization": {
       "type": "object",
       "additionalProperties": false,
       "required": ["slug", "display_name", "forge_binding", "metadata"],
       "properties": {
-        "slug": { "type": "string", "minLength": 1, "pattern": "^(?:\\S|\\S.*\\S)$" },
-        "display_name": { "type": "string", "minLength": 1, "pattern": "^(?:\\S|\\S.*\\S)$" },
+        "slug": { "$ref": "#/$defs/exactText" },
+        "display_name": { "$ref": "#/$defs/exactText" },
         "forge_binding": { "$ref": "#/$defs/organizationForgeBinding" },
         "metadata": {
+          "description": "Organization-owned fields, kept as authored and carried into the legacy projection's company object, whose own fields they never shadow.",
           "type": "object",
-          "propertyNames": {
-            "not": {
-              "enum": ["slug", "display_name", "github_org", "repository", "git_url", "root_repository", "default_branch"]
-            }
-          }
+          "propertyNames": { "not": { "enum": ["slug", "display_name", "github_org", "repository", "git_url", "root_repository", "default_branch"] } }
         }
       }
     },
     "root_repository": {
-      "anyOf": [
-        { "type": "null" },
-        { "$ref": "#/$defs/repositoryForgeBinding" }
-      ]
+      "description": "The Organization's root repository; absent or null declares none.",
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/repositoryForgeBinding" }]
     },
     "manifests": {
       "type": "object",
       "additionalProperties": false,
       "required": ["modules"],
-      "properties": {
-        "modules": { "const": "modules.manifest.json" }
-      }
+      "properties": { "modules": { "description": "The repository inventory beside this file.", "const": "modules.manifest.json" } }
     },
-    "module_port_pool": {
-      "type": "object",
-      "$comment": "Core additionally requires start <= end; standard JSON Schema cannot express this cross-field comparison without a non-portable extension.",
-      "additionalProperties": false,
-      "required": ["start", "end"],
-      "properties": {
-        "start": { "type": "integer", "minimum": 1024, "maximum": 65535 },
-        "end": { "type": "integer", "minimum": 1024, "maximum": 65535 }
-      }
-    },
-    "governance": {
-      "type": "object",
-      "properties": {
-        "default_branch": { "const": "main" },
-        "access_authority": { "const": "github" }
-      }
-    },
-    "teams": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["slug", "display_name"],
-        "properties": {
-          "slug": { "type": "string", "minLength": 1 },
-          "display_name": { "type": "string", "minLength": 1 },
-          "default": { "type": "boolean" },
-          "description": { "type": "string" },
-          "forge_binding": { "$ref": "#/$defs/teamForgeBinding" }
-        }
-      }
-    },
-    "layers": { "type": "array" },
-    "task_sources": { "type": "array" },
-    "doctor": { "type": "object" },
-    "settings": { "$ref": "#/$defs/organizationSettings" },
     "extensions": {
       "type": "object",
       "additionalProperties": false,
       "required": ["legacy"],
       "properties": {
         "legacy": {
+          "description": "Fields of the legacy projection without a canonical home, kept as authored; they never shadow the fields the projection writes itself.",
           "type": "object",
-          "description": "Losslessly preserved Organization-owned legacy fields without canonical-field collisions.",
-          "propertyNames": {
-            "not": {
-              "enum": ["organization_generation", "organization_kind", "company", "forge_binding", "governance", "teams", "layers", "task_sources", "doctor", "module_port_pool", "modules", "default_branch"]
-            }
-          }
+          "propertyNames": { "not": { "enum": ["organization_generation", "organization_kind", "company", "forge_binding", "governance", "teams", "layers", "task_sources", "doctor", "module_port_pool", "modules", "default_branch"] } }
         }
       }
     },
@@ -104,6 +52,7 @@
       "required": ["legacy_projection"],
       "properties": {
         "legacy_projection": {
+          "description": "The generated compatibility projection and the digest of its expected content; root resolution recomputes the digest.",
           "type": "object",
           "additionalProperties": false,
           "required": ["path", "algorithm", "sha256"],
@@ -114,146 +63,208 @@
           }
         }
       }
-    }
+    },
+    "module_port_pool": {
+      "description": "The TCP ports the Organization's modules lease from; start does not exceed end.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": { "start": { "$ref": "#/$defs/port" }, "end": { "$ref": "#/$defs/port" } }
+    },
+    "governance": {
+      "description": "Organization-owned governance data, kept as authored: the default branch is main and GitHub is the access authority.",
+      "type": "object",
+      "properties": { "default_branch": { "const": "main" }, "access_authority": { "const": "github" } }
+    },
+    "teams": { "type": "array", "items": { "$ref": "#/$defs/team" } },
+    "layers": { "description": "Organization-owned, kept as authored.", "type": "array" },
+    "task_sources": { "description": "Organization-owned, kept as authored.", "type": "array" },
+    "doctor": { "description": "Organization-owned, kept as authored.", "type": "object" },
+    "settings": { "$ref": "#/$defs/organizationSettings" }
   },
+  "allOf": [
+    {
+      "description": "Owner and root share one binding state: a verified Organization declares a verified root repository; an unverified one declares none, null or an unverified root.",
+      "if": {
+        "required": ["organization"],
+        "properties": {
+          "organization": {
+            "type": "object",
+            "required": ["forge_binding"],
+            "properties": {
+              "forge_binding": { "type": "object", "required": ["binding_state"], "properties": { "binding_state": { "const": "verified" } } }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": ["root_repository"],
+        "properties": { "root_repository": { "type": "object", "properties": { "binding_state": { "const": "verified" } } } }
+      },
+      "else": {
+        "properties": {
+          "root_repository": { "anyOf": [{ "type": "null" }, { "type": "object", "properties": { "binding_state": { "const": "unverified" } } }] }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "exactText": {
+      "description": "Text as written: no line break or NUL, no white space at either end, at least one other character.",
+      "type": "string",
+      "pattern": "^[^\\s\\u0000](?:[^\\r\\n\\u0000]*[^\\s\\u0000])?$"
+    },
+    "githubId": {
+      "description": "A GitHub database ID as a decimal string without leading zeros.",
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "organizationForgeBinding": {
+      "description": "The Organization's GitHub login. A verified binding carries the Organization's ID, an unverified one none.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forge", "locator", "binding_state"],
+      "properties": {
+        "forge": { "const": "github" },
+        "locator": { "type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$" },
+        "binding_state": { "enum": ["verified", "unverified"] },
+        "organization_id": { "$ref": "#/$defs/githubId" }
+      },
+      "if": { "required": ["binding_state"], "properties": { "binding_state": { "const": "verified" } } },
+      "then": { "required": ["organization_id"], "properties": { "organization_id": true } },
+      "else": { "properties": { "organization_id": false } }
+    },
+    "repositoryForgeBinding": {
+      "description": "A GitHub repository as <owner>/<name> without .git, on main. A verified binding carries the repository's ID, an unverified one none. The owner is the Organization's login, ignoring letter case (checked by the reader).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forge", "locator", "default_branch", "binding_state"],
+      "properties": {
+        "forge": { "const": "github" },
+        "locator": { "type": "string", "pattern": "^(?!.*\\.git$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "default_branch": { "const": "main" },
+        "binding_state": { "enum": ["verified", "unverified"] },
+        "repository_id": { "$ref": "#/$defs/githubId" }
+      },
+      "if": { "required": ["binding_state"], "properties": { "binding_state": { "const": "verified" } } },
+      "then": { "required": ["repository_id"], "properties": { "repository_id": true } },
+      "else": { "properties": { "repository_id": false } }
+    },
+    "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+    "team": {
+      "description": "A Team of the Organization; more Organization-owned fields are kept as authored.",
+      "type": "object",
+      "required": ["slug", "display_name"],
+      "properties": {
+        "slug": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string", "minLength": 1 },
+        "default": { "type": "boolean" },
+        "description": { "type": "string" },
+        "forge_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "provider", "team"],
+          "properties": {
+            "schema_version": { "const": "lazurio.team-forge-binding.github.v0" },
+            "provider": { "const": "github" },
+            "team": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "asserted_slug"],
+              "properties": {
+                "id": { "$ref": "#/$defs/githubId" },
+                "asserted_slug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "allowedSwitch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed"],
+      "properties": { "allowed": { "type": "boolean" } }
+    },
     "organizationSettings": {
-      "description": "Organization settings (decision 0194). An absent value is not governed by the Organization and each Environment decides; a present value governs every work Environment of the Organization; personal Environments ignore Organization settings. Excluded from the legacy compatibility projection and the semantic hash. Lazurio Core validates the same closed tree (core/organization-settings-lib.mjs).",
+      "description": "The optional, closed settings section (decision 0194), read only by organizationSettings in src/organizations/organization-settings.ts. An absent value is not governed by the Organization; a present one governs every work Environment of it. A new setting is one leaf here and in that reader, in one pull request.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tabs"],
+          "properties": {
+            "tabs": {
+              "description": "The Organization's own tabs in Apps' Workspace, in order (decision F32, addendum of 2026-10-16); a module put in no tab is in the first one. Names are unique ignoring letter case and a module is in one tab at most (checked by the reader).",
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "modules"],
+                "properties": {
+                  "name": {
+                    "description": "1 to 40 characters, no control character, no white space at either end.",
+                    "type": "string",
+                    "pattern": "^(?=[^\\u0000-\\u001f\\u007f]{1,40}$)[^\\s\\u0000-\\u001f\\u007f](?:.*[^\\s\\u0000-\\u001f\\u007f])?$"
+                  },
+                  "modules": {
+                    "description": "The modules of the tab by their lazurio.module.v1 id.",
+                    "type": "array",
+                    "maxItems": 500,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" }
+                  }
+                }
+              }
+            }
+          }
+        },
         "integrations": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "composio": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["allowed"],
-              "properties": {
-                "allowed": {
-                  "type": "boolean",
-                  "description": "Whether Integrations may be connected through Composio on the Organization's work Environments (decision 0162, addendum 2026-10-09)."
-                }
-              }
-            },
+            "composio": { "description": "Whether the Organization's work Environments may use Composio.", "$ref": "#/$defs/allowedSwitch" },
+            "chatgpt_apps": { "description": "Whether agents may use the apps, plugins and connectors of the person's ChatGPT account; absent and false are off.", "$ref": "#/$defs/allowedSwitch" },
             "microsoft365": {
-              "description": "The Organization's Microsoft 365 company app (decision 0162, addendum 2026-10-14): one single-tenant Entra app in the Organization's own tenant, a public client with admin consent. Only identifiers that are not secrets; the closed object refuses any other key, so no secret can be declared here.",
+              "description": "The Organization's Microsoft 365 company app: identifiers only, no secret, because the app is a public client.",
               "type": "object",
               "additionalProperties": false,
               "required": ["tenant_id", "client_id", "apps", "callbacks"],
               "properties": {
-                "tenant_id": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-                  "description": "Directory (tenant) id of the Organization's Microsoft tenant, lowercase GUID."
-                },
-                "client_id": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-                  "description": "Application (client) id of the Organization's Entra app, lowercase GUID."
-                },
-                "apps": {
-                  "type": "array",
-                  "minItems": 1,
-                  "uniqueItems": true,
-                  "items": { "enum": ["outlook", "one_drive", "share_point"] },
-                  "description": "Parts of the company app a connected account gets as one Integration, and so its delegated scopes: outlook (mail and calendar), one_drive, share_point."
-                },
+                "tenant_id": { "$ref": "#/$defs/guid" },
+                "client_id": { "$ref": "#/$defs/guid" },
+                "apps": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["outlook", "one_drive", "share_point"] } },
                 "callbacks": {
+                  "description": "Hosted Launchpad callbacks registered at Microsoft: https on launchpad.<machine>.<github-org-login>.lazurio.io, no port, query or fragment. At most 255, as Entra registers 256 and Executor's localhost callback takes one.",
                   "type": "array",
                   "maxItems": 255,
                   "uniqueItems": true,
                   "items": {
                     "type": "string",
-                    "pattern": "^https://launchpad\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.lazurio\\.io/api/integrations/oauth/callback$"
-                  },
-                  "description": "Hosted Launchpad callbacks (https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback) registered as redirect URIs of the Entra app, at most 255 because Entra allows 256 and the localhost callback takes one. An Environment whose callback is listed signs in from the user's own browser; any other one uses Executor's redirect URI http://localhost/api/oauth/callback, which is always registered and never listed, in the Environment browser."
-                }
-              }
-            },
-            "chatgpt_apps": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["allowed"],
-              "properties": {
-                "allowed": {
-                  "type": "boolean",
-                  "description": "Whether agents in the Organization's work and Team Environments may use the apps, plugins and connectors of the person's ChatGPT account for apps that Integrations do not have (decision 0162, addendum 2026-10-27). Absent means off on every Environment, unlike composio."
+                    "pattern": "^https:\\/\\/launchpad\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.lazurio\\.io\\/api\\/integrations\\/oauth\\/callback$"
+                  }
                 }
               }
             }
           }
         },
         "access_requests": {
-          "description": "Access requests (decision 0204, addendum 2026-10-17 afternoon, point b): a setting of the Lazurio Dashboard alone. No Environment receives, applies or reports it.",
+          "description": "The Dashboard's own setting: checked, never applied or reported by an Environment.",
           "type": "object",
           "additionalProperties": false,
           "required": ["enabled"],
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "description": "Whether a signed-in Lazurio account without membership may ask the Organization for access through its join link on the Dashboard. Absent or false is off."
-            }
-          }
+          "properties": { "enabled": { "type": "boolean" } }
         }
       }
     },
-    "bindingState": { "enum": ["unverified", "verified"] },
-    "organizationForgeBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["forge", "locator", "binding_state"],
-      "properties": {
-        "forge": { "const": "github" },
-        "locator": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$" },
-        "binding_state": { "$ref": "#/$defs/bindingState" },
-        "organization_id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "binding_state": { "const": "verified" } } },
-          "then": { "required": ["organization_id"] },
-          "else": { "not": { "required": ["organization_id"] } }
-        }
-      ]
-    },
-    "repositoryForgeBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["forge", "locator", "default_branch", "binding_state"],
-      "properties": {
-        "forge": { "const": "github" },
-        "locator": { "type": "string", "minLength": 3, "pattern": "^(?!.*\\.git$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
-        "default_branch": { "const": "main" },
-        "binding_state": { "$ref": "#/$defs/bindingState" },
-        "repository_id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "binding_state": { "const": "verified" } } },
-          "then": { "required": ["repository_id"] },
-          "else": { "not": { "required": ["repository_id"] } }
-        }
-      ]
-    },
-    "teamForgeBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["schema_version", "provider", "team"],
-      "properties": {
-        "schema_version": { "const": "lazurio.team-forge-binding.github.v0" },
-        "provider": { "const": "github" },
-        "team": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["id", "asserted_slug"],
-          "properties": {
-            "id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
-            "asserted_slug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$" }
-          }
-        }
-      }
+    "guid": {
+      "description": "A Microsoft identifier as a lowercase GUID, never a secret.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     }
   }
 }

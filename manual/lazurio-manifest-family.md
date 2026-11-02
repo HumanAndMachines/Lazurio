@@ -2,9 +2,11 @@
 
 > **GEN4 je autorita (0225).** Kontrakt manifestu Organizace vlastní od
 > 2026-11-01 LazurioPlatform: [`docs/organization-contract.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/organization-contract.md)
-> a čtečky Platformy. Schéma `lazurio/lazurio.organization.v1.schema.json`
-> zůstává pro GEN3, dokud Platforma nenapíše vlastní a root ho nepřipne
-> (Lazurio/LazurioPlatform#799). Tento soubor zůstává záznamem GEN3.
+> a čtečky Platformy. Schéma `lazurio/lazurio.organization.v1.schema.json` je
+> schéma LazurioPlatform připnuté commitem a SHA-256
+> (`lazurio/lazurio.organization.v1.schema.provenance.json`,
+> Lazurio/LazurioPlatform#811); root ho sám nemění. Tento soubor zůstává
+> záznamem GEN3.
 
 Status: **Organization contract accepted by decision amendments 0026, 0031 and
 0042; Personalspace naming remains a separate proposal and rollout**
@@ -164,10 +166,15 @@ decision 0162 (addendum 2026-10-09):
 - `settings`, `settings.integrations` and `settings.integrations.composio`
   are closed objects; `allowed` is a required boolean whenever `composio` is
   present. Every level is optional. The schema is `$defs.organizationSettings`
-  in `lazurio/lazurio.organization.v1.schema.json`; Core validates the same
-  closed tree in `lazurio/core/organization-settings-lib.mjs` and a test pins
-  the two together. A new setting adds a field there, the consumer that applies
-  it and its status report; no new channel (decision 0194 point 6).
+  in `lazurio/lazurio.organization.v1.schema.json`, pinned from
+  LazurioPlatform; Core validates the same closed tree in
+  `lazurio/core/organization-settings-lib.mjs` and a test pins the two
+  together. A new setting is added in LazurioPlatform first (its reader and
+  schema, decision 0225); the Root follows with a new pin, the same field in
+  Core, the consumer that applies it and its status report; no new channel.
+  `workspace.tabs` (GEN4's Apps tabs) is validated and reported here so that
+  an Organization that sets it keeps its other settings; the GEN3 Launchpad
+  shows no tabs.
 - **Absent value:** the Organization does not govern it and every Environment
   decides for itself, exactly as before the section existed. Existing
   Organizations therefore change nothing.

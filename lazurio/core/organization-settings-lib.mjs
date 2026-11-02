@@ -40,13 +40,24 @@ const LAUNCHPAD_CALLBACK_PATTERN =
 // callback always takes one of them.
 const MICROSOFT365_MAX_CALLBACKS = 255;
 
+// A Workspace tab of GEN4's Apps (LazurioPlatform decision F32, addendum of
+// 2026-10-16): a name of 1 to 40 characters without control characters or
+// space at either end, and the modules in it by id. The same patterns and
+// bounds as LazurioPlatform's `organizationSettings`.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it refuses.
+const WORKSPACE_TAB_NAME_PATTERN = /^(?=[^\u0000-\u001f\u007f]{1,40}$)[^\s\u0000-\u001f\u007f](?:.*[^\s\u0000-\u001f\u007f])?$/;
+const WORKSPACE_MODULE_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const WORKSPACE_TABS_MAX = 12;
+const WORKSPACE_TAB_MODULES_MAX = 500;
+
 const CANONICAL_SOURCE = "lazurio.organization.json";
 
-// The whole contract as one closed tree. Adding an Organization setting adds
-// one leaf here and the same leaf in `$defs.organizationSettings` of
-// `lazurio.organization.v1.schema.json` (organization-settings-lib.test.mjs
-// pins both), plus the consumers that apply and report it (decision 0194
-// point 6).
+// The whole contract as one closed tree. The contract and its schema belong
+// to LazurioPlatform (decision 0225): a new setting is added there first, in
+// its reader and in `$defs.organizationSettings` of the schema, which this
+// root pins as `lazurio.organization.v1.schema.json`. Core follows with the
+// same leaf (organization-settings-lib.test.mjs holds both together), plus
+// the consumers that apply and report it.
 //
 // `microsoft365` carries only identifiers that are not secrets (decision
 // 0162, addendum 2026-10-14): the Organization's single-tenant Entra app is a
@@ -64,6 +75,11 @@ const CANONICAL_SOURCE = "lazurio.organization.json";
 // validates it so an Organization that writes it keeps its other settings,
 // but no Environment receives, applies or reports it, so it has no key in
 // `ORGANIZATION_SETTINGS_KEYS`.
+//
+// `workspace.tabs` is the Organization's own tabs in GEN4's Apps, in order,
+// each a name and the modules in it. The GEN3 Launchpad shows no tabs; Core
+// validates and reports them so that an Organization that sets them keeps
+// every other setting here too.
 const SETTINGS_CONTRACT = objectNode({
   integrations: objectNode({
     composio: objectNode({ allowed: booleanLeaf() }, ["allowed"]),
@@ -79,6 +95,21 @@ const SETTINGS_CONTRACT = objectNode({
     chatgpt_apps: objectNode({ allowed: booleanLeaf() }, ["allowed"]),
   }),
   access_requests: dashboardOnly(objectNode({ enabled: booleanLeaf() }, ["enabled"])),
+  workspace: objectNode(
+    {
+      tabs: arrayLeaf(
+        objectNode(
+          {
+            name: stringLeaf(WORKSPACE_TAB_NAME_PATTERN),
+            modules: arrayLeaf(stringLeaf(WORKSPACE_MODULE_PATTERN), { maxItems: WORKSPACE_TAB_MODULES_MAX }),
+          },
+          ["name", "modules"],
+        ),
+        { minItems: 1, maxItems: WORKSPACE_TABS_MAX },
+      ),
+    },
+    ["tabs"],
+  ),
 });
 
 const SETTINGS_LEAVES = leaves(SETTINGS_CONTRACT, [], true);
@@ -126,6 +157,7 @@ export function resolveOrganizationSettings({ authority, canonicalManifest }) {
   }
   const issues = [];
   validateNode(canonicalManifest.settings, SETTINGS_CONTRACT, "/settings", issues);
+  if (issues.length === 0) workspaceIssues(canonicalManifest.settings, issues);
   if (issues.length > 0) {
     return settingsResult({
       status: "invalid",
@@ -207,6 +239,25 @@ function validateNode(value, node, path, issues) {
   }
 }
 
+// What the closed tree cannot say about the tabs: two tabs never share a
+// name (in NFC, letter case ignored), and a module is in one tab at most.
+function workspaceIssues(settings, issues) {
+  const tabs = settings.workspace?.tabs;
+  if (tabs === undefined) return;
+  const names = new Set();
+  const modules = new Set();
+  tabs.forEach((tab, index) => {
+    const at = `/settings/workspace/tabs/${index}`;
+    const name = tab.name.normalize("NFC").toLocaleLowerCase();
+    if (names.has(name)) issues.push({ code: "settings_value_invalid", path: `${at}/name` });
+    names.add(name);
+    tab.modules.forEach((module, position) => {
+      if (modules.has(module)) issues.push({ code: "settings_value_invalid", path: `${at}/modules/${position}` });
+      modules.add(module);
+    });
+  });
+}
+
 function objectNode(fields, required = []) {
   return Object.freeze({
     kind: "object",
@@ -233,7 +284,7 @@ function enumItem(values) {
 }
 
 // An array is one setting: its items are validated, never reported as keys.
-// Items are strings and must be unique.
+// String items must be unique; an item may also be an object node (a tab).
 function arrayLeaf(items, { minItems = 0, maxItems = Infinity } = {}) {
   return Object.freeze({ kind: "array", items, minItems, maxItems });
 }
