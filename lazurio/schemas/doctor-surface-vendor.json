@@ -31,11 +31,15 @@
       "path": "runtime/json-schema-mini.mjs",
       "baseline_path": "lazurio/runtime/json-schema-mini.mjs",
       "baseline_sha256": "c08dc53c7ed945af5621ca2e102160f1c4a29bd8fd8e85c5440d39152e694dd6",
-      "current_sha256": "1e298b02401fbad50c0a743764610ca09fa5b67f9357d366e1609e6c7313b7eb",
+      "current_sha256": "f9a6eb5b226242e19d1244f219baf54f0d3e33a15654d8d22b2cb2d45822e2ff",
       "declared_delta": [
         {
           "summary": "Sdílený validátor vynucuje null, maximum a propertyNames používané novým Organization manifest schématem; stávající Doctor kontrakt se nemění.",
           "anchor": "minimum, maximum, propertyNames"
+        },
+        {
+          "summary": "Sdílený validátor přijímá booleovská podschémata (true přijme každou hodnotu, false žádnou), kterými schéma Organizace připnuté z LazurioPlatform zakazuje pole; stávající Doctor kontrakt se nemění.",
+          "anchor": "booleovská podschémata"
         }
       ]
     },
