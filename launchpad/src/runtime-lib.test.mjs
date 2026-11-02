@@ -1997,7 +1997,7 @@ test("runtime manager odmítne Windows drive path mimo Organization boundary", a
   const app = fixtureDiscoveryApp({
     port,
     overrides: {
-      organization_path: "D:\\outside\\Macano-Tech_GEN3",
+      organization_path: "D:\\outside\\Acme-Tech_GEN3",
       organization_kind: "organization",
     },
   });
@@ -4736,10 +4736,13 @@ test("hosted entrypoint listener receives its application origin; other listener
   }
 }, platformTestTimeout(15_000));
 
-// Contract proof against the deployed consumers: the real hosted child env of
-// two Apps is fed to (a) the verbatim Knowledgebase reader and (b) the Mission
-// Control reader semantics. Both declare their single listener with role
-// entrypoint and read the keyed variable, like they read keyed host/port.
+// Contract check of the hosted child env: the real child env of two Apps is
+// fed to (a) a synthetic reader with the contract of a Knowledgebase-style
+// App's listener reader and (b) the reading a Mission Control App's server
+// does, restated inline. Neither is a deployed App's code, so the test proves
+// that the env satisfies these two contracts, not that a deployed App accepts
+// it. Both Apps declare their single listener with role entrypoint and read the
+// keyed variable, like they read keyed host/port.
 test("hosted child env satisfies the Knowledgebase and Mission Control external-origin readers", async () => {
   const knowledgebasePort = await findFreePort();
   const missionControlPort = await findFreePort();
@@ -4787,11 +4790,12 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     const knowledgebaseEnv = childEnvs.get(knowledgebase.id);
     const missionControlEnv = childEnvs.get(missionControl.id);
 
-    // (a) Knowledgebase: ConceptLineLazurio/knowledgebase main 7cee5ff,
-    // app/v2/scripts/runtime-listener.mjs (vendored verbatim under
-    // launchpad/src/fixtures/hosted-application-origin/). It resolves the
-    // module lease from ../../../lazurio.module.json and ../package.json at
-    // import time, so it runs from a temporary module tree for this App.
+    // (a) Knowledgebase: a synthetic reader written for this test
+    // (launchpad/src/fixtures/hosted-application-origin/), with the contract a
+    // Knowledgebase-style App's runtime listener reader has under the Module
+    // Standard. It resolves the module lease from ../../../lazurio.module.json
+    // and ../package.json at import time, so it runs from a temporary module
+    // tree for this App.
     const moduleRoot = join(await mkdtemp(join(tmpdir(), "knowledgebase-reader-")), "knowledgebase");
     await mkdir(join(moduleRoot, "app", "v2", "scripts"), { recursive: true });
     await writeFile(join(moduleRoot, "lazurio.module.json"), JSON.stringify({
@@ -4810,9 +4814,20 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     expect(listener).toEqual({ host: "127.0.0.1", port: knowledgebasePort, externalOrigin: "https://knowledgebase.pilot.example.lazurio.io" });
     expect(reader.withExternalOrigin({}, listener).server.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
     expect(reader.withModuleListener({}, knowledgebaseEnv).preview.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
+    // Every pair the Launchpad passes must equal the lease: a right keyed pair
+    // does not cover a wrong generic one, nor the other way round.
+    const otherPort = String(knowledgebasePort === 65535 ? 65534 : knowledgebasePort + 1);
+    expect(knowledgebaseEnv.LAZURIO_RUNTIME_LISTENER_APP_PORT).toBe(String(knowledgebasePort));
+    expect(knowledgebaseEnv.LAZURIO_RUNTIME_PORT).toBe(String(knowledgebasePort));
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_PORT: otherPort }))
+      .toThrow("LAZURIO_RUNTIME_* gives");
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_LISTENER_APP_PORT: otherPort }))
+      .toThrow("LAZURIO_RUNTIME_LISTENER_APP_* gives");
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_PORT: undefined }))
+      .toThrow("LAZURIO_RUNTIME_* must give both a host and a port");
 
-    // (b) Mission Control: ConceptLineLazurio/mission-control main 347d9bd,
-    // app/v3/src/server.ts — serverExternalOrigin() reads
+    // (b) Mission Control: the reading a Mission Control App's server does, inline
+    // here — its serverExternalOrigin() reads
     // process.env.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN and
     // parseExternalOrigin() accepts only an exact https origin whose hostname
     // is lowercase DNS labels, then adds { host, origin } to its allowlists.
@@ -5402,7 +5417,7 @@ test("Mission Control s planned data slotem se zastaví před startem procesu", 
       },
     ],
     appOverrides: {
-      title: "BNO & LJ Mission Control",
+      title: "Acme Mission Control",
       module: "mission-control",
       required_module_slots: ["mission-control/db"],
       tags: ["mission-control", "repository-db"],

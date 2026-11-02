@@ -5,15 +5,12 @@ import { promisify } from "node:util";
 
 const root = resolve(import.meta.dir, "..");
 const clientIdentityPattern = ["spec", "toda"].join("");
-const historicalEvidencePaths = new Set([
-  "ISSUES.open.json",
-  "ISSUES.resolved.json",
-]);
 const execFileAsync = promisify(execFile);
 
 describe("public Organization example boundary", () => {
-  test("keeps a real client identity only in explicit historical evidence", async () => {
-    const { stdout, stderr } = await execFileAsync(
+  test("names no real client identity anywhere in the tracked tree", async () => {
+    // git grep exits 1 when nothing matches, which is the expected state.
+    const result = await execFileAsync(
       "git",
       [
         "grep",
@@ -25,24 +22,13 @@ describe("public Organization example boundary", () => {
         ":!scripts/public-example-boundary.test.mjs",
       ],
       { cwd: root, encoding: "utf8" },
+    ).then(
+      (value) => ({ code: 0, ...value }),
+      (error) => ({ code: error.code, stdout: error.stdout ?? "", stderr: error.stderr ?? "" }),
     );
 
-    expect(stderr).toBe("");
-
-    const matches = stdout
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.replace(/\r$/, ""))
-      .map((line) => {
-        const fields = line.match(/^(.+?):(\d+):(.*)$/);
-        expect(fields).not.toBeNull();
-        return { path: fields[1], text: fields[3] };
-      });
-
-    expect(matches.length).toBeGreaterThan(0);
-    for (const match of matches) {
-      expect(historicalEvidencePaths.has(match.path)).toBe(true);
-    }
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
   });
 });

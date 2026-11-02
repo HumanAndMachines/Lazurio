@@ -81,14 +81,14 @@ test("usage tracking drží globální limit odpovědi", async () => {
 // nevšiml, protože osiřelý klíč se jen tiše odfiltruje.
 test("usage přežije změnu velikosti písmen v app id", async () => {
   const launchpadRoot = await makeLaunchpadRoot();
-  await recordAppOpen({ launchpadRoot, appId: "Macano-Tech-cenik-v2", now: new Date("2026-07-16T10:07:12Z") });
+  await recordAppOpen({ launchpadRoot, appId: "Acme-Tech-cenik-v2", now: new Date("2026-07-16T10:07:12Z") });
 
-  const renamed = [{ id: "macano-tech-cenik-v2", title: "Ceník", company: "Macano-Tech", icon: null }];
+  const renamed = [{ id: "acme-tech-cenik-v2", title: "Ceník", company: "Acme-Tech", icon: null }];
   const result = await buildMostUsedApps({ launchpadRoot, apps: renamed });
 
   expect(result.cold_start).toBe(false);
   expect(result.most_used).toHaveLength(1);
-  expect(result.most_used[0].id).toBe("macano-tech-cenik-v2");
+  expect(result.most_used[0].id).toBe("acme-tech-cenik-v2");
   expect(result.most_used[0].count).toBe(1);
 });
 

@@ -153,8 +153,8 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
 - Linuxové admin účty na hostu jsou samostatná osa a nesmějí vytvářet vlastní
   Headscale usery.
 - **Přechodný stav existujících uzlů:** nové uzly se zakládají rovnou pod
-  osobním Headscale userem. Existující uzel pod jiným userem (např. Matoušův
-  Windows, iPhone a Friday v `org-macano-tech`) se přesune jen při příležitosti,
+  osobním Headscale userem. Existující uzel pod jiným userem (např. Windows,
+  iPhone a osobní VM Ownera Acme-Tech v `org-acme-tech`) se přesune jen při příležitosti,
   kdy se zařízení stejně znovu přihlašuje, nebo až Headscale přesun uzlu bez
   nového přihlášení umožní (v0.29.3 `nodes move` nemá). Znovu párovat zařízení
   jen kvůli tomuto pravidlu se nesmí. Zóny se do té doby odvozují z
@@ -184,7 +184,7 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   Headscale a dopad přejmenování na vazby drží Machines
   `docs/conglomerate-tailnet.md` §1.1.
 - **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
-  virtualizační host `<org>-proxmox-NN` (např. `lumbio-proxmox-01`, aby ho
+  virtualizační host `<org>-proxmox-NN` (např. `acme-proxmox-01`, aby ho
   správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
   je krátký štítek Organizace, který Owner zvolí jednou a který se nemění
   s přejmenováním GitHub loginu ani DNS slugu); číslování od `01`, smí
@@ -236,20 +236,20 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 
 | Uživatel | Domovský Conglomerate | Osobní zóna | Pracovní zóna |
 | --- | --- | --- | --- |
-| Matouš (`mcn-kacanos-m`) | Macano-Tech | Windows laptop, iPhone, osobní VM „Friday“ | pracovní VM Macano-Tech „Henry“ |
-| Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě, HumanAndMachine-ai a Lumbio |
-| Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě |
+| Owner Acme-Tech (`example-owner`) | Acme-Tech | Windows laptop, iPhone, osobní VM „Friday“ | pracovní VM Acme-Tech „Henry“ |
+| Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM v HumanAndMachine-ai a ve dvou dalších Organizacích |
+| Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM v další Organizaci |
 
 Pracovní VM na osobní laptop nesmí, dokud Owner laptopu nezapne Přístup na
-zařízení podle pravidla 8. Matouš je Owner Macano-Techu a chce, aby jeho Windows
-notebook byl dosažitelný z pracovního Prostředí Macano-Techu; podle pravidla 8
+zařízení podle pravidla 8. Owner Acme-Techu chce, aby jeho Windows notebook
+byl dosažitelný z pracovního Prostředí Acme-Techu; podle pravidla 8
 to zapne sám jako Owner zařízení. **Dnes to ještě neplatí:** služba, která
 souhlasy převádí na hrany, zatím neběží, takže bez výslovné výjimky
-v `Macano-Tech/infra` pracovní VM Macano-Techu na notebook nedosáhne a notebook
+v `Acme-Tech/infra` pracovní VM Acme-Techu na notebook nedosáhne a notebook
 je v příkladu jen v osobní zóně. Do osobní zóny jiných uživatelů ani jiných
 Organizací se tím nic neotevírá. Uživatel s pracovním laptopem Organizace má SSH
 z pracovního laptopu do přiděleného pracovního Environmentu; opačný směr jen
 Přístupem na zařízení podle pravidla 8.
 
-Realizace a stav: Mission Control DEV-6614. Konkrétní instance pro Matouše
-drží `Macano-Tech/infra` v `machines/macano-tech-conglomerate-host/operator-device-access.md`.
+Realizace a stav: Mission Control DEV-6614. Konkrétní instanci drží privátní
+Deployment Repo té Organizace (`<Org>/infra`) v `machines/<host>/operator-device-access.md`.

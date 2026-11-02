@@ -70,12 +70,12 @@ test("ssh config hosts are parsed and only Lazurio Machines count", () => {
 });
 
 test("host block round-trips and keeps the paste command's layout", () => {
-  const block = hostBlock({ label: "iotor-jakub-vm", ipv4: "100.72.0.3", user: "jakub" });
-  expect(block).toContain("HostKeyAlias iotor-jakub-vm");
-  expect(block).toContain("UserKnownHostsFile ~/.ssh/lazurio/iotor-jakub-vm.known_hosts");
+  const block = hostBlock({ label: "acme-bob-vm", ipv4: "100.72.0.3", user: "bob" });
+  expect(block).toContain("HostKeyAlias acme-bob-vm");
+  expect(block).toContain("UserKnownHostsFile ~/.ssh/lazurio/acme-bob-vm.known_hosts");
   expect(block).toContain("StrictHostKeyChecking yes");
-  expect(parseHostBlock("iotor-jakub-vm", block)).toEqual({
-    label: "iotor-jakub-vm", host: "100.72.0.3", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm",
+  expect(parseHostBlock("acme-bob-vm", block)).toEqual({
+    label: "acme-bob-vm", host: "100.72.0.3", user: "bob", identity_file: "~/.ssh/lazurio-acme-bob-vm", connect: "ssh acme-bob-vm",
   });
 });
 
@@ -278,7 +278,7 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
     { label: "betaco-anna-workspace", host: "betaco-anna-vm.tailnet.betaco.lazurio.io", user: null, identity_file: null, connect: "ssh betaco-anna-workspace", managed: false },
   ]);
   await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\n");
-  const request = { label: "iotor-jakub-vm", ipv4: "100.72.0.3", user: "jakub", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
+  const request = { label: "acme-bob-vm", ipv4: "100.72.0.3", user: "bob", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
 
   await expect(network.connect({ ...request, tailnet: "headscale.other.lazurio.io" })).rejects.toMatchObject({
     code: "tailnet_mismatch", details: { active: "headscale.betaco.lazurio.io", expected: "headscale.other.lazurio.io" },
@@ -291,10 +291,10 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
   const first = await network.connect(request);
   expect(first.created).toBe(true);
   expect(first.public_key).toBe(laptopKey);
-  expect(first.connect).toBe("ssh iotor-jakub-vm");
+  expect(first.connect).toBe("ssh acme-bob-vm");
   expect(calls.some((call) => call[0] === "ssh-keygen" && call.includes("ed25519"))).toBe(true);
-  expect(await readFile(join(home, ".ssh", "lazurio", "iotor-jakub-vm.conf"), "utf8")).toBe(hostBlock({ label: "iotor-jakub-vm", ipv4: "100.72.0.3", user: "jakub" }));
-  expect(await readFile(join(home, ".ssh", "lazurio", "iotor-jakub-vm.known_hosts"), "utf8")).toBe(`iotor-jakub-vm ${hostKey.type} ${hostKey.key}\n`);
+  expect(await readFile(join(home, ".ssh", "lazurio", "acme-bob-vm.conf"), "utf8")).toBe(hostBlock({ label: "acme-bob-vm", ipv4: "100.72.0.3", user: "bob" }));
+  expect(await readFile(join(home, ".ssh", "lazurio", "acme-bob-vm.known_hosts"), "utf8")).toBe(`acme-bob-vm ${hostKey.type} ${hostKey.key}\n`);
   expect(await readFile(join(home, ".ssh", "config"), "utf8")).toBe("Include lazurio/*.conf\n\nHost old\n  HostName 10.0.0.1\n");
 
   const second = await network.connect({ ...request, ipv4: "100.72.0.4" });
@@ -302,12 +302,12 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
   expect(calls.filter((call) => call[0] === "ssh-keygen")).toHaveLength(1);
   expect(await readFile(join(home, ".ssh", "config"), "utf8").then((text) => text.split("Include lazurio/*.conf").length - 1)).toBe(1);
   expect(await network.readConnections()).toEqual([
-    { label: "iotor-jakub-vm", host: "100.72.0.4", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm", managed: true },
+    { label: "acme-bob-vm", host: "100.72.0.4", user: "bob", identity_file: "~/.ssh/lazurio-acme-bob-vm", connect: "ssh acme-bob-vm", managed: true },
   ]);
 
-  expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm", conf_removed: true, known_hosts_removed: true, key_removed: true, kept: [] });
+  expect(await network.removeConnection({ label: "acme-bob-vm" })).toEqual({ removed: true, label: "acme-bob-vm", conf_removed: true, known_hosts_removed: true, key_removed: true, kept: [] });
   expect(await network.readConnections()).toEqual([]);
-  expect(existsSync(join(home, ".ssh", "lazurio-iotor-jakub-vm"))).toBe(false);
+  expect(existsSync(join(home, ".ssh", "lazurio-acme-bob-vm"))).toBe(false);
 });
 
 test("removal never deletes what Launchpad did not create: hand-authored .conf, pre-existing key", async () => {
@@ -340,7 +340,7 @@ test("removal never deletes what Launchpad did not create: hand-authored .conf, 
   expect(await readFile(join(home, ".ssh", "lazurio-orphan"), "utf8")).toBe("keep me");
   expect(existsSync(join(home, ".ssh", "lazurio", "recovery.conf"))).toBe(true);
   // connect() will not overwrite a hand-authored .conf under the same label either.
-  const request = { label: "recovery", ipv4: "100.72.0.3", user: "jakub", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
+  const request = { label: "recovery", ipv4: "100.72.0.3", user: "bob", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
   await expect(network.connect(request)).rejects.toMatchObject({ code: "connection_unmanaged" });
 
   // A connection whose key already existed: removal drops the .conf and known_hosts, keeps the key.

@@ -96,7 +96,7 @@ Příkaz před zápisem vyžaduje public + `isTemplate=true` upstream. Při jak�
 driftu fail-closed skončí v preflightu a nevytvoří žádný osobní repozitář ani
 checkout.
 
-Detail a recovery jsou v `manual/create-personalspace.md`; pilot Matouše
+Detail a recovery jsou v `manual/create-personalspace.md`; pilot jednoho uživatele
 a cross-platform evidence drží `CAC-0071`.
 
 Root příkaz Buddyho nezakládá: parser `--with-buddy` odmítá jako neznámý

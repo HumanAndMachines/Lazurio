@@ -1500,7 +1500,7 @@ async function readOrganizationSpaces(
   // Vnořený child slot i explicitní repository-db slot jsou technické mounty
   // pro Doctor/search/publish flow, ne samostatné Launchpad module dlaždice.
   // Diagnostics-only klasifikace je záměrně nezávislá na přítomnosti parent
-  // slotu (AVALTAR může dočasně deklarovat jen mission-control/db). Pro resolver
+  // slotu (Organizace může dočasně deklarovat jen mission-control/db). Pro resolver
   // a Doctor (module_declarations) slot zůstává.
   const declarationPaths = projectedModuleDeclarations.map((slot) => slot.path);
   const isNestedChildSlot = (slot) =>

@@ -60,16 +60,16 @@ test("Guide install payload accepts only the exact source for its active locale"
 
 test("declared shared-port peer is matched by endpoint and ownership, not listener PID", () => {
   const target = {
-    id: "agentmint-knowledgebase-v2",
-    company: "AgentMint",
+    id: "acmecorp-knowledgebase-v2",
+    company: "AcmeCorp",
     host: "127.0.0.1",
     port: 5286,
     runtime: { owner: "foreign-port", pid: 2635 },
-    shared_port_owners: [{ app_id: "macano-knowledgebase-v2" }],
+    shared_port_owners: [{ app_id: "acme-tech-knowledgebase-v2" }],
   };
   const peer = {
-    id: "macano-knowledgebase-v2",
-    company: "Macano-Tech",
+    id: "acme-tech-knowledgebase-v2",
+    company: "Acme-Tech",
     host: "localhost",
     port: 5286,
     runtime: { owner: "current-instance", pid: 2628 },
@@ -151,7 +151,7 @@ test("runtime requests without a cross-Module peer never prompt or carry takeove
 
 test("shared-port peer selection stays fail-closed for undeclared or unmanaged Apps", () => {
   const target = {
-    id: "agentmint-knowledgebase-v2",
+    id: "acmecorp-knowledgebase-v2",
     host: "127.0.0.1",
     port: 5286,
     runtime: { owner: "foreign-port", pid: 2635 },
@@ -1114,8 +1114,8 @@ test("neplatná dependency boundary je blokátor prostoru i položka Ke kontrole
 
 test("zdravá výchozí verze neutralizuje jen očekávaný mismatch staršího shared lease", () => {
   const rollback = {
-    ...app("knowledgebase-v1", "Iotor", "ready"),
-    title: "Iotor Knowledgebase v1",
+    ...app("knowledgebase-v1", "ExampleOrg", "ready"),
+    title: "ExampleOrg Knowledgebase v1",
     module: "knowledgebase",
     host: "127.0.0.1",
     port: 24_302,
@@ -1126,8 +1126,8 @@ test("zdravá výchozí verze neutralizuje jen očekávaný mismatch staršího 
     },
   };
   const current = {
-    ...app("knowledgebase-v2", "Iotor", "ready"),
-    title: "Iotor Knowledgebase v2",
+    ...app("knowledgebase-v2", "ExampleOrg", "ready"),
+    title: "ExampleOrg Knowledgebase v2",
     module: "knowledgebase",
     host: "127.0.0.1",
     port: 24_302,
@@ -1142,29 +1142,29 @@ test("zdravá výchozí verze neutralizuje jen očekávaný mismatch staršího 
   current.module_apps = moduleApps;
 
   const healthyDefault = summarizeOrganizationSpaceHealth({
-    organization: { slug: "Iotor", workspaces: [] },
+    organization: { slug: "ExampleOrg", workspaces: [] },
     apps: [rollback, current],
   });
   expect(healthyDefault).toMatchObject({ blockers: 0, warnings: 0, running: 1 });
   expect(healthyDefault.blocking_apps).toEqual([]);
 
   const wrongLease = summarizeOrganizationSpaceHealth({
-    organization: { slug: "Iotor", workspaces: [] },
+    organization: { slug: "ExampleOrg", workspaces: [] },
     apps: [{ ...rollback, port: 24_303 }, current],
   });
   expect(wrongLease.blockers).toBe(1);
 
   const namedSubApp = summarizeOrganizationSpaceHealth({
-    organization: { slug: "Iotor", workspaces: [] },
+    organization: { slug: "ExampleOrg", workspaces: [] },
     apps: [
-      { ...rollback, title: "Iotor Knowledgebase Catalog v1" },
-      { ...current, title: "Iotor Knowledgebase Editor v2" },
+      { ...rollback, title: "ExampleOrg Knowledgebase Catalog v1" },
+      { ...current, title: "ExampleOrg Knowledgebase Editor v2" },
     ],
   });
   expect(namedSubApp.blockers).toBe(1);
 
   const independentDependencyFailure = summarizeOrganizationSpaceHealth({
-    organization: { slug: "Iotor", workspaces: [] },
+    organization: { slug: "ExampleOrg", workspaces: [] },
     apps: [{ ...rollback, dependencies: { state: "missing_package" } }, current],
   });
   expect(independentDependencyFailure.blockers).toBe(1);
@@ -1172,16 +1172,16 @@ test("zdravá výchozí verze neutralizuje jen očekávaný mismatch staršího 
 
 test("starší běžící rollback dál blokuje výchozí novější verzi", () => {
   const rollback = {
-    ...app("knowledgebase-v1", "Iotor", "ready"),
-    title: "Iotor Knowledgebase v1",
+    ...app("knowledgebase-v1", "ExampleOrg", "ready"),
+    title: "ExampleOrg Knowledgebase v1",
     module: "knowledgebase",
     host: "127.0.0.1",
     port: 24_302,
     runtime_status: "healthy",
   };
   const current = {
-    ...app("knowledgebase-v2", "Iotor", "ready"),
-    title: "Iotor Knowledgebase v2",
+    ...app("knowledgebase-v2", "ExampleOrg", "ready"),
+    title: "ExampleOrg Knowledgebase v2",
     module: "knowledgebase",
     host: "127.0.0.1",
     port: 24_302,
@@ -1193,7 +1193,7 @@ test("starší běžící rollback dál blokuje výchozí novější verzi", () 
   };
 
   const health = summarizeOrganizationSpaceHealth({
-    organization: { slug: "Iotor", workspaces: [] },
+    organization: { slug: "ExampleOrg", workspaces: [] },
     apps: [rollback, current],
   });
   expect(health.blockers).toBe(1);

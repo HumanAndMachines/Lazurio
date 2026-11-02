@@ -125,7 +125,7 @@ Ruční postup je stejný jako na pracovní stanici
    bez přihlášení Organizaci nenatáhne. Nejde o `lazurio update`
    LazurioPlatform.
 4. Rezidentní CLI `organization install <setup-organizace> --role builder --json`
-   (u Iotoru `IotorLazurio`). Gate read-only ověří živé členství uživatele
+   (např. `ExampleOrg`). Gate read-only ověří živé členství uživatele
    v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
    pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
    Restricted Admin-only sloty (`infra`) Buildera neblokují a nemountují se.
@@ -193,7 +193,7 @@ Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
 
 1. Rezidentní CLI `update`.
 2. Rezidentní CLI `organization install <setup-organizace> --json` **bez
-   `--role`** (u Iotoru `IotorLazurio`): bot nemá lidskou roli. Lazurio ověří
+   `--role`** (např. `ExampleOrg`): bot nemá lidskou roli. Lazurio ověří
    bota, zmaterializuje root Organizace a jen ty moduly, jejichž repozitáře
    jsou v klientském rozsahu této VM (repository policy v
    `/etc/lazurio/github-broker/environment`); ostatní sloty vrátí jako

@@ -104,7 +104,7 @@ bun run parity:workspace -- \
 
 `--organization` je exact `company.slug`, nikoli název mount adresáře. Runner
 jeho cestu získá ze stejné scan-first discovery jako Launchpad, takže například
-slug `Macano-Tech` korektně najde mount `organizations/Macano-Tech_GEN3` bez
+slug `Acme-Tech` korektně najde mount `organizations/Acme-Tech_GEN3` bez
 druhého mapování.
 
 `live` ověří discovery, Doctor, static module lease, worktree provenienci,

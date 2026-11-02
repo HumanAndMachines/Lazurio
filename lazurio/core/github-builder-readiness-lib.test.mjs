@@ -333,21 +333,21 @@ test("role readiness never reads an ordinary repository declared below a restric
   expect(calls.filter((endpoint) => /mission-control|typo/u.test(endpoint))).toEqual([]);
 });
 
-// Iotor-like Organization: a shared work Team, a business Team and personal
+// Organization with a shared work Team, a business Team and personal
 // Team slots of individual operators. Each hosted work Machine selects its
 // operator's slot through LAZURIO_TEAM_ID.
-const sharedModuleTeams = ["iotor-team", "management", "tereza", "jakub"];
+const sharedModuleTeams = ["acme-team", "management", "alena", "bob"];
 
 function teamOrganizationResource() {
   return {
-    teams: ["iotor-team", "management", "energo", "tereza", "jakub"]
-      .map((slug) => ({ slug, default: slug === "iotor-team" })),
+    teams: ["acme-team", "management", "business", "alena", "bob"]
+      .map((slug) => ({ slug, default: slug === "acme-team" })),
     repository_inventory: [
       moduleSlot("mission-control-app", "workspace/mission-control", sharedModuleTeams),
       repositoryDbSlot("mission-control-data", "workspace/mission-control/db"),
       moduleSlot("knowledgebase", "workspace/knowledgebase", sharedModuleTeams),
-      moduleSlot("energo-offers", "workspace/energo-offers", ["energo"]),
-      repositoryDbSlot("energo-offers-data", "workspace/energo-offers/db"),
+      moduleSlot("business-offers", "workspace/business-offers", ["business"]),
+      repositoryDbSlot("business-offers-data", "workspace/business-offers/db"),
       {
         path: "productionspace/firmware",
         slug: "firmware",
@@ -432,14 +432,14 @@ test("hosted personal Team Machine is ready with WRITE on exactly the repositori
     organization,
     rootRepository,
     resource: teamOrganizationResource(),
-    slotInInstallScope: hostedTeamScope("tereza"),
+    slotInInstallScope: hostedTeamScope("alena"),
   });
 
   expect(report.blockers).toEqual([]);
   expect(report.status).toBe("ready");
   expect(report.repositories.map((repository) => repository.full_name)).toEqual(personalMachineRepositories);
   expect(calls.some((endpoint) => endpoint.includes("/teams/") || endpoint.includes("/memberships/"))).toBe(false);
-  expect(calls.some((endpoint) => /energo|firmware/u.test(endpoint))).toBe(false);
+  expect(calls.some((endpoint) => /business|firmware/u.test(endpoint))).toBe(false);
 });
 
 test("hosted personal Team Machine stays blocked without WRITE on a selected repository", () => {
@@ -449,7 +449,7 @@ test("hosted personal Team Machine stays blocked without WRITE on a selected rep
     organization,
     rootRepository,
     resource: teamOrganizationResource(),
-    slotInInstallScope: hostedTeamScope("tereza"),
+    slotInInstallScope: hostedTeamScope("alena"),
   });
 
   expect(report.status).toBe("blocked");
@@ -469,11 +469,11 @@ test("hosted Team Machine is not blocked by another Team's Modules it does not s
     organization,
     rootRepository,
     resource: teamOrganizationResource(),
-    slotInInstallScope: hostedTeamScope("iotor-team"),
+    slotInInstallScope: hostedTeamScope("acme-team"),
   });
 
   expect(report.status).toBe("ready");
-  expect(calls.some((endpoint) => /energo|firmware/u.test(endpoint))).toBe(false);
+  expect(calls.some((endpoint) => /business|firmware/u.test(endpoint))).toBe(false);
 });
 
 test("hosted scope never widens past restricted or malformed slots", () => {
@@ -481,7 +481,7 @@ test("hosted scope never widens past restricted or malformed slots", () => {
   const resource = teamOrganizationResource();
   resource.repository_inventory.find((slot) => slot.slug === "knowledgebase").default_access = "restricted";
   resource.repository_inventory.push({
-    ...moduleSlot("typo", "workspace/typo", ["tereza"]),
+    ...moduleSlot("typo", "workspace/typo", ["alena"]),
     default_access: "Expected",
   });
   const report = observeGitHubRoleReadiness({
@@ -490,7 +490,7 @@ test("hosted scope never widens past restricted or malformed slots", () => {
     organization,
     rootRepository,
     resource,
-    slotInInstallScope: hostedTeamScope("tereza"),
+    slotInInstallScope: hostedTeamScope("alena"),
   });
 
   expect(report.status).toBe("ready");
@@ -513,8 +513,8 @@ test("non-hosted role install keeps the full Organization scope", () => {
   // productionspace, is still covered and must be writable.
   expect(report.status).toBe("blocked");
   expect(report.blockers.map((item) => item.repository).sort()).toEqual([
-    "ExampleOrganization/energo-offers",
-    "ExampleOrganization/energo-offers-data",
+    "ExampleOrganization/business-offers",
+    "ExampleOrganization/business-offers-data",
     "ExampleOrganization/firmware",
   ]);
   // Omitting the predicate is the same full scope.
@@ -535,7 +535,7 @@ test("Steward readiness follows the same effective WRITE rule without Team bindi
     organization,
     rootRepository,
     resource: teamOrganizationResource(),
-    slotInInstallScope: hostedTeamScope("tereza"),
+    slotInInstallScope: hostedTeamScope("alena"),
   });
 
   expect(report.status).toBe("ready");

@@ -31,7 +31,7 @@
         "bun run check",
         "bun run doctor"
       ],
-      "next_action": "Steward review root PR + template PRs; po merge přesunout do ISSUES.resolved.json. Follow-up: kanonizovat pravidlo v aktuální vlastnické autoritě, adoptovat katalog v reálných Organizacích (Spectoda první) a provést org-side admin kroky (Slack app approval, Atlassian allowlist, Canva AI Connector).",
+      "next_action": "Steward review root PR + template PRs; po merge přesunout do ISSUES.resolved.json. Follow-up: kanonizovat pravidlo v aktuální vlastnické autoritě, adoptovat katalog v reálných Organizacích (nejdřív v jedné z nich) a provést org-side admin kroky (Slack app approval, Atlassian allowlist, Canva AI Connector).",
       "links": [
         {
           "label": "Kanonický standard",
@@ -47,7 +47,7 @@
         }
       ],
       "resolved_at": "2026-07-24",
-      "resolution": "Implementováno a mergnuto na founder greenlight 2026-07-24: Conglomerate PR #40 (standard, runbooky, skill, AGENTS.md, de-broker) a #43 (upřesnění konektorů — preference a zákaz zřizování, ne zákaz použití), OrganizationTemplate PR #24 (tracked katalog + mirror skillu) a #25 (tracked byte-for-byte mirror .claude/skills), PersonalspaceTemplate PR #5 (osobní scope). Follow-up QA fix indexového vynucení mirroru běží jako OrganizationTemplate PR #27. Zbylé follow-upy (HnM decision record, adopce ve Spectodě, org-side admin kroky) nese Mission Control plán CAC-0082."
+      "resolution": "Implementováno a mergnuto na founder greenlight 2026-07-24: Conglomerate PR #40 (standard, runbooky, skill, AGENTS.md, de-broker) a #43 (upřesnění konektorů — preference a zákaz zřizování, ne zákaz použití), OrganizationTemplate PR #24 (tracked katalog + mirror skillu) a #25 (tracked byte-for-byte mirror .claude/skills), PersonalspaceTemplate PR #5 (osobní scope). Follow-up QA fix indexového vynucení mirroru běží jako OrganizationTemplate PR #27. Zbylé follow-upy (HnM decision record, adopce v první reálné Organizaci, org-side admin kroky) nese Mission Control plán CAC-0082."
     },
     {
       "id": "issue-2026-08-07-002",

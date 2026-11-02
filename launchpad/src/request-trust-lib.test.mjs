@@ -36,8 +36,8 @@ test("local trust accepts loopback same-origin requests and rejects foreign orig
 });
 
 test("hosted trust revalidates only the exact Team-scoped signed OAuth session", async () => {
-  const externalOrigin = "https://launchpad.management.iotorlazurio.lazurio.io";
-  const authCheckUrl = "https://auth.management.iotorlazurio.lazurio.io/oauth2/auth";
+  const externalOrigin = "https://launchpad.management.example-org.lazurio.io";
+  const authCheckUrl = "https://auth.management.example-org.lazurio.io/oauth2/auth";
   const authCookieName = "__Secure-lazurio-management-workspace";
   const authCalls = [];
   const trust = createRequestTrustPolicy({

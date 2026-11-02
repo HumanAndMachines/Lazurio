@@ -229,10 +229,10 @@ test("GitHub repository normalization anchors the exact GitHub host", () => {
 });
 
 test("portable Windows paths and trusted executable candidates are deterministic", () => {
-  expect(normalizeComparableCliPath("C:\\Users\\Matous\\Lazurio\\", "win32"))
-    .toBe(normalizeComparableCliPath("c:/users/matous/lazurio", "win32"));
-  expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Matous\\Lazurio", "win32"))
-    .toBe(normalizeComparableCliPath("c:\\users\\matous\\lazurio", "win32"));
+  expect(normalizeComparableCliPath("C:\\Users\\Example\\Lazurio\\", "win32"))
+    .toBe(normalizeComparableCliPath("c:/users/example/lazurio", "win32"));
+  expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Example\\Lazurio", "win32"))
+    .toBe(normalizeComparableCliPath("c:\\users\\example\\lazurio", "win32"));
 
 });
 

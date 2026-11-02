@@ -26,7 +26,7 @@ test("neznámý prefix se nevydává za druh změny", () => {
 
 test("merge commit vytáhne skutečný název z těla a číslo návrhu stranou", () => {
   const copy = humanCommitCopy(
-    { subject: "Merge pull request #15 from Lumbiocz/codex/negotiate-escalation" },
+    { subject: "Merge pull request #15 from ExampleOrg/codex/negotiate-escalation" },
     "fix(deals): opravit eskalaci\n\nDelší popis změny.",
   );
   expect(copy.pullRequest).toBe("15");

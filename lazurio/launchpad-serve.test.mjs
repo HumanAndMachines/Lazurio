@@ -11,7 +11,7 @@ test("serve fasáda deleguje lifecycle Serveru přes --reuse, nikdy přes OS ope
   let captured;
   const exitCode = await runLaunchpadServe({
     root: "/Users/colleague/Lazurio",
-    organization: "AgentMint",
+    organization: "AcmeCorp",
     codeRoot: "/runtime/lazurio",
     inspectServerPath: (serverPath) => serverPath === resolve("/runtime/lazurio", "launchpad/src/server.mjs"),
     launchServer(invocation) {
@@ -29,7 +29,7 @@ test("serve fasáda deleguje lifecycle Serveru přes --reuse, nikdy přes OS ope
       "/Users/colleague/Lazurio",
       "--agent-entry",
       "--organization",
-      "AgentMint",
+      "AcmeCorp",
     ],
     cwd: "/Users/colleague/Lazurio",
   });
@@ -45,7 +45,7 @@ test("serve invocation drží root a Personalspace jako vzájemně výlučné re
     .toEqual(["--reuse", "--root", "/srv/lazurio", "--agent-entry", "--personalspace"]);
   expect(() => buildLaunchpadServeInvocation({
     root: "/srv/lazurio",
-    organization: "AgentMint",
+    organization: "AcmeCorp",
     personalspace: true,
   })).toThrow(TypeError);
   expect(() => buildLaunchpadServeInvocation({
@@ -81,7 +81,7 @@ test("CLI parser přijme serve help a odmítne konflikty i JSON", () => {
   const cli = join(import.meta.dirname, "cli.mjs");
   const help = Bun.spawnSync([process.execPath, "run", cli, "launchpad", "serve", "--help"]);
   const conflict = Bun.spawnSync([
-    process.execPath, "run", cli, "launchpad", "serve", "--organization", "AgentMint", "--personalspace",
+    process.execPath, "run", cli, "launchpad", "serve", "--organization", "AcmeCorp", "--personalspace",
   ]);
   const json = Bun.spawnSync([process.execPath, "run", cli, "launchpad", "serve", "--json"]);
   const unsafe = Bun.spawnSync([

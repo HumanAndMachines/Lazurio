@@ -34,7 +34,7 @@ test("locale is stored per browser and catalogs interpolate semantic keys", () =
   setLocale("en", { storage });
   expect(getLocale()).toBe("en");
   expect(writes).toEqual([[LOCALE_STORAGE_KEY, "en"]]);
-  expect(t("workspace.welcomeOrganization", { organization: "AVALTAR" })).toBe("Welcome to the AVALTAR workspace");
+  expect(t("workspace.welcomeOrganization", { organization: "ACME" })).toBe("Welcome to the ACME workspace");
   expect(tp("plural.blocker", 2)).toBe("blockers");
 });
 

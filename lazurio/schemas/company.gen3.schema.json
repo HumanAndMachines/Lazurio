@@ -52,7 +52,7 @@
         "slug": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$",
-          "description": "Kanonický Organization slug v ownerem potvrzeném přesném zápisu velkých a malých písmen čisté brand identity (např. AgentMint, Rozjedeme-ai, ExampleOrg, AVALTAR-HAM). Agent jej nesmí title-case ani lowercase normalizovat; porovnává se case-sensitive. Module a Team slugy zůstávají lowercase."
+          "description": "Kanonický Organization slug v ownerem potvrzeném přesném zápisu velkých a malých písmen čisté brand identity (např. AcmeCorp, Rozjedeme-ai, ExampleOrg, ACME-HQ). Agent jej nesmí title-case ani lowercase normalizovat; porovnává se case-sensitive. Module a Team slugy zůstávají lowercase."
         },
         "display_name": {
           "type": "string",

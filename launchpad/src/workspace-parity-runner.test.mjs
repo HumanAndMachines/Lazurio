@@ -13,11 +13,11 @@ import {
   worktreeProvenanceMatches,
 } from "./workspace-parity-runner.mjs";
 
-const organization = "IotorLazurio";
-const creator = "t3-code/iotor-builder";
+const organization = "ExampleOrg";
+const creator = "t3-code/acme-builder";
 const shared = [
   "--organization", organization,
-  "--app-id", "iotor-knowledgebase-v2",
+  "--app-id", "acme-knowledgebase-v2",
   "--worktree-slug", "DEV-6439-parity",
   "--expected-worktree-created-by", creator,
 ];
@@ -39,8 +39,8 @@ test("hosted parity requires the derived URL and shared process identities", () 
     "--profile", "hosted",
     "--phase", "post-restart",
     ...shared,
-    "--team", "iotor-builders",
-    "--hosted-domain", "iotor.example",
+    "--team", "acme-builders",
+    "--hosted-domain", "acme.example",
     "--machine", "builder",
     "--t3-pid", "101",
     "--codex-pid", "151",
@@ -51,12 +51,12 @@ test("hosted parity requires the derived URL and shared process identities", () 
     .toThrow("--machine is required");
   expect(() => parseArgs(args.filter((value) => value !== "151" && value !== "--codex-pid")))
     .toThrow("--codex-pid is required");
-  expect(() => parseArgs(args.filter((value) => value !== "iotor-builders" && value !== "--team")))
+  expect(() => parseArgs(args.filter((value) => value !== "acme-builders" && value !== "--team")))
     .toThrow("--team is required");
   expect(() => parseArgs([
     "--profile", "hosted",
     ...shared,
-    "--team", "iotor-builders",
+    "--team", "acme-builders",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
@@ -124,21 +124,21 @@ test("hosted evidence names the derived private development origin", () => {
 test("parity resolves an exact Organization slug to its discovered mount path", () => {
   const discovery = {
     organizations: [
-      { slug: "IotorLazurio", path: "organizations/IotorLazurio_GEN3" },
-      { slug: "Macano-Tech", path: "organizations/Macano-Tech_GEN3" },
+      { slug: "ExampleOrg", path: "organizations/ExampleOrg_GEN3" },
+      { slug: "Acme-Tech", path: "organizations/Acme-Tech_GEN3" },
     ],
   };
-  expect(resolveParityOrganization(discovery, "Macano-Tech")).toEqual({
-    slug: "Macano-Tech",
-    path: "organizations/Macano-Tech_GEN3",
+  expect(resolveParityOrganization(discovery, "Acme-Tech")).toEqual({
+    slug: "Acme-Tech",
+    path: "organizations/Acme-Tech_GEN3",
   });
-  expect(resolveParityOrganization(discovery, "Macano-Tech_GEN3")).toBeNull();
+  expect(resolveParityOrganization(discovery, "Acme-Tech_GEN3")).toBeNull();
   expect(resolveParityOrganization({
     organizations: [
-      { slug: "Macano-Tech", path: "organizations/one" },
-      { slug: "Macano-Tech", path: "organizations/two" },
+      { slug: "Acme-Tech", path: "organizations/one" },
+      { slug: "Acme-Tech", path: "organizations/two" },
     ],
-  }, "Macano-Tech")).toBeNull();
+  }, "Acme-Tech")).toBeNull();
 });
 
 test("hosted parity accepts the complete derived Team set and exact session sources", () => {
@@ -155,19 +155,19 @@ test("hosted parity accepts the complete derived Team set and exact session sour
   const worktree = { type: "worktree", slug: worktreeSlug };
   const evidence = [
     {
-      app_id: "macano-tech-knowledgebase-v1",
-      expected_url: "https://knowledgebase.technical.macano.example/",
-      health: health(worktree, "https://knowledgebase.technical.macano.example/"),
+      app_id: "acme-tech-knowledgebase-v1",
+      expected_url: "https://knowledgebase.technical.acme-tech.example/",
+      health: health(worktree, "https://knowledgebase.technical.acme-tech.example/"),
     },
     {
-      app_id: "macano-tech-wiki-v1",
-      expected_url: "https://wiki.technical.macano.example/",
-      health: health(main, "https://wiki.technical.macano.example/"),
+      app_id: "acme-tech-wiki-v1",
+      expected_url: "https://wiki.technical.acme-tech.example/",
+      health: health(main, "https://wiki.technical.acme-tech.example/"),
     },
   ];
   const input = {
     healthEvidence: evidence,
-    exercisedAppId: "macano-tech-knowledgebase-v1",
+    exercisedAppId: "acme-tech-knowledgebase-v1",
     phase: "live",
     worktreeSlug,
     maintenance: { total: 2, healthy: 1, stopped: 1, starting: 0, degraded: 0, skipped: 1 },
