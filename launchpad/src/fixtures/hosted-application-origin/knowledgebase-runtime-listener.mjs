@@ -3,8 +3,11 @@
 // hosted application origin the way a static Astro or Vite App does under the
 // Lazurio Module Standard: the lease from ../../../lazurio.module.json and the
 // runtime declaration from ../package.json at import time, then host, port and
-// external origin from the variables the Launchpad passes. runtime-lib.test.mjs
-// copies it into a temporary module tree for the App under test.
+// external origin from the variables the Launchpad passes. The lease owns the
+// listener: every host/port pair the Launchpad passes, the keyed and the
+// generic one, must be complete and equal to the lease, or the reader refuses
+// the environment. runtime-lib.test.mjs copies it into a temporary module tree
+// for the App under test.
 import { readFileSync } from "node:fs";
 
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -27,13 +30,20 @@ function leaseOf(moduleManifest, runtime) {
 
 export const moduleListener = leaseOf(manifest, appPackage?.lazurio?.runtime);
 
-function listenerPair(host, rawPort, source) {
-  if (host === undefined && rawPort === undefined) return null;
+function checkPair(host, rawPort, source) {
+  if (host === undefined && rawPort === undefined) return;
+  if (host === undefined || rawPort === undefined) {
+    throw new Error(`${source} must give both a host and a port`);
+  }
   const port = Number(rawPort);
   if (!loopbackHosts.has(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`${source} must name a loopback host and a TCP port`);
   }
-  return { host, port };
+  if (host !== moduleListener.host || port !== moduleListener.port) {
+    throw new Error(
+      `${source} gives ${host}:${port}, but the module's lease is ${moduleListener.host}:${moduleListener.port}`,
+    );
+  }
 }
 
 export function resolveExternalOrigin(env = process.env) {
@@ -53,12 +63,10 @@ export function resolveExternalOrigin(env = process.env) {
 }
 
 export function resolveModuleListener(env = process.env) {
-  const pair =
-    listenerPair(env.LAZURIO_RUNTIME_LISTENER_APP_HOST, env.LAZURIO_RUNTIME_LISTENER_APP_PORT, "LAZURIO_RUNTIME_LISTENER_APP_*") ??
-    listenerPair(env.LAZURIO_RUNTIME_HOST, env.LAZURIO_RUNTIME_PORT, "LAZURIO_RUNTIME_*") ??
-    moduleListener;
+  checkPair(env.LAZURIO_RUNTIME_LISTENER_APP_HOST, env.LAZURIO_RUNTIME_LISTENER_APP_PORT, "LAZURIO_RUNTIME_LISTENER_APP_*");
+  checkPair(env.LAZURIO_RUNTIME_HOST, env.LAZURIO_RUNTIME_PORT, "LAZURIO_RUNTIME_*");
   const externalOrigin = resolveExternalOrigin(env);
-  return externalOrigin === null ? { ...pair } : { ...pair, externalOrigin };
+  return externalOrigin === null ? { ...moduleListener } : { ...moduleListener, externalOrigin };
 }
 
 function allowedHostsOf(listener) {

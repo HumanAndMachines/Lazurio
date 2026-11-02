@@ -4736,10 +4736,13 @@ test("hosted entrypoint listener receives its application origin; other listener
   }
 }, platformTestTimeout(15_000));
 
-// Contract proof against the deployed consumers: the real hosted child env of
-// two Apps is fed to (a) the verbatim Knowledgebase reader and (b) the Mission
-// Control reader semantics. Both declare their single listener with role
-// entrypoint and read the keyed variable, like they read keyed host/port.
+// Contract check of the hosted child env: the real child env of two Apps is
+// fed to (a) a synthetic reader with the contract of a Knowledgebase-style
+// App's listener reader and (b) the reading a Mission Control App's server
+// does, restated inline. Neither is a deployed App's code, so the test proves
+// that the env satisfies these two contracts, not that a deployed App accepts
+// it. Both Apps declare their single listener with role entrypoint and read the
+// keyed variable, like they read keyed host/port.
 test("hosted child env satisfies the Knowledgebase and Mission Control external-origin readers", async () => {
   const knowledgebasePort = await findFreePort();
   const missionControlPort = await findFreePort();
@@ -4811,6 +4814,17 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     expect(listener).toEqual({ host: "127.0.0.1", port: knowledgebasePort, externalOrigin: "https://knowledgebase.pilot.example.lazurio.io" });
     expect(reader.withExternalOrigin({}, listener).server.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
     expect(reader.withModuleListener({}, knowledgebaseEnv).preview.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
+    // Every pair the Launchpad passes must equal the lease: a right keyed pair
+    // does not cover a wrong generic one, nor the other way round.
+    const otherPort = String(knowledgebasePort === 65535 ? 65534 : knowledgebasePort + 1);
+    expect(knowledgebaseEnv.LAZURIO_RUNTIME_LISTENER_APP_PORT).toBe(String(knowledgebasePort));
+    expect(knowledgebaseEnv.LAZURIO_RUNTIME_PORT).toBe(String(knowledgebasePort));
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_PORT: otherPort }))
+      .toThrow("LAZURIO_RUNTIME_* gives");
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_LISTENER_APP_PORT: otherPort }))
+      .toThrow("LAZURIO_RUNTIME_LISTENER_APP_* gives");
+    expect(() => reader.resolveModuleListener({ ...knowledgebaseEnv, LAZURIO_RUNTIME_PORT: undefined }))
+      .toThrow("LAZURIO_RUNTIME_* must give both a host and a port");
 
     // (b) Mission Control: the reading a Mission Control App's server does, inline
     // here — its serverExternalOrigin() reads
