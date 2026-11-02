@@ -2,8 +2,9 @@
 // Podporuje: type, required, enum, const, properties, additionalProperties:false,
 // items, pattern, minimum, maximum, propertyNames, minItems, maxItems,
 // uniqueItems, lokální JSON Pointer $ref (#/definitions/..., #/$defs/... i
-// rekurzivní kořenové "#"), allOf, anyOf, contains, minLength, if/then/else, not
-// a dependentRequired.
+// rekurzivní kořenové "#"), allOf, anyOf, contains, minLength, if/then/else, not,
+// dependentRequired a booleovská podschémata (`true` přijme každou hodnotu,
+// `false` žádnou; schéma Organizace z LazurioPlatform jimi zakazuje pole).
 // Vrací pole chybových hlášek (prázdné = validní).
 
 export function validateAgainstSchema(value, schema, label = "$") {
@@ -13,6 +14,11 @@ export function validateAgainstSchema(value, schema, label = "$") {
 }
 
 function validateNode(value, node, path, failures, rootSchema) {
+  if (node === true) return;
+  if (node === false) {
+    failures.push(`${path}: hodnota zde není povolená`);
+    return;
+  }
   if (Object.prototype.hasOwnProperty.call(node, "const") && value !== node.const) {
     failures.push(`${path}: hodnota musí být ${JSON.stringify(node.const)}`);
     return;

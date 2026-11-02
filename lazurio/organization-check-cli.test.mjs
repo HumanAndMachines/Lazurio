@@ -44,7 +44,7 @@ test("a root with valid settings passes and prints the effective values without 
       status: "valid",
       source: "lazurio.organization.json",
       values: { integrations: { composio: { allowed: false } } },
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, { key: "workspace.tabs", governed: false, value: null }],
       issues: [],
     },
     failures: [],
@@ -66,7 +66,7 @@ test("a root without settings passes: the Organization governs nothing", () => {
     settings: {
       status: "absent",
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft365(), { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, { key: "workspace.tabs", governed: false, value: null }],
     },
   });
   expect(run(["organization", "check", root]).stdout).toContain("integrations.composio.allowed: neřízeno");
