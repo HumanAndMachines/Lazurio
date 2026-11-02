@@ -66,7 +66,7 @@ reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,isDraft`.
 
 ### 2. Ledger a pořadí
 
-Založ lokální ledger (gitignored, např. `drafts/pr-sweep-<datum>-ledger.md`)
+Založ lokální ledger mimo Git (např. `~/Documents/pr-sweep-<datum>/ledger.md`)
 s řádkem na PR: repo#číslo, autor, stav před, verdikt, poznámka. Aktualizuj ho
 po každém PR; je to jediná paměť sweepu při ztrátě kontextu.
 

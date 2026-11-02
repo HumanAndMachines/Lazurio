@@ -34,7 +34,8 @@ Před vytvořením issue Agent:
    Personalspace, lokální uživatelská jména a zbytečné absolutní cesty;
 4. vytvoří nový issue, nebo k přesně shodnému issue přidá novou evidence;
 5. vrátí URL v instalačním handoffu a dál bez pověření issue nezavírá,
-   nepřiřazuje ani nemění jeho priority.
+   nemění jeho priority a nepřiřazuje ho, kromě eskalace chybějícího práva
+   (níže).
 
 Pro Lazurio použij issue template
 `.github/ISSUE_TEMPLATE/installation-report.md`. Strojově bezpečný postup je:
@@ -56,8 +57,11 @@ Zapsat issue nebo ho doplnit komentářem je trvalý mandát každého Task Agen
 (decision 0163): otevřený technický problém, nejistotu nebo nález, který
 nejde hned vyřešit, Agent po kontrole duplicit a sanitizaci sám zapíše do
 přesného owning repa, uvede URL v handoffu a pokračuje na práci, která na
-issue nestojí. Předem se neptá. Mandát se nevztahuje na uzavření, assignment
-ani prioritizaci issue; ty dělá jen na pokyn uživatele.
+issue nestojí. Předem se neptá. Mandát se nevztahuje na uzavření ani
+prioritizaci issue a na assignment jen s jedinou výjimkou: když Agentovi chybí
+právo, zapíše issue do kořenového repozitáře Organizace a přiřadí ho tomu, kdo
+právo smí udělit (eskalace chybějícího práva, 0219, #702). Jinak uzavření,
+assignment i prioritizaci dělá jen na pokyn uživatele.
 
 Instalační prompt může owning repo pojmenovat předem. Doporučená věta:
 
@@ -65,7 +69,7 @@ Instalační prompt může owning repo pojmenovat předem. Doporučená věta:
 > kontrole duplicit a sanitizaci vytvořit nebo doplnit GitHub Issue v
 > `HumanAndMachines/Lazurio` a uvést jeho URL v handoffu. Nezveřejňuj secrets,
 > Personalspace ani Organization-specific data a issue nezavírej ani
-> nepřiřazuj.
+> nepřiřazuj, kromě eskalace chybějícího práva podle `manual/github-issues.md`.
 
 Agent se u každé nové reprodukované vady znovu neptá a nezůstane jen u lokální
 poznámky: po kontrole duplicit a sanitizaci issue proaktivně vytvoří nebo

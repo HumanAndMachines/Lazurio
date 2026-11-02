@@ -4,8 +4,10 @@ Tento soubor drží hodnoty, hranice a krátká pravidla pro agenty v Lazurio
 rootu. Podrobnosti a postupy jsou v manuálech a skillech, na které pravidla
 odkazují, a platí stejně jako tento soubor (decision 0112, dodatek
 z 2026-10-24). Hranice a hodnoty jsou pevné, provedení je na tvém úsudku.
-Lidská mapa repa je `MAP.md`; čísla rozhodnutí vysvětluje
-`manual/decision-register.md`.
+Lidská mapa repa je `MAP.md`. Čísla rozhodnutí přiděluje veřejný rejstřík
+`docs/decision-register.md` v `Lazurio/LazurioPlatform`, kde je i plné znění
+veřejných rozhodnutí (0226); `manual/decision-register.md` je záznam GEN3
+s řádky do 0224.
 
 ## Zásadní pravidlo
 
@@ -46,9 +48,12 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   LazurioDevelopment jako její repozitář a root CLI se tam spouští
   `bun run lazurio -- …` z rootu, protože `lazurio` je tam Platforma (0217
   s dodatky; nasazuje plán DEV-6691).
-- GEN3 (Lazurio Root na počítači) a GEN4 (Prostředí s Lazurio Folderem) jsou
-  jen orientační pojmy, ne názvy produktů ani složek; Root se na mechanismech
-  Folderu sjednocuje (0219).
+- GEN3 je oficiální označení Lazurio Rootu na počítači, GEN4 Lazurio
+  Platform s Lazurio Folderem a Prostředími (0225, mění 0219). Platí
+  v textech; repozitáře ani složky se nepřejmenovávají. GEN3 zůstává
+  udržovaná pro zákazníky, kteří na ní pracují, ale nové normy se píšou jen
+  do GEN4 a root na ně odkazuje. Na mechanismech Folderu se root sjednocuje
+  (0219).
 - Root upravuj jen když se mění `launchpad.gen3.json`, seznam nebo mountpoint
   Organizací, pravidla `personalspace/`, cross-organization izolace, šablony,
   sdílený Launchpad nebo Guide, root manuál, mapa, agentní pravidla nebo
@@ -282,7 +287,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   odeslání, nasazení; v datových aplikacích (repository-db) už commit a push
   tlačítkem „Publikovat změny“. Publikace patří uživateli: provedeš ji jen na
   jeho výslovný pokyn v aktuálním threadu, který se nepřenáší do dalších
-  konverzací. Takovým pokynem je i ověřené předání přes GitHub assignee
+  konverzací. Pokyn smí dát i předem, na začátku úkolu nebo pro celé
+  vlákno: pak po dokončení publikuješ sám a znovu se neptáš, dokud ho
+  neodvolá; platí jeho poslední slovo (jako Folder, 0219, #702). Takovým pokynem je i ověřené předání přes GitHub assignee
   a stálý mandát, který člověk zapsal rozhodnutím (0171, 0218;
   `manual/pull-request-handoff.md`). Způsobilost Publikaci schválit určují
   živá práva uživatele k přesné operaci. **Release** není Publikace; spouští ho
@@ -341,8 +348,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - **Zapsat issue je trvalý mandát** (0163). Otevřený technický problém,
   nejistotu nebo nález, který nejde hned vyřešit, po kontrole duplicit
   a sanitizaci zapíšeš do Issues přesného owning repa a URL uvedeš
-  v handoffu. Pokračuješ na všem, co na něm nestojí. Issue nezavíráš,
-  nepřiřazuješ ani neprioritizuješ bez pokynu uživatele. Když Issues nejdou
+  v handoffu. Pokračuješ na všem, co na něm nestojí. Issue nezavíráš ani
+  neprioritizuješ bez pokynu uživatele a přiřazuješ ho jen při eskalaci
+  chybějícího práva: když ti právo chybí, zapíšeš issue do kořenového
+  repozitáře Organizace a přiřadíš ho tomu, kdo ho smí udělit (jako Folder,
+  0219, #702). Když Issues nejdou
   nebo public-safety není jistá, vrátíš sanitizovaný návrh s přesným cílovým
   repem. Postup drží `manual/github-issues.md`; `ISSUES.open.json`
   a `ISSUES.resolved.json` jsou zmrazený migrační vstup.
@@ -363,8 +373,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   a mazání podle stáří nejsou úklid.
 - Než zapíšeš čas do záznamu (popis PR, plán, sidecar, poznámka), spusť
   `date -u`; tvůj odhad času v dlouhé relaci ujíždí.
-- Pomocné skripty a mezivýsledky, které mají přežít, patří do gitignored
-  `drafts/`, ne do `/tmp`: restart počítače ho smaže.
+- Pomocné skripty a mezivýsledky, které mají přežít, patří do
+  `~/Documents/<úkol>/` (na Windows do složky Dokumenty), ne do `/tmp`,
+  který restart smaže, ani do kořene rootu nebo Folderu (jako Folder, 0219,
+  #702). Stávající obsah gitignored `drafts/` zůstává.
 - macOS nemá příkaz `timeout`, takže kontrola postavená na něm tiše projde.
   Ověř, že každá kontrola opravdu běží a selže, když má.
 
@@ -519,16 +531,17 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 
 - Při konfliktu platí vyšší: decision records > `ARCHITECTURE.md` (cílový
   model a názvosloví) > schémata a configy (nasazený stav) > GLOSSARY >
-  `AGENTS.md` daného scope > kontrakty > Guide (0040). Lokální projekcí
-  decision records je `manual/decision-register.md`. Nemíchej cílový
+  `AGENTS.md` daného scope > kontrakty > Guide (0040). Rozhodnutí vede
+  veřejný rejstřík `Lazurio/LazurioPlatform` `docs/decision-register.md`
+  (0226); `manual/decision-register.md` je jeho záznam pro GEN3. Nemíchej cílový
   a nasazený stav: `ARCHITECTURE.md` říká, kam systém směřuje, kód
   a configy, co je nasazené. Každý pojem nutný pro práci v Lazuriu je
   vysvětlený v tomto repu; privátní zdroje maintainerů jsou jen provenience.
 - Mapa je `MAP.md`, manuál `manual/` (rozcestník `manual/README.md`) a skilly
   `.agents/skills/` s registrem `manifest.json` a byte-for-byte mirrorem
   `.claude/skills` (paritu hlídá `bun run doctor:agent-skills`, 0104).
-  Sdílený Launchpad je v `launchpad/`, Guide v `guide/` a lokální drafty
-  v `drafts/`. Issues rootu jsou v `HumanAndMachines/Lazurio`.
+  Sdílený Launchpad je v `launchpad/` a Guide v `guide/`. Issues rootu jsou
+  v `HumanAndMachines/Lazurio`.
 - Často potřebné manuály: instalace mašiny `manual/lazurio-root-for-agents.md`
   a `manual/organization-install.md`, první přihlášení na hostované VM
   `manual/hosted-machine-first-login.md`, Windows `manual/windows-e2e-lab.md`,
@@ -567,6 +580,8 @@ nástrojem na otázky dvojotázku „Mám změny Publikovat vaším jménem? Neb
 požádat jiného Kolegu o kontrolu a Publikaci?“ s volbami „Publikovat vaším
 jménem“ a „Požádat jiného Kolegu“; žádnou neoznačíš jako doporučenou. Bez
 nástroje ji napíšeš jako očíslované volby a dodáš, že čekáš na odpověď.
+Když ti uživatel Publikaci dovolil předem a neodvolal ji, dvojotázku
+nepokládáš: publikuješ a v handoffu to oznámíš.
 
 Před otázkou zjistíš živá GitHub práva uživatele. Zvolí-li Publikaci a smí
 merge, mergneš metodou, kterou repozitář povoluje, na ověřeném headu,

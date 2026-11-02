@@ -126,7 +126,8 @@ Add only the paragraphs whose impact the user actually approves:
 > evidence—to create or extend a GitHub Issue in
 > `<installation-issue-repository>` and include its URL in the handoff. Do not
 > publish secrets, Personalspace, the local username, or Organization-specific
-> data. Do not close, assign, or prioritize the issue.
+> data. Do not close or prioritize the issue, and do not assign it except to
+> escalate a missing right as `manual/github-issues.md` describes.
 
 `<installation-issue-repository>` must be the exact owning repo, not a generic
 name. For the installer, CLI, Doctor, Launchpad, and shared manual, that is

@@ -131,7 +131,7 @@ pracovní Root.
   custody cesta pro secrets rootu, Buddyho a uživatele; secrets Organizace
   a jejích Prostředí Henry patří do organization-local `private/secrets/...`
 - `templates/` — šablony
-- `drafts/` — lokální netrackované návrhy bez dlouhodobé autority; sdílený návrh patří do příslušné Organizace, plan-owned worktree nebo PR
+- `drafts/` — starší lokální netrackované návrhy bez dlouhodobé autority; nové pracovní soubory patří do `~/Documents/<úkol>/` (AGENTS.md) a sdílený návrh do příslušné Organizace, plan-owned worktree nebo PR
 - **V jakém světě jsi (koexistence Human↔Machine):** začni sekcí
   `AGENTS.md → Hranice`. Vysvětluje
   hierarchii, hranice a procesy, ve kterých tento root a všechny Organizace

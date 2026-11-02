@@ -1,13 +1,17 @@
 # Registr rozhodnutí sdíleného frameworku
 
-Dokumenty Lazurio rootu odkazují na rozhodnutí číslem (`decision NNNN`).
-Číslo je stabilní identifikátor; tento registr je **lokální projekce norem
-uvnitř Lazuria** — uživatel Lazuria nepotřebuje žádný externí
-repozitář. Plné decision records (kontext, founder verbatim, historie) drží
-privátní strategické repo maintainerů frameworku; pro práci v Lazuriu
-jsou závazné texty tohoto repa: `AGENTS.md`, manuály, skilly a tento registr.
-Mezery v číselné řadě jsou normální (rozhodnutí mimo scope sdíleného
-frameworku se sem nepřenášejí).
+Od 2026-11-01 přiděluje čísla rozhodnutí Lazuria pro GEN3 i GEN4 jen veřejný
+rejstřík `docs/decision-register.md` v `Lazurio/LazurioPlatform`
+(<https://github.com/Lazurio/LazurioPlatform/blob/main/docs/decision-register.md>,
+rozhodnutí 0226). Tam je plné, zhuštěné znění veřejných rozhodnutí; interní
+rozhodnutí o vývoji a provozu Lazuria nebo o jeho produktu a byznysu mají
+v rejstříku řádek a plné znění v Knowledgebase své Organizace. Nové
+rozhodnutí ani dodatek se sem nezapisuje.
+
+Tento soubor zůstává záznamem GEN3 (0225): řádky do 0224 v podobě
+z 2026-11-01, na které odkazují dokumenty rootu (`decision NNNN`). Když se
+řádek a veřejný rejstřík rozcházejí, platí veřejný rejstřík. Mezery v číselné
+řadě jsou normální.
 
 | # | Norma (shrnutí) |
 | --- | --- |
