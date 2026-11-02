@@ -32,6 +32,27 @@ test("boolean subschemas: false refuses a value, true accepts every value", () =
   expect(validateAgainstSchema({ free: ["anything"] }, node, "x")).toEqual([]);
 });
 
+test("boolean subschemas hold wherever a subschema stands: items, if/then/else, not, contains, propertyNames", () => {
+  const refused = "x: hodnota zde není povolená";
+  expect(validateAgainstSchema([1], { type: "array", items: false }, "x")).toEqual(["x[0]: hodnota zde není povolená"]);
+  expect(validateAgainstSchema([], { type: "array", items: false }, "x")).toEqual([]);
+  expect(validateAgainstSchema([1, "a"], { type: "array", items: true }, "x")).toEqual([]);
+  expect(validateAgainstSchema(1, { if: true, then: false, else: true }, "x")).toEqual([refused]);
+  expect(validateAgainstSchema(1, { if: false, then: true, else: false }, "x")).toEqual([refused]);
+  expect(validateAgainstSchema(1, { not: true }, "x")).toEqual(["x: hodnota odpovídá zakázané 'not' větvi"]);
+  expect(validateAgainstSchema(1, { not: false }, "x")).toEqual([]);
+  expect(validateAgainstSchema([1], { contains: false }, "x")).toEqual([
+    "x: pole neobsahuje žádnou položku odpovídající 'contains'",
+  ]);
+  expect(validateAgainstSchema([1], { contains: true }, "x")).toEqual([]);
+  expect(validateAgainstSchema({ a: 1 }, { type: "object", propertyNames: false }, "x")).toEqual([
+    "x.a#propertyName: hodnota zde není povolená",
+  ]);
+  expect(validateAgainstSchema({}, { type: "object", propertyNames: false }, "x")).toEqual([]);
+  expect(validateAgainstSchema(1, { allOf: [true, false] }, "x")).toEqual([refused]);
+  expect(validateAgainstSchema(1, { anyOf: [false, true] }, "x")).toEqual([]);
+});
+
 test("an unverified binding may not carry a GitHub id, for the Organization and for its root repository", () => {
   const organizationIds = validateAgainstSchema(
     manifest({ organizationBinding: { organization_id: "123" } }),
