@@ -30,7 +30,8 @@ Maintenance agent před zásahem ověřuje:
 - `organizations/README.md` — jediné trackované vysvětlení lokálního Organization mountpointu; konkrétní `organizations/*` jsou gitignored nested repos.
 - `personalspace/` — privátní osobní repo mimo GitHub organizace.
 - `templates/` — doplňkové šablony.
-- `drafts/` — lokální prostor bez dlouhodobé autority.
+- `drafts/` — starší lokální prostor bez dlouhodobé autority; nové pracovní
+  soubory patří do `~/Documents/<úkol>/`.
 - `manual/security/local-secret-custody.md` — standard pro lokální držení
   OAuth client JSONů, token helper souborů a dalších secret artefaktů mimo Git.
 - [Cizí tailnety na stanovišti](station-tailnets.md) — na Linuxovém Prostředí

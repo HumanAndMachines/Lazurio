@@ -111,7 +111,8 @@ Při publikačním mandátu pro instalační vady přečti také
     prohledej otevřené i zavřené duplicity, sanitizuj username, absolutní cesty, secrets,
     Personalspace a Organization data a issue vytvoř nebo doplň pomocí body
     file. U téhož nálezu se znovu neptej. Transient nebo domněnku nepublikuj;
-    issue bez dalšího mandátu nezavírej, nepřiřazuj ani neprioritizuj.
+    issue bez dalšího mandátu nezavírej ani neprioritizuj a nepřiřazuj,
+    kromě eskalace chybějícího práva (`manual/github-issues.md`).
 11. **Dokonči povrch podle platformy.** Na macOS a Windows podporovanou CLI
     cestou nainstaluj desktop Launchpad. Na Linuxu je desktop instalace
     `not_applicable`, dokud ji CLI nepodporuje; nepředstírej ji ani nevolej

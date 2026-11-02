@@ -58,7 +58,7 @@ mimo repozitáře:
 Platí pro ně stejná pravidla jako pro `private/secrets/` a
 `personalspace/<owner>_GEN3/secrets/`: adresáře `0700`, soubory `0600`, do
 Gitu nikdy. Netajné výstupy (logy, receipty, inventury) do custody nepatří;
-patří do pracovního adresáře úlohy (`drafts/…`), aby je šlo číst.
+patří do pracovního adresáře úlohy (`~/Documents/<úkol>/`), aby je šlo číst.
 
 ## Hodnoty se nikdy nevypisují
 

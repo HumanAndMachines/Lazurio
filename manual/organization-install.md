@@ -115,7 +115,8 @@ Do promptu přidej pouze ty odstavce, jejichž dopad uživatel skutečně schval
 > kontrole otevřených i zavřených duplicit a sanitizaci vytvořit nebo doplnit
 > GitHub Issue v `<installation-issue-repository>` a uvést jeho URL v handoffu.
 > Nezveřejňuj secrets, Personalspace, lokální username ani
-> Organization-specific data. Issue nezavírej, nepřiřazuj ani neprioritizuj.
+> Organization-specific data. Issue nezavírej ani neprioritizuj a nepřiřazuj,
+> kromě eskalace chybějícího práva podle `manual/github-issues.md`.
 
 `<installation-issue-repository>` musí být exact owning repo, ne obecný název.
 Pro installer, CLI, Doctor, Launchpad a sdílený manuál je dnes

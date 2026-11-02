@@ -67,5 +67,5 @@ custody/drafts cesty, ne do sdílených složek.
 ## Custody a rizika
 
 - OAuth token drží harness (keyring); revoke v Canva účtu (Connected apps).
-- Export tools zapisují soubory — cílové cesty drž v drafts/custody, ať
-  agent nepřepisuje sdílený obsah.
+- Export tools zapisují soubory — cílové cesty drž v `~/Documents/<úkol>/`
+  nebo v custody, ať agent nepřepisuje sdílený obsah.
