@@ -143,6 +143,11 @@ function validateNode(value, node, path, failures, rootSchema) {
     });
     if (!anyMatch) failures.push(`${path}: pole neobsahuje žádnou položku odpovídající 'contains'`);
   }
+  // `items` applies to every array value, with or without `type: "array"`
+  // (JSON Schema 2020-12); a typed array applies it in its own branch below.
+  if (node.type !== "array" && Array.isArray(value) && isSchema(node.items)) {
+    value.forEach((item, index) => validateNode(item, node.items, `${path}[${index}]`, failures, rootSchema));
+  }
   if (typeof value === "string" && node.type !== "string") {
     if (node.pattern && !new RegExp(node.pattern).test(value)) {
       failures.push(`${path}: '${value}' neodpovídá pattern ${node.pattern}`);

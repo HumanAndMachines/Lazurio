@@ -37,6 +37,11 @@ test("boolean subschemas hold wherever a subschema stands: items, if/then/else, 
   expect(validateAgainstSchema([1], { type: "array", items: false }, "x")).toEqual(["x[0]: hodnota zde není povolená"]);
   expect(validateAgainstSchema([], { type: "array", items: false }, "x")).toEqual([]);
   expect(validateAgainstSchema([1, "a"], { type: "array", items: true }, "x")).toEqual([]);
+  // `items` applies by the value's type, also when the schema names no type.
+  expect(validateAgainstSchema([1], { items: false }, "x")).toEqual(["x[0]: hodnota zde není povolená"]);
+  expect(validateAgainstSchema([], { items: false }, "x")).toEqual([]);
+  expect(validateAgainstSchema([1, "a"], { items: true }, "x")).toEqual([]);
+  expect(validateAgainstSchema("not an array", { items: false }, "x")).toEqual([]);
   expect(validateAgainstSchema(1, { if: true, then: false, else: true }, "x")).toEqual([refused]);
   expect(validateAgainstSchema(1, { if: false, then: true, else: false }, "x")).toEqual([refused]);
   expect(validateAgainstSchema(1, { not: true }, "x")).toEqual(["x: hodnota odpovídá zakázané 'not' větvi"]);

@@ -31,7 +31,7 @@
       "path": "runtime/json-schema-mini.mjs",
       "baseline_path": "lazurio/runtime/json-schema-mini.mjs",
       "baseline_sha256": "c08dc53c7ed945af5621ca2e102160f1c4a29bd8fd8e85c5440d39152e694dd6",
-      "current_sha256": "b5fef1cb16057ffe5c08dcb9d4a96abe00135b605e4ef0b330b303f03745f20a",
+      "current_sha256": "95d7f4564d981eb41b4aeabff042f683c56ba2945a2337be6aec73f8284e8ca0",
       "declared_delta": [
         {
           "summary": "Sdílený validátor vynucuje null, maximum a propertyNames používané novým Organization manifest schématem; stávající Doctor kontrakt se nemění.",
