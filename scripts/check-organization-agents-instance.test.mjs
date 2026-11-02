@@ -217,12 +217,12 @@ test("canonical Knowledgebase remains required when only an off-path knowledge s
 test("active Design System and infra slots require their AGENTS.md", () => {
   const targets = collectAgentsInstanceTargets({
     repository_inventory: [
-      slot("workspace/design-system-light-works", { category: "design", status: "active" }),
+      slot("workspace/design-system-acme", { category: "design", status: "active" }),
       slot("infra", { category: "infrastructure", status: "active" }),
     ],
   });
   expect(targets).toEqual(expect.arrayContaining([
-    { relativePath: "workspace/design-system-light-works/AGENTS.md", kind: "design-system", required: true },
+    { relativePath: "workspace/design-system-acme/AGENTS.md", kind: "design-system", required: true },
     { relativePath: "infra/AGENTS.md", kind: "infra", required: true },
     { relativePath: "workspace/knowledgebase/AGENTS.md", kind: "knowledgebase", required: true },
   ]));

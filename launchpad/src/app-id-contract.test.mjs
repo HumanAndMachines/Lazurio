@@ -5,7 +5,7 @@
 // doctor reportu z decision 0118 vyžaduje `^[a-z0-9]+([._-][a-z0-9]+)*$` — samá
 // malá písmena. Manifestový pattern pro `companyascode.app.id` byl přitom malý
 // od začátku, jenže porušení bylo podle decision 0043 jen scoped varování v
-// `invalid_apps`, ne brána. Dvacet manifestů (`AgentMint-*`, `Macano-Tech-*`)
+// `invalid_apps`, ne brána. Dvacet manifestů dvou Organizací (`<Organizace>-*`)
 // tak žilo měsíce a jejich id uteklo do reportu — `doctor.self_conformance`
 // hlásil 20 porušení schématu. Pravidlo platilo, mechanismus chyběl.
 //
@@ -60,10 +60,10 @@ test("manifestový pattern pro app.id nepovoluje velká písmena", async () => {
   // Rozšíření na [A-Za-z0-9] by drift legalizovalo, ne opravilo: check id se
   // staví z app.id bez ohledu na to, jestli je manifest validní, takže
   // `doctor.self_conformance` by padal dál a jen by zmizela oranžová karta.
-  expect(new RegExp(pattern).test("Macano-Tech-cenik-v2")).toBe(false);
-  expect(new RegExp(pattern).test("AgentMint-design-system-v1")).toBe(false);
-  expect(new RegExp(pattern).test("macano-tech-cenik-v2")).toBe(true);
-  expect(new RegExp(pattern).test("agentmint-design-system-v1")).toBe(true);
+  expect(new RegExp(pattern).test("Acme-Tech-cenik-v2")).toBe(false);
+  expect(new RegExp(pattern).test("AcmeCorp-design-system-v1")).toBe(false);
+  expect(new RegExp(pattern).test("acme-tech-cenik-v2")).toBe(true);
+  expect(new RegExp(pattern).test("acmecorp-design-system-v1")).toBe(true);
 });
 
 test("doctor surface pattern v repozitáři se shoduje s tím, proti čemu se tady testuje", async () => {
@@ -83,15 +83,15 @@ test("každé app.id povolené manifestem dá doctor check id v souladu se surfa
   const checkIdPattern = new RegExp(DOCTOR_CHECK_ID_PATTERN);
 
   // Reprezentativní vzorek přes celý povolený tvar: jedno písmeno, číslice,
-  // pomlčky jako oddělovač i ve shluku, verzovaný suffix, reálná produkční id.
+  // pomlčky jako oddělovač i ve shluku, verzovaný suffix, tvar produkčních id.
   const accepted = [
     "a",
     "9",
     "app",
     "app-v1",
-    "macano-tech-cenik-v2",
-    "macano-tech-rozvadece-dokumentace-v1",
-    "agentmint-mission-control-v1",
+    "acme-tech-cenik-v2",
+    "acme-tech-technicka-dokumentace-v1",
+    "acmecorp-mission-control-v1",
     "test-company-demo-v1",
   ];
   for (const id of accepted) {
@@ -100,7 +100,7 @@ test("každé app.id povolené manifestem dá doctor check id v souladu se surfa
   }
 
   // A obráceně: co manifest odmítne, to se do reportu nemá jak dostat.
-  const rejected = ["Macano-Tech-cenik-v2", "AgentMint-knowledgebase-v1", "-leading", "under_score", "MiXeD"];
+  const rejected = ["Acme-Tech-cenik-v2", "AcmeCorp-knowledgebase-v1", "-leading", "under_score", "MiXeD"];
   for (const id of rejected) {
     expect(appIdPattern.test(id)).toBe(false);
   }
@@ -142,9 +142,9 @@ test("validateAppManifest hlásí velké písmeno v app.id jako failure, ne jako
   const softWarnings = [];
   const app = {
     schema_version: "companyascode.launchpad_app.v1",
-    id: "Macano-Tech-cenik-v2",
+    id: "Acme-Tech-cenik-v2",
     title: "Ceník",
-    company: "Macano-Tech",
+    company: "Acme-Tech",
     module: "cenik",
     surface: "internal",
     port: 5724,
@@ -157,7 +157,7 @@ test("validateAppManifest hlásí velké písmeno v app.id jako failure, ne jako
   validateAppManifest({
     app,
     packageJson: { scripts: { dev: "bun server.mjs" } },
-    packagePath: "organizations/Macano-Tech_GEN3/workspace/cenik/app/v2/package.json",
+    packagePath: "organizations/Acme-Tech_GEN3/workspace/cenik/app/v2/package.json",
     schema,
     failures,
     softWarnings,
@@ -169,9 +169,9 @@ test("validateAppManifest hlásí velké písmeno v app.id jako failure, ne jako
   // Kontrolní běh: stejný manifest s malým id nemá k app.id co vytknout.
   const cleanFailures = [];
   validateAppManifest({
-    app: { ...app, id: "macano-tech-cenik-v2" },
+    app: { ...app, id: "acme-tech-cenik-v2" },
     packageJson: { scripts: { dev: "bun server.mjs" } },
-    packagePath: "organizations/Macano-Tech_GEN3/workspace/cenik/app/v2/package.json",
+    packagePath: "organizations/Acme-Tech_GEN3/workspace/cenik/app/v2/package.json",
     schema,
     failures: cleanFailures,
     softWarnings: [],

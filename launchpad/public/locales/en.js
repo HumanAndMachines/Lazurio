@@ -102,7 +102,7 @@ export const en = Object.freeze({
   "setup.github.intro": "One button does the correct sign-in: it signs GitHub CLI in with the SSH protocol, creates an SSH key on this Machine when needed, uploads its public half to your just-verified account and proves that Git really reaches GitHub. Clicking it is your consent. The private key never leaves this Machine.",
   "setup.github.statusTitle": "Status",
   "setup.github.organizationLabel": "GitHub Organization to verify (optional)",
-  "setup.github.organizationPlaceholder": "e.g. IotorLazurio",
+  "setup.github.organizationPlaceholder": "e.g. ExampleOrg",
   "setup.github.start": "Sign in to GitHub",
   "setup.github.refresh": "Check again",
   "setup.github.logout": "Sign out",

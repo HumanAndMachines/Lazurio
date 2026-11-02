@@ -508,8 +508,8 @@ Decision 0051 remains the Personalspace authority and is explicitly unchanged.
 The resolver slice introduces no Organization writer or migration by itself.
 
 The proposal and later rollout use a new Mission Control plan and DEV code.
-They are independent of DEV-6439 and PR #129: DEV-6439 keeps its current Iotor
-Core/CLI/lifecycle scope and does not deprecate Organization or Personalspace
+They are independent of DEV-6439 and PR #129: DEV-6439 keeps its current
+hosted-Organization Core/CLI/lifecycle scope and does not deprecate Organization or Personalspace
 manifests. The new plan may consume its Core read-model patterns after they land
 without becoming part of its implementation sequence.
 

@@ -55,7 +55,7 @@ export async function recordAppOpen({ launchpadRoot, appId, now = new Date() } =
 // Historie počítadel přežije změnu velikosti písmen v app id.
 //
 // Konkrétní den, kvůli kterému to tady je: 2026-07-29 se dvacet app id
-// (`AgentMint-*`, `Macano-Tech-*`) přejmenovalo na malá písmena, aby
+// dvou Organizací (`<Organizace>-*`) přejmenovalo na malá písmena, aby
 // `launchpad.runtime.<id>` odpovídalo surfacu doctor reportu (decision 0118).
 // usage.json je ale klíčovaný přesným řetězcem, takže by se devatenáct
 // počítadel utrhlo od svých aplikací — nic by nespadlo, jen by panel

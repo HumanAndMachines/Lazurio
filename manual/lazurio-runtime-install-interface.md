@@ -40,8 +40,9 @@ artifact root. Manifest uvnitř nese exact source commit, target, profil
 secrets, `.git`, worktrees, Personalspace, Organization data i `node_modules`.
 
 Image/release pipeline před instalací ověří sidecar i manifest a zkopíruje
-obsah artifact rootu do nové immutable vrstvy. Iotor může tuto vrstvu připnout
-exact image digestem a namountovat ji read-only jako `/opt/lazurio-runtime`.
+obsah artifact rootu do nové immutable vrstvy. Hostované Prostředí Organizace
+může tuto vrstvu připnout exact image digestem a namountovat ji read-only jako
+`/opt/lazurio-runtime`.
 Runtime nemá self-update službu a nevytváří druhý kontejner ani druhou službu.
 
 Lokální `lazurio launchpad install` je od toho oddělený desktopový krok: pouze

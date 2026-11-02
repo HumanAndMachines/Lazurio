@@ -70,8 +70,8 @@ test("provider resolves a human login to immutable root identity using read-only
 test("Builder install readiness on a hosted Team Machine covers only that Team's selection", () => {
   const documents = scaffoldDocuments();
   const team = (slug) => ({ slug, display_name: slug });
-  documents.company.teams.push(team("iotor-team"), team("energo"), team("tereza"), team("jakub"));
-  documents.modules.teams.push(team("iotor-team"), team("energo"), team("tereza"), team("jakub"));
+  documents.company.teams.push(team("acme-team"), team("business"), team("alena"), team("bob"));
+  documents.modules.teams.push(team("acme-team"), team("business"), team("alena"), team("bob"));
   const moduleSlot = (slug, teams) => ({
     path: `workspace/${slug}`,
     slug,
@@ -83,8 +83,8 @@ test("Builder install readiness on a hosted Team Machine covers only that Team's
     git: { url: `git@github.com:${login}/${slug}.git`, branch: "main" },
   });
   documents.modules.module_slots.push(
-    moduleSlot("knowledgebase", ["iotor-team", "tereza", "jakub"]),
-    moduleSlot("energo-offers", ["energo"]),
+    moduleSlot("knowledgebase", ["acme-team", "alena", "bob"]),
+    moduleSlot("business-offers", ["business"]),
   );
   const writable = new Set([fullName, `${login}/knowledgebase`]);
   const environmentFor = (environment) => ({ SystemRoot: "C:\\Windows", USERPROFILE: "C:\\Users\\Example", ...environment });
@@ -94,7 +94,7 @@ test("Builder install readiness on a hosted Team Machine covers only that Team's
     return (call) => {
       calls.push(call.args[1]);
       const endpoint = call.args[1];
-      if (endpoint === "user") return ok({ id: 51515151, login: "tereza-account" });
+      if (endpoint === "user") return ok({ id: 51515151, login: "alena-account" });
       const repository = /^repos\/([^/]+\/[^/]+)$/u.exec(endpoint ?? "")?.[1];
       const permissions = { push: writable.has(repository), pull: true };
       if (repository === fullName) return ok({ ...JSON.parse(base(call).stdout), permissions });
@@ -123,33 +123,33 @@ test("Builder install readiness on a hosted Team Machine covers only that Team's
     return { source, calls };
   };
 
-  const hosted = observe(hostedTeamEnvironment("tereza"));
+  const hosted = observe(hostedTeamEnvironment("alena"));
   expect(hosted.source, JSON.stringify(hosted.source.access)).toMatchObject({ ok: true, access: { status: "ready" } });
   expect(hosted.source.access.repositories.map((repository) => repository.full_name)).toEqual([
     fullName,
     `${login}/knowledgebase`,
   ]);
-  expect(hosted.calls.some((endpoint) => /energo|\/teams\/|memberships/u.test(endpoint ?? ""))).toBe(false);
+  expect(hosted.calls.some((endpoint) => /business|\/teams\/|memberships/u.test(endpoint ?? ""))).toBe(false);
 
   // Outside the hosted profile the gate keeps the full Organization scope.
   const local = observe({});
   expect(local.source).toMatchObject({ ok: false, code: "builder_access_not_ready" });
   expect(local.source.access.blockers).toEqual([expect.objectContaining({
     reason: "repository_write_missing",
-    repository: `${login}/energo-offers`,
+    repository: `${login}/business-offers`,
   })]);
 
   // An invalid, foreign or undeclared hosted binding never narrows the scope:
   // it fails closed before readiness reads a single repository.
   for (const [environment, code] of [
-    [{ ...hostedTeamEnvironment("tereza"), LAZURIO_TEAM_ID: "Not A Team" }, "workspace_configuration_invalid"],
-    [{ ...hostedTeamEnvironment("tereza"), LAZURIO_ORGANIZATION_SLUG: "another-organization" }, "hosted_organization_mismatch"],
+    [{ ...hostedTeamEnvironment("alena"), LAZURIO_TEAM_ID: "Not A Team" }, "workspace_configuration_invalid"],
+    [{ ...hostedTeamEnvironment("alena"), LAZURIO_ORGANIZATION_SLUG: "another-organization" }, "hosted_organization_mismatch"],
     [hostedTeamEnvironment("other-team"), "hosted_team_not_declared"],
   ]) {
     for (const role of ["builder", null]) {
       const rejected = observe(environment, role);
       expect(rejected.source).toMatchObject({ ok: false, code });
-      expect(rejected.calls.some((endpoint) => endpoint === "user" || /knowledgebase|energo/u.test(endpoint ?? ""))).toBe(false);
+      expect(rejected.calls.some((endpoint) => endpoint === "user" || /knowledgebase|business/u.test(endpoint ?? ""))).toBe(false);
     }
   }
 });
@@ -695,15 +695,15 @@ test("role-scoped install inherits a restricted Workspace parent without touchin
 });
 
 test("hosted Team install leaves another Team's Workspace repository-db unselected with its parent", async () => {
-  // Iotor-like Machine: the person's work Team owns no Workspace Module, so
+  // A person's hosted work Machine whose Team owns no Workspace Module, so
   // the scoped update never materializes the parent and install must neither
   // select its data mount nor block on the absent parent.
-  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["iotor-team"] });
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["acme-team"] });
   const report = await installOrganization({
     rootPath: fixture.root,
     githubLogin: login,
     role: "builder",
-    environment: hostedTeamEnvironment("tereza"),
+    environment: hostedTeamEnvironment("alena"),
     deps: {
       observe: async () => ({ ...sourceObservation({ documents: fixture.documents }), access: roleReadiness("builder") }),
       reobserve: async () => ({ ok: true }),
@@ -720,7 +720,7 @@ test("hosted Team install leaves another Team's Workspace repository-db unselect
 });
 
 test("hosted Team install still materializes the Workspace repository-db of its own Module", async () => {
-  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["iotor-team"] });
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["acme-team"] });
   const remoteMap = new Map([
     [fakeHttpsRemote, fixture.remote],
     [fakeWorkspaceDataRemote, fixture.dataRemote],
@@ -728,7 +728,7 @@ test("hosted Team install still materializes the Workspace repository-db of its 
   const report = await installOrganization({
     rootPath: fixture.root,
     githubLogin: login,
-    environment: hostedTeamEnvironment("iotor-team"),
+    environment: hostedTeamEnvironment("acme-team"),
     deps: {
       observe: async () => sourceObservation({ documents: fixture.documents }),
       reobserve: async () => ({ ok: true }),
@@ -759,7 +759,7 @@ test("hosted Team install keeps the Mission Control repository-db in scope", asy
   const report = await installOrganization({
     rootPath: fixture.root,
     githubLogin: login,
-    environment: hostedTeamEnvironment("tereza"),
+    environment: hostedTeamEnvironment("alena"),
     deps: {
       observe: async () => sourceObservation({ documents: fixture.documents }),
       reobserve: async () => ({ ok: true }),

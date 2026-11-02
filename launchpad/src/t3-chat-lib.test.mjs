@@ -7,12 +7,12 @@ import {
 } from "./t3-chat-lib.mjs";
 
 const command = JSON.stringify([
-  "/home/tereza/.local/bin/node",
-  "/home/tereza/.local/share/lazurio/t3code/current/dist/bin.mjs",
-  "auth", "pairing", "create", "--base-dir", "/home/tereza/.t3",
+  "/home/alena/.local/bin/node",
+  "/home/alena/.local/share/lazurio/t3code/current/dist/bin.mjs",
+  "auth", "pairing", "create", "--base-dir", "/home/alena/.t3",
 ]);
 const env = {
-  LAZURIO_T3CODE_URL: "https://t3code.tereza.iotorlazurio.lazurio.io/t3code/",
+  LAZURIO_T3CODE_URL: "https://t3code.alena.example-org.lazurio.io/t3code/",
   LAZURIO_T3CODE_PAIRING_COMMAND: command,
 };
 
@@ -27,10 +27,10 @@ test("half a configuration is a deployment error, not a silent off", () => {
 
 test("the T3 address must be a clean HTTPS mount", () => {
   for (const url of [
-    "http://t3code.tereza.iotorlazurio.lazurio.io/t3code/",
-    "https://t3code.tereza.iotorlazurio.lazurio.io/t3code",
-    "https://t3code.tereza.iotorlazurio.lazurio.io/t3code/?x=1",
-    "https://user@t3code.tereza.iotorlazurio.lazurio.io/t3code/",
+    "http://t3code.alena.example-org.lazurio.io/t3code/",
+    "https://t3code.alena.example-org.lazurio.io/t3code",
+    "https://t3code.alena.example-org.lazurio.io/t3code/?x=1",
+    "https://user@t3code.alena.example-org.lazurio.io/t3code/",
     "t3code/",
   ]) {
     expect(() => t3ChatConfigurationFromEnvironment({ ...env, LAZURIO_T3CODE_URL: url })).toThrow();
@@ -45,7 +45,7 @@ test("the pairing command is an exact argv with absolute program and script", ()
 
 test("the pair URL keeps the T3 mount and carries the token only in the fragment", () => {
   expect(t3PairUrl(env.LAZURIO_T3CODE_URL, "Q99JLPJXN9WC"))
-    .toBe("https://t3code.tereza.iotorlazurio.lazurio.io/t3code/pair#token=Q99JLPJXN9WC");
+    .toBe("https://t3code.alena.example-org.lazurio.io/t3code/pair#token=Q99JLPJXN9WC");
 });
 
 test("a Chat click mints a short one-time token without a shell", async () => {
@@ -57,12 +57,12 @@ test("a Chat click mints a short one-time token without a shell", async () => {
       return JSON.stringify({ id: "x", credential: "G2RQZFN6MK77", expiresAt: "2026-09-21T10:00:00.000Z" });
     },
   });
-  expect(url).toBe("https://t3code.tereza.iotorlazurio.lazurio.io/t3code/pair#token=G2RQZFN6MK77");
+  expect(url).toBe("https://t3code.alena.example-org.lazurio.io/t3code/pair#token=G2RQZFN6MK77");
   expect(calls).toEqual([[
-    "/home/tereza/.local/bin/node",
+    "/home/alena/.local/bin/node",
     [
-      "/home/tereza/.local/share/lazurio/t3code/current/dist/bin.mjs",
-      "auth", "pairing", "create", "--base-dir", "/home/tereza/.t3",
+      "/home/alena/.local/share/lazurio/t3code/current/dist/bin.mjs",
+      "auth", "pairing", "create", "--base-dir", "/home/alena/.t3",
       "--ttl", "60s", "--label", "launchpad-chat", "--json",
     ],
   ]]);

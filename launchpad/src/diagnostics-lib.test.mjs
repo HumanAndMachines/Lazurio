@@ -2329,9 +2329,9 @@ test("Mission Control app/code a data jsou root sloty mimo Team dlaždice", asyn
   expect(declarationCheck?.details.join("\n")).toContain("mission-control/db");
 });
 
-test("AVALTAR-like standalone Mission Control repository-db zůstává jen v diagnostice", async () => {
+test("Standalone Mission Control repository-db zůstává jen v diagnostice", async () => {
   const root = await createCompaniesWorkspaceFixture();
-  const companyRoot = join(root, "organizations", "AVALTAR-HAM_GEN3");
+  const companyRoot = join(root, "organizations", "ACME-HQ_GEN3");
   await mkdir(join(companyRoot, "manual"), { recursive: true });
   await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
   await writeJson(join(root, "launchpad.gen3.json"), {
@@ -2343,15 +2343,15 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "AVALTAR-HAM", display_name: "AVALTAR", github_org: "AVALTAR-HAM" },
+    company: { slug: "ACME-HQ", display_name: "ACME", github_org: "ACME-HQ" },
     workspaces: [{ slug: "workspace", display_name: "Workspace", default: true }],
     layers: [{ path: "mission-control", kind: "root-docs", ownership: "manual" }],
     modules: [{ path: "workspace/knowledgebase", teams: ["workspace"] }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
-    company: "AVALTAR-HAM",
-    github_org: "AVALTAR-HAM",
+    company: "ACME-HQ",
+    github_org: "ACME-HQ",
     module_slots: [
       {
         path: "mission-control/db",
@@ -2377,16 +2377,16 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
   const missionControlApp = join(companyRoot, "mission-control", "app", "v3");
   await mkdir(missionControlApp, { recursive: true });
   await writeJson(join(missionControlApp, "package.json"), {
-    name: "avaltar-mission-control-v3",
+    name: "acme-mission-control-v3",
     private: true,
     type: "module",
     scripts: { dev: "bun server.mjs" },
     companyascode: {
       app: {
         schema_version: "companyascode.launchpad_app.v1",
-        id: "avaltar-mission-control-v3",
+        id: "acme-mission-control-v3",
         title: "Mission Control",
-        company: "AVALTAR-HAM",
+        company: "ACME-HQ",
         module: "mission-control",
         surface: "internal",
         port: 5293,
@@ -2403,7 +2403,7 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
     launchpadRoot: join(root, "launchpad"),
     runtimeManager: { appsWithRuntime: async (apps) => apps },
   });
-  const org = response.organizations.find((item) => item.slug === "AVALTAR-HAM");
+  const org = response.organizations.find((item) => item.slug === "ACME-HQ");
   const workspaceModules = (org?.workspaces ?? []).flatMap((workspace) => workspace.modules);
   const dataDeclaration = org?.module_declarations.find(
     (slot) => slot.path === "mission-control/db",
@@ -2416,12 +2416,12 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
     ui_exposure: "diagnostics-only",
     status: "planned_slot",
   });
-  expect(response.apps.map((app) => app.id)).toContain("avaltar-mission-control-v3");
+  expect(response.apps.map((app) => app.id)).toContain("acme-mission-control-v3");
 
   const gitInventory = await buildGitInventory({ companiesRoot: root });
   expect(gitInventory.planned).toContainEqual(
     expect.objectContaining({
-      organization: "AVALTAR-HAM",
+      organization: "ACME-HQ",
       slot_path: "mission-control/db",
     }),
   );

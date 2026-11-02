@@ -12,7 +12,7 @@ test("cross-Organization discovery failure offers a concrete Codex repair handof
       payload: {
         error: "invalid_discovery",
         failure_kind: "invalid_discovery",
-        message: "Organizace Lumbio potřebuje opravit nastavení.",
+        message: "Organizace ExampleOrg potřebuje opravit nastavení.",
         details: ["modules.manifest.json module_slots[3].path není kanonická boundary"],
       },
     },

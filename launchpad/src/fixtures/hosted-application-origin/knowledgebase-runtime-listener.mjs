@@ -1,4 +1,4 @@
-// Verbatim fixture copy of ConceptLineLazurio/knowledgebase
+// Verbatim fixture copy of a consumer Organization's knowledgebase Module
 // app/v2/scripts/runtime-listener.mjs at main commit 7cee5ff (the deployed
 // Knowledgebase reader of the hosted application origin). Not imported from
 // this path: the reader loads ../../../lazurio.module.json and ../package.json

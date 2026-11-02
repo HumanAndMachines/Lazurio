@@ -10,21 +10,21 @@ import {
 } from "../../lazurio/runtime/deep-link-lib.mjs";
 
 const companies = [
-  { slug: "Macano-Tech", display_name: "Macano-Tech" },
-  { slug: "Lumbio", display_name: "Lumbio" },
+  { slug: "Acme-Tech", display_name: "Acme-Tech" },
+  { slug: "ExampleOrg", display_name: "ExampleOrg" },
 ];
 
 test("Organization deep-link zachová a znovu přečte přesný company slug", () => {
-  const hash = organizationHash("Macano-Tech");
-  expect(hash).toBe("#/org/Macano-Tech");
+  const hash = organizationHash("Acme-Tech");
+  expect(hash).toBe("#/org/Acme-Tech");
   expect(parseLaunchpadHash(hash)).toEqual({
     kind: "organization",
-    organization: "Macano-Tech",
+    organization: "Acme-Tech",
   });
   expect(resolveLaunchpadHash(hash, { companies })).toMatchObject({
     status: "matched",
     scope: "org",
-    company: "Macano-Tech",
+    company: "Acme-Tech",
   });
 });
 
@@ -65,10 +65,10 @@ test("Deep-link builder odmítne prázdné a path-like Organization slugy", () =
 
 test("Agentní entry URL skládá až skutečný origin se stabilním root, Organization a Personalspace hashem", () => {
   expect(launchpadEntryUrl("http://127.0.0.1:4199", {})).toBe("http://127.0.0.1:4199/#/");
-  expect(launchpadEntryUrl("http://127.0.0.1:4199", { organization: "Agent Mint" }))
-    .toBe("http://127.0.0.1:4199/#/org/Agent%20Mint");
+  expect(launchpadEntryUrl("http://127.0.0.1:4199", { organization: "Acme Corp" }))
+    .toBe("http://127.0.0.1:4199/#/org/Acme%20Corp");
   expect(launchpadEntryUrl("http://127.0.0.1:4199", { personalspace: true }))
     .toBe("http://127.0.0.1:4199/#/personalspace");
-  expect(() => launchpadEntryHash({ organization: "AgentMint", personalspace: true })).toThrow(TypeError);
+  expect(() => launchpadEntryHash({ organization: "AcmeCorp", personalspace: true })).toThrow(TypeError);
   expect(() => launchpadEntryUrl("file:///tmp/launchpad", {})).toThrow(TypeError);
 });

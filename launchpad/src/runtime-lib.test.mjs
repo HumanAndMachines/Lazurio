@@ -1997,7 +1997,7 @@ test("runtime manager odmítne Windows drive path mimo Organization boundary", a
   const app = fixtureDiscoveryApp({
     port,
     overrides: {
-      organization_path: "D:\\outside\\Macano-Tech_GEN3",
+      organization_path: "D:\\outside\\Acme-Tech_GEN3",
       organization_kind: "organization",
     },
   });
@@ -4787,7 +4787,7 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     const knowledgebaseEnv = childEnvs.get(knowledgebase.id);
     const missionControlEnv = childEnvs.get(missionControl.id);
 
-    // (a) Knowledgebase: ConceptLineLazurio/knowledgebase main 7cee5ff,
+    // (a) Knowledgebase: a consumer Organization's knowledgebase Module, main 7cee5ff,
     // app/v2/scripts/runtime-listener.mjs (vendored verbatim under
     // launchpad/src/fixtures/hosted-application-origin/). It resolves the
     // module lease from ../../../lazurio.module.json and ../package.json at
@@ -4811,7 +4811,7 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     expect(reader.withExternalOrigin({}, listener).server.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
     expect(reader.withModuleListener({}, knowledgebaseEnv).preview.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
 
-    // (b) Mission Control: ConceptLineLazurio/mission-control main 347d9bd,
+    // (b) Mission Control: the same Organization's mission-control Module, main 347d9bd,
     // app/v3/src/server.ts — serverExternalOrigin() reads
     // process.env.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN and
     // parseExternalOrigin() accepts only an exact https origin whose hostname
@@ -5402,7 +5402,7 @@ test("Mission Control s planned data slotem se zastaví před startem procesu", 
       },
     ],
     appOverrides: {
-      title: "BNO & LJ Mission Control",
+      title: "Acme Mission Control",
       module: "mission-control",
       required_module_slots: ["mission-control/db"],
       tags: ["mission-control", "repository-db"],

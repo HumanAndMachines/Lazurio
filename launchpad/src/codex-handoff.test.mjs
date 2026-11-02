@@ -60,11 +60,11 @@ test("obecný runtime handoff nese chybu, scope a publikační hranici", () => {
   const prompt = buildCodexRuntimeIssuePrompt(blockedApp, {
     code: "invalid_discovery",
     failureKind: "invalid_discovery",
-    technical: ["Lumbio: module_slots[3].path není kanonická boundary"],
+    technical: ["ExampleOrg: module_slots[3].path není kanonická boundary"],
   });
 
   expect(prompt).toContain("invalid_discovery");
-  expect(prompt).toContain("Lumbio: module_slots[3].path");
+  expect(prompt).toContain("ExampleOrg: module_slots[3].path");
   expect(prompt).toContain("správný root / Organizaci / modul");
   expect(prompt).toContain("Nic nemerguj ani nepublikuj");
   expect(prompt).toContain("ověř její health");

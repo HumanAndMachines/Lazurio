@@ -102,7 +102,7 @@ export const cs = Object.freeze({
   "setup.github.intro": "Jedno tlačítko udělá správné přihlášení: přihlásí GitHub CLI s protokolem SSH, podle potřeby na této Mašině vytvoří SSH klíč, nahraje jeho veřejnou část na váš právě ověřený účet a ověří, že Git na GitHub opravdu dosáhne. Kliknutím k tomu dáváte souhlas. Soukromý klíč nikdy neopustí tuto Mašinu.",
   "setup.github.statusTitle": "Stav",
   "setup.github.organizationLabel": "GitHub Organizace k ověření (volitelné)",
-  "setup.github.organizationPlaceholder": "např. IotorLazurio",
+  "setup.github.organizationPlaceholder": "např. ExampleOrg",
   "setup.github.start": "Přihlásit GitHub",
   "setup.github.refresh": "Ověřit znovu",
   "setup.github.logout": "Odhlásit",

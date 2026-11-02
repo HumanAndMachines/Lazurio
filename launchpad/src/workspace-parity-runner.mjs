@@ -736,7 +736,7 @@ Local: run live, restart Launchpad, then use post-restart to prove no session
 child was restored. Hosted: run live, restart the work container (and separately
 reboot the host), then use post-restart to prove every Team module returned on
 main without a click. The report lists infra-owned external assertions that the
-Iotor lane must prove outside the work container.`;
+hosted lane must prove outside the work container.`;
 }
 
 export function parityApiUrl(base, path) {
