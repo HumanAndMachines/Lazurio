@@ -62,7 +62,7 @@ zapiš do `INTEGRATIONS.md`. Design smíš po ověření odstranit jen když
 uživatel výslovně schválil jmenovitý smoke cíl zapsaný v
 `INTEGRATIONS.md` a design vytvořil tento konkrétní smoke. Jinak artefakt
 ponech a vyžádej si samostatný explicitní pokyn uživatele. Export směřuj do
-custody/drafts cesty, ne do sdílených složek.
+`~/Documents/<úkol>/` nebo do custody, ne do sdílených složek.
 
 ## Custody a rizika
 
