@@ -1,5 +1,11 @@
 # Účet, zařízení a přístupy k Environmentům
 
+> **GEN4 je autorita.** Veřejný model přístupu drží od 2026-11-01
+> LazurioPlatform: [`docs/environment-access.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/environment-access.md),
+> rozhodnutí 0192, 0196, 0213 a 0224 jsou ve veřejném rejstříku
+> [`docs/decision-register.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/decision-register.md). Tento soubor zůstává
+> záznamem GEN3 s podrobnostmi, které do veřejného modelu nepatří.
+
 Rozhodnutí Matěje z 2026-10-06, root decision **0192**, včetně následného
 rozhodnutí o vědomém sdílení na základě důvěry. [Architektonické review](environment-access-review-2026-10-06.md)
 zachovává nálezy a odlišuje původní doporučení od následné volby Operátora.

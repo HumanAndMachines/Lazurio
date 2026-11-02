@@ -42,7 +42,8 @@ Maintenance agent před zásahem ověřuje:
 - [Servisní připravenost agentů](agent-service-readiness.md) — návrh společné
   acceptance pro neinteraktivní servis, nezávislou obnovu a dostupnost modulu
   přes běžnou URL; rozlišuje dnešní hranice a cílovou automatickou konvergenci.
-- [Prohlížeč Environmentu](environment-browser.md) — jedna architektura
+- [Prohlížeč Environmentu](environment-browser.md) — záznam GEN3; autoritou je
+  LazurioPlatform `docs/environment-browser.md`. Jedna architektura
   prohlížeče Environmentu pro Launchpad, T3 Code, Lazurio MausBot a Codex Desktop:
   principy, kdo co vlastní, smlouva hostitelské aplikace a pravidla pro
   aktualizace forků a nové verze upstreamu (dodatek 0191 z 2026-10-11).
