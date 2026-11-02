@@ -1,5 +1,11 @@
 # Správa Conglomerate Hostu vlastníky Organizace
 
+> **GEN4 je autorita (0225).** Zásady správy Conglomerate Hostu drží od
+> 2026-11-02 Machines (`HumanAndMachine-ai/Machines`,
+> `docs/server-conventions.md` §3) a jejich mechanismus
+> `docs/conglomerate-tailnet.md` §1.5. Tento soubor zůstává záznamem GEN3;
+> kde se liší, platí Machines.
+
 Tento standard platí stejně pro každou Organizaci. Konkrétní účty, zařízení,
 klíče, síťové vazby a důkazy celého hostu patří výhradně do Deployment Repa
 vlastníka této Mašiny. U sdíleného hostu tenantní Organizace drží jen své

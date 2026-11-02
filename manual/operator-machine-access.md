@@ -190,7 +190,9 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   s přejmenováním GitHub loginu ani DNS slugu); číslování od `01`, smí
   přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
   nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
-  nepřejmenovávají.
+  nepřejmenovávají. Autoritou je od 2026-11-02 Machines
+  (`HumanAndMachine-ai/Machines`, `docs/server-conventions.md` §1); tento bod
+  zůstává záznamem GEN3.
 - **Jedna servisní Mašina na server (0209).** Každý virtualizační host
   Organizace má právě jednu servisní Mašinu `services-NN` s číslem hostu
   (`<org>-proxmox-01` má `services-01`). Je to Pracovní Prostředí jen pro
@@ -198,7 +200,9 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
   servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
   zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
-  Prostředími více uživatelů služby Organizace nemá.
+  Prostředími více uživatelů služby Organizace nemá. Číslo servisní Mašiny
+  kontroluje Machines (`docs/server-services.md`) a konvenci drží jeho
+  `docs/server-conventions.md` §1.
 
 ## Infra je blueprint
 
@@ -223,6 +227,9 @@ balíčky, služby, DNS, certifikáty a credentials zůstávají v push apply s
 jednorázovým Permitem. Do zavedení lane platí push apply i pro síť.
 
 ## IPv4 rozsahy
+
+Autoritou je od 2026-11-02 Machines (`HumanAndMachine-ai/Machines`,
+`docs/server-conventions.md` §2); tento oddíl zůstává záznamem GEN3.
 
 Každý Conglomerate Host dostane vlastní nepřekrývající se prefix uvnitř
 `100.64.0.0/10`, aby se adresy různých tailnetů na počítači operátora

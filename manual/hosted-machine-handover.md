@@ -95,6 +95,9 @@ operací v nové Platform distribuci.
 
 ## Dva samostatné výsledky
 
+Autoritou je od 2026-11-02 Machines (`HumanAndMachine-ai/Machines`,
+`docs/server-conventions.md` §4); tento oddíl zůstává záznamem GEN3.
+
 ### Mašina připravená k předání
 
 - Jsou ověřené prostředky, OS, identita, management, síť a izolace.
