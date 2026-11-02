@@ -4787,11 +4787,12 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     const knowledgebaseEnv = childEnvs.get(knowledgebase.id);
     const missionControlEnv = childEnvs.get(missionControl.id);
 
-    // (a) Knowledgebase: a consumer Organization's knowledgebase Module, main 7cee5ff,
-    // app/v2/scripts/runtime-listener.mjs (vendored verbatim under
-    // launchpad/src/fixtures/hosted-application-origin/). It resolves the
-    // module lease from ../../../lazurio.module.json and ../package.json at
-    // import time, so it runs from a temporary module tree for this App.
+    // (a) Knowledgebase: a synthetic reader written for this test
+    // (launchpad/src/fixtures/hosted-application-origin/), with the contract a
+    // Knowledgebase-style App's runtime listener reader has under the Module
+    // Standard. It resolves the module lease from ../../../lazurio.module.json
+    // and ../package.json at import time, so it runs from a temporary module
+    // tree for this App.
     const moduleRoot = join(await mkdtemp(join(tmpdir(), "knowledgebase-reader-")), "knowledgebase");
     await mkdir(join(moduleRoot, "app", "v2", "scripts"), { recursive: true });
     await writeFile(join(moduleRoot, "lazurio.module.json"), JSON.stringify({
@@ -4811,8 +4812,8 @@ test("hosted child env satisfies the Knowledgebase and Mission Control external-
     expect(reader.withExternalOrigin({}, listener).server.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
     expect(reader.withModuleListener({}, knowledgebaseEnv).preview.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
 
-    // (b) Mission Control: the same Organization's mission-control Module, main 347d9bd,
-    // app/v3/src/server.ts — serverExternalOrigin() reads
+    // (b) Mission Control: the reading a Mission Control App's server does, inline
+    // here — its serverExternalOrigin() reads
     // process.env.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN and
     // parseExternalOrigin() accepts only an exact https origin whose hostname
     // is lowercase DNS labels, then adds { host, origin } to its allowlists.
