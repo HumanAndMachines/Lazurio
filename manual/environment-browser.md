@@ -1,5 +1,11 @@
 # Prohlížeč Environmentu: architektura pro aplikace a forky
 
+> **GEN4 je autorita.** Smlouvy prohlížeče C1–C18, vydání, na která se dá
+> spolehnout, a aktualizace forků drží od 2026-11-01 LazurioPlatform:
+> [`docs/environment-browser.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/environment-browser.md) s rozhodnutím F50
+> (dodatek z 2026-11-01). Tento soubor zůstává záznamem GEN3; tabulku smluv
+> a postup aktualizace forků už neupravuj tady.
+
 Jedna architektura prohlížeče Environmentu pro všechny aplikace, které ho ukazují:
 Launchpad, T3 Code, Lazurio MausBot a napojení Codex Desktopu. Podle tohoto dokumentu se
 mění Platforma (LazurioPlatform), aktualizují se forky (`Lazurio/t3code`,

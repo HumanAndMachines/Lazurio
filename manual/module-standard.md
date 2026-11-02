@@ -1,5 +1,10 @@
 # Lazurio Module Standard
 
+> **GEN4 je autorita (0225).** Plné znění Lazurio Module Standardu platí od
+> 2026-11-01 v LazurioPlatform: [`docs/module-standard.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/module-standard.md).
+> Tento soubor zůstává záznamem GEN3 a popisem kontrol `lazurio module setup`
+> rootu; kde se od Platformy liší, platí Platforma.
+
 Standard pro to, jak vypadá, startuje a žije Modul (a org-level aplikace)
 v Lazuriu. Přijal ho Matěj 2026-09-30 (decision 0171 v
 [decision-register.md](decision-register.md)) s pořadím: **Launchpad

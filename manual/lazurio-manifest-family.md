@@ -1,5 +1,11 @@
 # Proposal: Lazurio manifest family
 
+> **GEN4 je autorita (0225).** Kontrakt manifestu Organizace vlastní od
+> 2026-11-01 LazurioPlatform: [`docs/organization-contract.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/organization-contract.md)
+> a čtečky Platformy. Schéma `lazurio/lazurio.organization.v1.schema.json`
+> zůstává pro GEN3, dokud Platforma nenapíše vlastní a root ho nepřipne
+> (Lazurio/LazurioPlatform#799). Tento soubor zůstává záznamem GEN3.
+
 Status: **Organization contract accepted by decision amendments 0026, 0031 and
 0042; Personalspace naming remains a separate proposal and rollout**
 Decision owner: Lazurio maintainers

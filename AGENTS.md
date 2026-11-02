@@ -200,7 +200,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   Týmových Prostředí a jako Admin do ostatních Prostředí Organizace se jde
   dál přes vlastní Pracovní Prostředí. Přístup na zařízení zapíná jeho
   Owner. Používáš jen cesty, které zapsalo Lazurio, a chybějící cestu
-  nahlásíš; ruční alias ani nový grant nezakládáš. Tabulku přístupů drží
+  nahlásíš; ruční alias ani nový grant nezakládáš. Model přístupů drží
+  LazurioPlatform `docs/environment-access.md`, podrobnosti GEN3
   `manual/environment-access-model.md`.
 - Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
   `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
@@ -255,7 +256,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   nestavíš a nástroje jen měří a hlásí. Migrační kód žije jen
   v `lazurio/migrations/<migrace>/` s README a podmínkou smazání a po
   dokončení migrace se maže.
-- **Moduly** vznikají a mění se podle Lazurio Module Standardu (0171,
+- **Moduly** vznikají a mění se podle Lazurio Module Standardu (0171; plné
+  znění v LazurioPlatform `docs/module-standard.md`, 0225; záznam GEN3
   `manual/module-standard.md`, skill `lazurio-module-standard`). Nový Modul
   zakládáš `lazurio module create` nebo z Dashboardu a konformanci ověřuje
   `lazurio module setup`. Launchpad odchylky Modulu neobchází, opravíš je

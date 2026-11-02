@@ -13,7 +13,8 @@ decision recordu a znalost do Knowledgebase.
 
 | Nález | GitHub Issue patří do |
 | --- | --- |
-| Lazurio installer, CLI, Launchpad, Guide nebo sdílený manuál | `HumanAndMachines/Lazurio` |
+| Lazurio installer, CLI, Launchpad, Guide nebo sdílený manuál rootu (GEN3) | `HumanAndMachines/Lazurio` |
+| Samotné Lazurio v GEN4: Folder a jeho instrukce, příkaz `lazurio` Platformy, Launchpad Prostředí, Chat, prohlížeč Prostředí, Module Standard | `Lazurio/LazurioPlatform` (veřejné, bez obsahu Organizace) |
 | Organization root kontrakt nebo org-wide proces | privátní root repo dané Organizace |
 | Jedna aplikace nebo Modul | přesný repo Modulu |
 | Plán, priorita, assignee nebo stav realizace | Mission Control, ne Issue tracker |
