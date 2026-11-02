@@ -1,5 +1,10 @@
 # Správa Conglomerate Hostu vlastníky Organizace
 
+> **Veřejný domov GEN4.** Tento standard od 2026-11-02 veřejně popisuje stránka
+> [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
+> dokumentace Lazuria, oddíl Správa Conglomerate Hostu. Tento soubor zůstává
+> záznamem GEN3 s podrobnostmi, které na veřejnou stránku nepatří.
+
 Tento standard platí stejně pro každou Organizaci. Konkrétní účty, zařízení,
 klíče, síťové vazby a důkazy celého hostu patří výhradně do Deployment Repa
 vlastníka této Mašiny. U sdíleného hostu tenantní Organizace drží jen své
