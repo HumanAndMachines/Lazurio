@@ -182,7 +182,9 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   uzly se kvůli ní nepřejmenovávají. Jméno se nastavuje na zařízení samém jako
   hostname klienta, nikdy ručně na Conglomerate Hostu. Pravidla, chování
   Headscale a dopad přejmenování na vazby drží Machines
-  `docs/conglomerate-tailnet.md` §1.1.
+  `docs/conglomerate-tailnet.md` §1.1. Veřejně jména uzlů pro GEN4 popisuje
+  stránka [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
+  dokumentace Lazuria, oddíl Jména.
 - **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
   virtualizační host `<org>-proxmox-NN` (např. `acme-proxmox-01`, aby ho
   správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
@@ -190,7 +192,9 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   s přejmenováním GitHub loginu ani DNS slugu); číslování od `01`, smí
   přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
   nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
-  nepřejmenovávají.
+  nepřejmenovávají. Veřejně ji pro GEN4 popisuje stránka
+  [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
+  dokumentace Lazuria, oddíl Jména; tento bod zůstává záznamem GEN3.
 - **Jedna servisní Mašina na server (0209).** Každý virtualizační host
   Organizace má právě jednu servisní Mašinu `services-NN` s číslem hostu
   (`<org>-proxmox-01` má `services-01`). Je to Pracovní Prostředí jen pro
@@ -198,7 +202,8 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
   servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
   zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
-  Prostředími více uživatelů služby Organizace nemá.
+  Prostředími více uživatelů služby Organizace nemá. Veřejně toto pravidlo
+  pro GEN4 popisuje tatáž stránka, oddíl Jména.
 
 ## Infra je blueprint
 
@@ -223,6 +228,11 @@ balíčky, služby, DNS, certifikáty a credentials zůstávají v push apply s
 jednorázovým Permitem. Do zavedení lane platí push apply i pro síť.
 
 ## IPv4 rozsahy
+
+Veřejně je pro GEN4 popisuje stránka
+[Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
+dokumentace Lazuria, oddíl Rozsah adres tailnetu; tento oddíl zůstává záznamem
+GEN3.
 
 Každý Conglomerate Host dostane vlastní nepřekrývající se prefix uvnitř
 `100.64.0.0/10`, aby se adresy různých tailnetů na počítači operátora

@@ -95,6 +95,11 @@ operací v nové Platform distribuci.
 
 ## Dva samostatné výsledky
 
+Veřejně je pro GEN4 popisuje stránka
+[Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
+dokumentace Lazuria, oddíl Dva výsledky předání Prostředí na serveru; tento
+oddíl zůstává záznamem GEN3.
+
 ### Mašina připravená k předání
 
 - Jsou ověřené prostředky, OS, identita, management, síť a izolace.
