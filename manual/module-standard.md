@@ -729,16 +729,18 @@ Launchpad tohoto repa na počítači uživatele z této politiky přebírá jen
 sestavenou verzi z `main` podle kap. 4.7, bez přestavění na pozadí a bez
 uspávání.
 
-### 10.1 Kdo je přihlášený
+### 10.1 Kdo přišel a s jakou rolí
 
 Norma platí jen v GEN4: Lazurio Module Standard v LazurioPlatform, oddíl
-[Who is signed in](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/module-standard.md#who-is-signed-in)
-(Lazurio/LazurioPlatform#474). Platí stejně pro Moduly, které spouští
-Launchpad tohoto repa na Prostředí na serveru, protože identitu nastavuje
-brána Prostředí, ne Launchpad. Ve zkratce: App čte přihlášeného člověka jen
-přes `signedInPerson` z `@lazurio/module-kit` (od `v0.3.0`), jen za bránou,
-u každého požadavku a jen ke čtení; na počítači uživatele je vždy
-nedostupný. Nic nepovoluje, nic nepodepisuje a nemění úroveň přístupu.
+[Who came and with which role](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/module-standard.md#who-came-and-with-which-role),
+podle rozhodnutí 0231 v rejstříku LazurioPlatform. Platí stejně pro Moduly,
+které spouští Launchpad tohoto repa na Prostředí na serveru, protože
+tvrzení nastavuje brána Prostředí, ne Launchpad. Ve zkratce: App se dozví, kdo
+přišel a s jakou rolí aplikace (admin aplikace, nebo uživatel aplikace), jen
+přes `appAccess` z `@lazurio/module-kit` (od `v0.3.0`), u každého požadavku
+a roli vynucuje na serveru. Na počítači uživatele vrací vždy místní provoz
+(`entry: "local"`) bez jména. Odpověď není klíč k datům, nic nepodepisuje
+a nemění úroveň přístupu.
 
 ## 11. Konformance: `lazurio module setup`
 
