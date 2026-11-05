@@ -23,7 +23,9 @@ Maintenance agent před zásahem ověřuje:
 
 - `launchpad.gen3.json` — sdílená root metadata a lokální povrchy (ne allowlist Organizací; decision 0042). Organizace i šablony se auto-discoverují skenem disku; `planned` sloty a personalspace owner jsou per-machine v gitignored `launchpad.gen3.local.json`.
 - `package.json` — root workflow pro `bun run check`, `bun run doctor` a spuštění Launchpadu.
-- `AGENTS.md` — rozhodovací pravidla pro agenty před vstupem do organizace.
+- `AGENTS.md` — rozhodovací pravidla pro agenty před vstupem do organizace;
+  postupy, na které odkazuje, jsou v `manual/agents/` (oddíl Pravidla pro
+  agenty níž).
 - `MAP.md` — lidský rozcestník.
 - `launchpad/` — sdílený builder-first Lazurio Launchpad (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Organization Users do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI agenty; mechanismy rootu a Organizací drží `manual/` a MAP.md, dokud nevznikne plánovaná cesta „mapa systému“.
@@ -84,6 +86,38 @@ Maintenance agent před zásahem ověřuje:
   Lazurio Rootu, aktualizací, incidentů a odděleného source checkoutu.
 - `manual/personalspace-modules-and-hosted-gbrain.md` — seed koncept pro personalspace privátní moduly, per-user/per-colleague aplikace, hosted GBrain a Obsidian-compatible sync/reader model.
 - `manual/app/v1/` — statická read-only aplikace technického manuálu (`index.html`); nesmí držet pravidla, která nejsou zapsaná v manuálu nebo root dokumentech.
+
+## Pravidla pro agenty
+
+Manuály v `manual/agents/` jsou závaznou součástí pravidel pro agenty, stejně
+jako `AGENTS.md` rootu (decision 0112). `AGENTS.md` drží hodnoty, hranice
+a krátká závazná pravidla a u každého přesunutého postupu jeho závazné jádro
+a cestu k manuálu; postupy jsou doslova v manuálech. Než uděláš krok, ke
+kterému `AGENTS.md` odkazuje, načti příslušný manuál.
+
+| Manuál | Kdy ho načíst |
+| --- | --- |
+| [Tento root, hranice a zdroje pravdy](agents/root-and-boundaries.md) | Objevování Organizací, Conglomerate, stanoviště, GEN3 a GEN4, Personalspace, přístupy, Mašina, secrets, kdo je na kterém Prostředí uživatel, často potřebné manuály. |
+| [Názvy a texty pro uživatele](agents/names-and-texts.md) | Text pro uživatele, názvy produktu, Prostředí a jeho druhů. |
+| [Osobní Prostředí a Buddy](agents/personal-environment-and-buddy.md) | Osobní Prostředí, Buddy, Pracovní přístup, adresy aplikací, přidělování Prostředí. |
+| [Jak se tu pracuje](agents/how-work-is-done.md) | Týmové Prostředí, sdílení Pracovního Prostředí, architektonická odpovědnost, refactor, Moduly, návaznost na jiná vlákna. |
+| [Pull request, Publikace a handoff](agents/publication-and-handoff.md) | Popis PR, Git a GitHub, ověření v prohlížeči, review, závěrečná zpráva s handoffem. |
+| [Otázky, issues a poznatky](agents/questions-issues-learnings.md) | Otázka nebo žádost o úkon, zápis issue, eskalace chybějícího práva, poznatek. |
+| [Před prací](agents/before-work.md) | Začátek tasku: synchronizace, nástroje Mašiny, worktrees, SSH v tailnetu. |
+| [Launchpad a aplikace](agents/launchpad-and-apps.md) | Spuštění Launchpadu nebo aplikace, Web Lazuria, vlákna otevřená z Launchpadu. |
+| [Integrace](agents/integrations.md) | Připojení, nastavení nebo návrh napojení na externí aplikaci, Figma. |
+| [Organizace a Moduly](agents/organizations-and-modules.md) | Model Organizace, Moduly a Teamy, productionspace, jména aplikací, hostující Moduly, Design System. |
+
+Rozpočet `AGENTS.md`: root ho drží pod 24 KiB (`wc -c AGENTS.md` ≤ 24576)
+stejně jako Organizace. Codex načítá projektové instrukce jen do
+`project_doc_max_bytes`, výchozí 32 KiB, a zbytek tiše uřízne; když agent
+soubor čte nástrojem, Codex výstup nad zhruba 10 tisíc tokenů ořízne
+uprostřed. Claude Code načítá `AGENTS.md` přes `CLAUDE.md` (`@AGENTS.md`)
+celý. Ověřeno 2026-11-05 na Codex CLI 0.166.0 a Claude Code 2.1.318; kontrolu
+rozpočtu navrhuje Lazurio/LazurioPlatform#876. Nové pravidlo zapiš do
+`AGENTS.md` jako závazné jádro na jednu až tři věty s odkazem a postup do
+manuálu tady nebo do skillu. Manuál drž pod 30 KB, aby ho agent přečetl
+jedním čtením bez ořezu.
 
 ## Organization GEN3 tvar
 

@@ -93,6 +93,7 @@ pracovní Root.
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI agenty; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Organization Users do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
+- `manual/agents/` — závazné postupy pro agenty, na které odkazuje `AGENTS.md`; rozcestník a rozpočet `AGENTS.md` drží oddíl Pravidla pro agenty v `manual/README.md`
 - `manual/module-standard.md` — Lazurio Module Standard (decision 0171): jak Modul vypadá, startuje, na čem stojí a jak vzniká; konformance `lazurio module setup`, skill `.agents/skills/lazurio-module-standard/`
 - `manual/mission-control-trusted-builder-smoke.md` — živý cross-Lazurio audit GitHub-only writeru, root pointerů a progresivního `trusted-process` / `provider-enforced` režimu
 - `manual/module-create.md` — nový Modul příkazem `lazurio module create`:
