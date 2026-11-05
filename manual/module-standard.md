@@ -729,6 +729,17 @@ Launchpad tohoto repa na počítači uživatele z této politiky přebírá jen
 sestavenou verzi z `main` podle kap. 4.7, bez přestavění na pozadí a bez
 uspávání.
 
+### 10.1 Kdo je přihlášený
+
+Norma platí jen v GEN4: Lazurio Module Standard v LazurioPlatform, oddíl
+[Who is signed in](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/module-standard.md#who-is-signed-in)
+(Lazurio/LazurioPlatform#474). Platí stejně pro Moduly, které spouští
+Launchpad tohoto repa na Prostředí na serveru, protože identitu nastavuje
+brána Prostředí, ne Launchpad. Ve zkratce: App čte přihlášeného člověka jen
+přes `signedInPerson` z `@lazurio/module-kit` (od `v0.3.0`), jen za bránou,
+u každého požadavku a jen ke čtení; na počítači uživatele je vždy
+nedostupný. Nic nepovoluje, nic nepodepisuje a nemění úroveň přístupu.
+
 ## 11. Konformance: `lazurio module setup`
 
 `lazurio module setup <module-root> --root <lazurio-root>` (viz
