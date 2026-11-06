@@ -9,6 +9,7 @@ import {
   rm,
   statfs,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -45,12 +46,15 @@ const execute = promisify(execFile);
 // The same contract, cache layout and locks as LazurioPlatform (decision F62,
 // `src/modules/bun-runtime.ts`), so the two share one cache on one machine:
 // `~/.local/share/lazurio/runtimes/bun/<version>/` with the exclusion of each
-// version in `~/.local/share/lazurio/runtimes/bun.locks/<version>`. On Windows
-// the cache is `%LOCALAPPDATA%\Lazurio\runtimes\bun\<version>\` and there is
-// no exclusion across processes (no qualified `flock`, as the Platform's own
-// case without one): two processes repairing one broken version at once are
-// not excluded from each other, while the identity check before a broken copy
-// is moved aside and the one-step rename remain.
+// version in `~/.local/share/lazurio/runtimes/bun.locks/<version>`. Beside
+// them, the modification time of `~/.local/share/lazurio/runtimes/bun.used/
+// <version>` is the last use of a cached version (#640), which LazurioPlatform
+// is to write as well in a release of its own. On Windows the cache is
+// `%LOCALAPPDATA%\Lazurio\runtimes\bun\<version>\` and there is no exclusion
+// across processes (no qualified `flock`, as the Platform's own case without
+// one): two processes repairing one broken version at once are not excluded
+// from each other, while the identity check before a broken copy is moved
+// aside and the one-step rename remain.
 
 /** The refusals of an App's pinned Bun, the closed set LazurioPlatform uses. */
 export const runtimeReasons = Object.freeze([
@@ -96,6 +100,15 @@ export function moduleBunRoot(home, { platform = process.platform, env = process
 export function moduleBunLocks(home, options = {}) {
   const path = (options.platform ?? process.platform) === "win32" ? win32 : posix;
   return path.join(path.dirname(moduleBunRoot(home, options)), "bun.locks");
+}
+
+/** The use markers of the cached versions, beside the cache as the locks are:
+ * the modification time of `<version>` is the last resolution that answered
+ * that version from the cache (#640). Never inside a version's directory,
+ * which stays as it was placed. */
+export function moduleBunUsed(home, options = {}) {
+  const path = (options.platform ?? process.platform) === "win32" ? win32 : posix;
+  return path.join(path.dirname(moduleBunRoot(home, options)), "bun.used");
 }
 
 // The cache as its words name it, without the user's home.
@@ -459,6 +472,7 @@ export function createModuleBunResolver({
   if (typeof userBun !== "string" || userBun === "") throw new TypeError("The user's Bun is required");
   const root = moduleBunRoot(home, { platform, env });
   const locks = moduleBunLocks(home, { platform, env });
+  const used = moduleBunUsed(home, { platform, env });
   const cacheRoot = displayedRoot(platform);
   // What a Windows program needs to run at all; nothing of the user's Bun or
   // npm configuration.
@@ -659,6 +673,26 @@ export function createModuleBunResolver({
     }
   }
 
+  // A version answered from the cache, ready or just placed, is marked used:
+  // its marker beside the cache is created or its modification time moved to
+  // now. Best effort, one attempt: a marker that cannot be written never
+  // fails, retries or holds up the resolution.
+  async function markUsed(version) {
+    const marker = join(used, version);
+    const now = new Date();
+    try {
+      await utimes(marker, now, now);
+    } catch (error) {
+      if (error?.code !== "ENOENT") return;
+      try {
+        await mkdir(used, { recursive: true, mode: 0o700 });
+        await writeFile(marker, "", { flag: "a", mode: 0o600 });
+      } catch {
+        // Unwritable: the resolution stands as it is.
+      }
+    }
+  }
+
   return async ({ packageManager, owner }) => {
     if (packageManager === null || packageManager === undefined) return user;
     const match = exactPin.exec(packageManager);
@@ -682,11 +716,14 @@ export function createModuleBunResolver({
       pending = started;
       fetches.set(key, pending);
     }
+    let bun;
     try {
-      return await pending;
+      bun = await pending;
     } catch (error) {
       if (error instanceof RuntimeFailure) throw refusal(error.reason);
       throw error;
     }
+    await markUsed(version);
+    return bun;
   };
 }

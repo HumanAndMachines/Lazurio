@@ -1064,6 +1064,11 @@ jasný mechanismus:
   aktualizuje namountovaná
   org-level repa, atomicky materializuje explicitně opt-in root repa a
   aktualizuje nebo atomicky materializuje Workspace Moduly.
+  Na počítači potom stáhne předem do mezipaměti runtime Lazuria Bun, který
+  připínají CLI, `tools.bun.default` a Apps včetně jejich worktrees, a v sekci
+  `tools` reportu ukáže, které verze z mezipaměti by prune smazal a proč
+  ostatní zůstávají; zatím nic nemaže (#640). Každé použití verze z mezipaměti
+  zapíše čas do `~/.local/share/lazurio/runtimes/bun.used/<verze>`.
   Po skutečné změně repa obnoví jeho root
   package a pouze package rooty validních Apps z čerstvého manifestu. Každý
   přesný root zpracuje nejvýše jednou. Instalace používá

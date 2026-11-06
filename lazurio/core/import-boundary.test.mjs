@@ -154,6 +154,7 @@ test("runtime declaration validation has one physical Core owner", async () => {
 
   expect(consumers).toEqual([
     "lazurio/module-setup-lib.mjs",
+    "lazurio/runtime/bun-runtime-cache-lib.mjs",
     "lazurio/runtime/discovery-lib.mjs",
     "lazurio/runtime/personalspace-lib.mjs",
     "lazurio/runtime/repository-db-worktree-lib.mjs",

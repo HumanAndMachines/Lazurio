@@ -133,6 +133,10 @@ export async function runLazurioUpdate({
   organizations = null,
   restrictedSlotPolicy = "defer",
   hostedWorkspace = createHostedWorkspaceConfiguration(),
+  // The tools step, which a computer's update entry passes in
+  // (lazurio-update-runtime.mjs, `updateBunRuntimes`): the engine itself
+  // never reads or fills the user's runtime cache.
+  tools = null,
   deps = {},
 } = {}) {
   if (!rootPath) throw new Error("runLazurioUpdate requires rootPath");
@@ -337,6 +341,21 @@ export async function runLazurioUpdate({
       }));
     }
 
+    // Tools after the content and before its packages and builds (decision
+    // 0212: Lazurio → content → tools → builds), on a computer only: the Bun
+    // the synced root and its Apps pin is fetched ahead, and a report tells
+    // what a prune of the runtime cache would remove, which removes nothing
+    // (decision 0171, addendum of 2026-10-24, point 5; #640). It never fails
+    // the update.
+    let toolsReport = null;
+    if (tools && hostedWorkspace.profile !== "hosted") {
+      try {
+        toolsReport = await tools({ rootPath: absoluteRoot, discoverApps, warnings, now });
+      } catch (error) {
+        toolsReport = { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
     const dependencyPhase = await reconcileUpdatedDependencies({
       rootPath: absoluteRoot,
       results,
@@ -371,6 +390,7 @@ export async function runLazurioUpdate({
       results,
       warnings: inventoryReportWarnings(finalInventory, warnings),
       restrictedSlotPolicy,
+      tools: toolsReport,
     });
   } finally {
     await sshSharing?.release().catch(() => {});
@@ -2289,7 +2309,7 @@ function inventoryDescriptor(rootPath, organization = null) {
   };
 }
 
-function updateReport({ rootPath, runId, now, results, warnings, restrictedSlotPolicy = "defer" }) {
+function updateReport({ rootPath, runId, now, results, warnings, restrictedSlotPolicy = "defer", tools = null }) {
   const state = results.some((result) => result.state === "blocked")
     ? "blocked"
     : results.some((result) => result.state === "updated")
@@ -2319,6 +2339,8 @@ function updateReport({ rootPath, runId, now, results, warnings, restrictedSlotP
     warnings: [...new Set([...warnings, ...results
       .filter((result) => result.actions?.includes("fetch_retried_after_repository_not_found"))
       .map((result) => `${result.repo_key}: ${result.message}`)])],
+    // The tools step's section, when one ran.
+    ...(tools === null ? {} : { tools }),
   };
 }
 
