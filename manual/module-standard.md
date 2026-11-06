@@ -742,6 +742,12 @@ a roli vynucuje na serveru. Na počítači uživatele vrací vždy místní prov
 (`entry: "local"`) bez jména. Odpověď není klíč k datům, nic nepodepisuje
 a nemění úroveň přístupu.
 
+**Stav: rozhodnuto, zatím nedostupné.** Kontrakt začne platit na Prostředí, až
+vyjde `@lazurio/module-kit` 0.3.0 a Prostředí dostane vydání brány
+z Machines, které osobu a druh vstupu nastavuje. Do té doby vrátí `appAccess`
+pro požadavek přes bránu `entry: "unknown"` bez role a App ho musí ukázat jako
+nedostupný, nikdy jako roli.
+
 ## 11. Konformance: `lazurio module setup`
 
 `lazurio module setup <module-root> --root <lazurio-root>` (viz
