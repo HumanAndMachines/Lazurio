@@ -1370,8 +1370,11 @@ function roleAccessNotReadyCode(role) {
   return `${role}_access_not_ready`;
 }
 
+// Platí pro každý blokovaný gate, také když provider nebo účet nešel ověřit,
+// proto netvrdí chybějící WRITE; přesný důvod nesou `access.blockers`.
 function roleAccessNotReadyMessage(role) {
-  return `GitHub účet nemá na repozitářích scope efektivní WRITE, které vyžaduje ${organizationInstallRoleGateLabel(role)}.`;
+  const label = organizationInstallRoleGateLabel(role);
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)} neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.`;
 }
 
 function rootOutcome(state, reason, path, message = null) {

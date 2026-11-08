@@ -15,6 +15,7 @@ import {
 } from "./core/organization-activation-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import { parseBrokeredGitHubEnvironment } from "./core/brokered-github-lib.mjs";
+import { githubRoleReadinessUnavailable } from "./core/github-builder-readiness-lib.mjs";
 import {
   installOrganization,
   observeOrganizationInstallIdentity,
@@ -1241,10 +1242,22 @@ test("Builder role blocks before materialization when provider observation did n
 
   expect(report).toMatchObject({
     state: "blocked",
-    access: { authority: "github", role: "builder", status: "blocked" },
+    access: {
+      authority: "github",
+      role: "builder",
+      status: "blocked",
+      blockers: [{ reason: "builder_access_not_ready", message: "Instalační WRITE gate pro --role module-contributor neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers." }],
+    },
     scope: { role: "builder", restricted_slots: "exclude" },
-    target: { reason: "builder_access_not_ready" },
+    target: {
+      reason: "builder_access_not_ready",
+      // An unverified observation is not proof of missing WRITE (review on #722).
+      message: "Instalační WRITE gate pro --role module-contributor neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.",
+    },
   });
+  const human = renderHumanOrganizationInstall(report);
+  expect(human).toContain("Access: blocked · instalační WRITE gate pro --role module-contributor (roli modulu nedokazuje)");
+  expect(human).not.toContain("nemá");
   expect(materialized).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
 });
@@ -1267,12 +1280,67 @@ test("Steward role blocks before materialization when provider observation did n
 
   expect(report).toMatchObject({
     state: "blocked",
-    access: { authority: "github", role: "steward", status: "blocked" },
+    access: {
+      authority: "github",
+      role: "steward",
+      status: "blocked",
+      blockers: [{ reason: "steward_access_not_ready", message: "Instalační WRITE gate pro --role module-maintainer neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers." }],
+    },
     scope: { role: "steward", restricted_slots: "exclude" },
-    target: { reason: "steward_access_not_ready" },
+    target: {
+      reason: "steward_access_not_ready",
+      // An unverified observation is not proof of missing WRITE (review on #722).
+      message: "Instalační WRITE gate pro --role module-maintainer neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.",
+    },
   });
+  const human = renderHumanOrganizationInstall(report);
+  expect(human).toContain("Access: blocked · instalační WRITE gate pro --role module-maintainer (roli modulu nedokazuje)");
+  expect(human).not.toContain("nemá");
   expect(materialized).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
+});
+
+// Review on #722: a gate that could not be verified keeps the provider's own
+// blocker in the report; the summary in target.message and in the human
+// output never claims missing WRITE.
+test("a failed provider observation behind the --role gate is reported as unverified, not as missing WRITE", async () => {
+  for (const [deployed, identifier] of [["builder", "module-contributor"], ["steward", "module-maintainer"]]) {
+    const fixture = await organizationRemoteFixture();
+    let materialized = false;
+    const report = await installOrganization({
+      rootPath: fixture.root,
+      githubLogin: login,
+      role: identifier,
+      deps: {
+        observe: async () => ({
+          ...sourceObservation(),
+          access: githubRoleReadinessUnavailable(deployed, "provider_observation_failed", "GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase."),
+        }),
+        runPinnedChild: async () => {
+          materialized = true;
+          throw new Error("must not materialize");
+        },
+      },
+    });
+
+    expect(report).toMatchObject({
+      state: "blocked",
+      access: {
+        role: deployed,
+        status: "blocked",
+        blockers: [{ reason: "provider_observation_failed", message: "GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase." }],
+      },
+      scope: { role: deployed, restricted_slots: "exclude" },
+      target: {
+        reason: `${deployed}_access_not_ready`,
+        message: `Instalační WRITE gate pro --role ${identifier} neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.`,
+      },
+    });
+    const human = renderHumanOrganizationInstall(report);
+    expect(human).toContain("! GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase.");
+    expect(human).not.toContain("nemá");
+    expect(materialized).toBe(false);
+  }
 });
 
 test("Steward install converges ordinary apps and the Mission Control data mount without touching the restricted root slot", async () => {
