@@ -25,17 +25,17 @@ Vyplň před tím, než vytvoříš nebo mountneš klientský checkout:
 | Cílová GitHub Organization / repo | U github-first klientem schválená hranice; u local-first zatím `not configured` |
 | Lokální mount slug | `organizations/ClientX_GEN3/`; suffix `_GEN3` je filesystem marker, ne interní company identity |
 | Repo hranice | klientské super-repo ve vlastnictví klientské/GitHub organization hranice |
-| GitHub access baseline | `Lazurio for GitHub` na `All repositories`; base repository permission `none`; právě jeden GitHub Team `builders` pro obecnou Builder roli |
-| Počáteční Builders | Přesné GitHub loginy schválených uživatelů; každý musí být aktivní Organization member i člen Teamu `builders`, ne jen čekající pozvánka |
+| GitHub access baseline | `Lazurio for GitHub` na `All repositories`; base repository permission `none`; právě jeden GitHub Team `builders` pro roli Přispěvatel modulu |
+| Počáteční Přispěvatelé modulů | Přesné GitHub loginy schválených uživatelů; každý musí být aktivní Člen Organizace i člen Teamu `builders`, ne jen čekající pozvánka |
 | Default Team | právě jeden default Team se slugem `workspace`; Team je logická deklarace, ne adresář |
-| Role hranice | Admin Organizace, Builder Organizace, User Organizace a Steward Organizace; případné Prostředí Henry (preset Steward Lazurio MausBotu, vlastní GitHub účet persony, odpovědný Owner nebo Admin); kdo drží secrets a kdo smí měnit source |
+| Role hranice | Vlastník Organizace, Admin Organizace a Členové Organizace; Přispěvatelé modulů a Správci modulů (role podle rozhodnutí 0234); případné Prostředí Henry (preset Steward Lazurio MausBotu, vlastní GitHub účet persony, odpovědný Vlastník Organizace nebo Admin Organizace); kdo drží secrets a kdo smí měnit source |
 | Počáteční baseline | Mission Control app + data, Knowledgebase, Design System a Infra; ostatní workspace moduly až podle business potřeby, ne big-bang rollout |
 | Design System scope | `active`, pokud je vytvoření objednané; jinak manifestový `planned_slot` bez repa a bez vymyšlených brandových dat |
 | Template baseline | Organization z `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`; Mission Control, Knowledgebase a Design System z vlastních `TemplatesRozjedeme-ai/*Template` upstreamů |
 | Klientské podklady | Hledej ve schválené delivery/sales knowledgebase dodavatele a souvisejících deal/quote/proposal záznamech; vendor-specific cesty patří do AGENTS.md dané dodavatelské Organizace, ne do sdíleného runbooku. Do nové Organizace přenášej jen relevantní, netajný delivery kontext, ne raw interní reasoning ani secrets |
 | Shared Guide | bere se z `guide/` veřejného Lazurio rootu, nekopíruje se ani neforkuje do klientské Organizace |
 | Productionspace | co je release/produkční systém a nesmí být běžný workspace modul |
-| Zastřešující Admin Organizace | Nastav absolutní `ADMIN_ORGANIZATION_ROOT`, například `/Users/example/Lazurio/organizations/AdminOrganization_GEN3`; musí být přímý Organization child tohoto Lazurio rootu. |
+| Zastřešující Organizace (`AdminOrganization`) | Nastav absolutní `ADMIN_ORGANIZATION_ROOT`, například `/Users/example/Lazurio/organizations/AdminOrganization_GEN3`; musí být přímý Organization child tohoto Lazurio rootu. |
 | Organization template checkout | Nastav absolutní `ORGANIZATION_TEMPLATE_ROOT` přesně na `$ADMIN_ORGANIZATION_ROOT/productionspace/OrganizationTemplate_GEN3`; checkout musí používat kanonický SSH origin. |
 
 ## Rollout fáze
@@ -74,7 +74,7 @@ do
         ;;
       *" 403 "*|*" 404 "*|*"(HTTP 403)"*|*"(HTTP 404)"*)
         echo "Template repo není pro tento účet čitelné nebo neexistuje: $template_repository" >&2
-        echo "Požádej ownera TemplatesRozjedeme-ai o READ pozvánku/grant pro přesné repo; pokud je souřadnice zastaralá, oprav ji reviewovanou změnou tohoto runbooku." >&2
+        echo "Požádej Vlastníka Organizace TemplatesRozjedeme-ai o READ pozvánku/grant pro přesné repo; pokud je souřadnice zastaralá, oprav ji reviewovanou změnou tohoto runbooku." >&2
         ;;
       *)
         echo "GitHub provider nebo síť nedovolily ověřit template repo: $template_repository" >&2
@@ -148,7 +148,7 @@ organization_template_root="$(cd "$organization_template_root" 2>/dev/null && pw
 
 admin_organization_root="${ADMIN_ORGANIZATION_ROOT:-}"
 if [ -z "$admin_organization_root" ] || [ "${admin_organization_root#/}" = "$admin_organization_root" ]; then
-  echo "Nastav ADMIN_ORGANIZATION_ROOT na absolutní root zastřešující Admin Organizace" >&2
+  echo "Nastav ADMIN_ORGANIZATION_ROOT na absolutní root zastřešující Organizace (AdminOrganization)" >&2
   return 1
 fi
 admin_organization_root="$(cd "$admin_organization_root" 2>/dev/null && pwd -P)" || {
@@ -293,8 +293,8 @@ samostatné blokátory. Žádný z nich neopravuj forkem ani alternativním remo
 ### 0a. GitHub access baseline před instalací klientských Mašin
 
 Tento gate platí pro `github-first` a pro okamžik, kdy se `local-first`
-Organizaci později připojuje klientský `origin`. Jeho ownerem je GitHub
-Organization Admin: runbook popisuje požadovaný stav, ale sám není trvalým
+Organizaci později připojuje klientský `origin`. Odpovídá za něj Vlastník
+Organizace na GitHubu: runbook popisuje požadovaný stav, ale sám není trvalým
 mandátem k instalaci App, změně memberů, Teamů ani repository grantů. Každý
 live provider zápis potřebuje explicitní pokyn uživatele pro přesnou
 Organizaci.
@@ -307,21 +307,22 @@ Builder Mašinu.
 Musí současně platit:
 
 1. Oficiální GitHub App **Lazurio for GitHub** je v cílové Organizaci
-   nainstalovaná pro **All repositories** a Organization owner dokončil její
+   nainstalovaná pro **All repositories** a Vlastník Organizace dokončil její
    jednorázovou aktivaci podle `manual/organization-install.md`.
 2. Organization **Base permissions** / API
    `default_repository_permission` je `none`. Členství v Organizaci samo
    nesmí zpřístupnit žádný privátní repozitář.
 3. Existuje právě jeden obecný GitHub Team se slugem `builders`. Každý uživatel,
-   který má instalovat Builder Mašinu, je aktivní Organization member a
+   který má instalovat Builder Mašinu, je aktivní Člen Organizace a
    aktivní člen tohoto Teamu; čekající invitation není readiness.
 4. Team `builders` má user-facing **Write** (GitHub API `push`) na canonical
    Organization rootu a na každém aktivním běžném repozitáři deklarovaném
    verzovaným Organization manifestem. `planned_slot` grant nepotřebuje.
-5. Team `builders` ani jednotliví Builders nemají Teamový nebo přímý grant na
-   žádný slot s `default_access: restricted` / `private`; v počátečním
-   baseline to znamená zejména repo `infra`. Organization Admini si zachovají
-   svou provider roli — jejich legitimní admin přístup není Builder grant.
+5. Team `builders` ani jednotliví Přispěvatelé modulů nemají Teamový nebo
+   přímý grant na žádný slot s `default_access: restricted` / `private`;
+   v počátečním baseline to znamená zejména repo `infra`. Vlastníci a Admini
+   Organizace si zachovají svou roli na GitHubu — jejich legitimní přístup
+   z ní není grant Přispěvatele modulu.
 
 GitHub neumí vyjádřit trvalé pravidlo „všechny současné i budoucí repozitáře
 kromě `infra`“. Proto se při vytvoření každého nového běžného repozitáře ve
@@ -330,7 +331,7 @@ restricted repo se výslovně nepřidá. Aktivace manifestového slotu bez tohot
 živého grantu je neúplný rollout, ne pozdější instalační detail.
 
 Před předáním instalačního promptu proveď read-only provider read-back pro
-přesnou Organizaci a zamýšlené Builder loginy:
+přesnou Organizaci a zamýšlené loginy Přispěvatelů modulů:
 
 ```sh
 gh api "orgs/<ClientOrg>" --jq '{login,id,default_repository_permission}'
@@ -371,14 +372,14 @@ gh api --paginate "repos/<exact-owner/repository>/collaborators?affiliation=all&
   --jq '.[] | {login,role_name,permissions}'
 ```
 
-Owner-only activation výstup musí explicitně splnit
+Activation výstup, který vidí jen Vlastník Organizace, musí explicitně splnit
 `execution.status == "ok"`, `observations.github_app.status == "installed"` a
 `observations.github_app.repository_selection == "all"`. Samotné
 `outcome == "active"` nestačí, protože vědomě scoped instalace
 `repository_selection == "selected"` může být platná pro jiný use case, ale
 greenfield klientský baseline nesplňuje. Nečitelný výstup, chybějící pole,
-neznámá hodnota nebo ownerovi nedostupný App read-back je blocker, nikdy důkaz
-`All repositories`.
+neznámá hodnota nebo Vlastníkovi Organizace nedostupný App read-back je
+blocker, nikdy důkaz `All repositories`.
 
 Výsledek porovnej s canonical rootem a aktivními sloty manifestu, ne s ručně
 udržovaným druhým seznamem. Team repo read-back musí zahrnout každý zamýšlený
@@ -397,31 +398,31 @@ binding i duplicitní repository a vydá deterministicky seřazené exact
 ne pouze pro repo pojmenované `infra` a nikdy ručním přepisem seznamu.
 
 GitHub collaborators odpověď vrací efektivní právo ze všech zdrojů a
-[neumí odlišit Organization-owner přístup od repository grantu](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators).
+[neumí odlišit přístup Vlastníka Organizace od repository grantu](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators).
 Schválený roster pochází z přesného Organization creation/rollout zadání, ne z
 druhého trvalého ACL. `--paginate --slurp` načte celý živý Team roster a exact
 JSON comparison odmítne chybějícího, přebývajícího i duplicitně zadaného
-Buildera; každý následující membership a restricted-repo check iteruj nad tímto
+Přispěvatele modulu; každý následující membership a restricted-repo check iteruj nad tímto
 úplným živým rosterem, ne nad ručně vybranými loginy.
 
 Collaborators výsledek vždy koreluj s výše načteným Organization membership
 `role`: login z úplného rosteru s `role: member` nesmí být v žádném restricted
-výpisu; `role: admin` je Organization owner, ne non-admin Builder, a jeho
-očekávanou přítomnost eviduj jako `owner_role_exception`, nikoli jako Builder
-grant. Builders Team přesto nesmí mít restricted repo ve svém Team repo
-read-backu. Z tohoto endpointu nikdy netvrď, že owner nemá redundantní direct
-grant — GitHub tuto provenienci neposkytuje.
+výpisu; `role: admin` je Vlastník Organizace, ne Přispěvatel modulu, a jeho
+očekávanou přítomnost eviduj jako `owner_role_exception`, nikoli jako grant
+Přispěvatele modulu. Team `builders` přesto nesmí mít restricted repo ve svém
+Team repo read-backu. Z tohoto endpointu nikdy netvrď, že Vlastník Organizace
+nemá redundantní direct grant — GitHub tuto provenienci neposkytuje.
 
 Nenulový exit, neúplná pagination, ne-JSON nebo jinak malformed provider
 odpověď a active restricted slot bez exact repository bindingu jsou
 fail-closed blocker; neinterpretují se jako prázdný seznam collaborators.
-Chybějící App scope, base
-permission jiné než `none`, pending member/Team membership, READ místo WRITE,
-chybějící běžné repo nebo non-admin Builder v restricted repu je blocker před
-instalací Mašiny. Oprav přesný GitHub grant a read-back zopakuj; nepřidávej
-workaround do manifestu ani lokální ACL.
+Chybějící App scope, base permission jiné než `none`, pending member/Team
+membership, READ místo WRITE, chybějící běžné repo nebo Přispěvatel modulu bez
+role `admin` v restricted repu je blocker před instalací Mašiny. Oprav přesný
+GitHub grant a read-back zopakuj; nepřidávej workaround do manifestu ani
+lokální ACL.
 
-Teprve potom předej klientovi aktuální krátký Builder prompt z
+Teprve potom předej klientovi aktuální krátký prompt pro Builder Mašinu z
 `manual/organization-install.md`. Prompt musí zůstat self-contained end-to-end
 mandátem: Agent autonomně zkonverguje nezbytný User i Machine/system-wide
 `PATH`, používá své background nástroje bez user-facing Terminalu nebo
@@ -488,8 +489,8 @@ První reálný GEN3 klient začíná s:
    mountuje se jako `design-system/`. Bez objednaného vytvoření zůstává
    `status: "planned_slot"` bez `git`, bez repa a bez předstírání hotové
    vizuální identity; handoff uvádí, že klient může dodavatele kontaktovat pro
-   vytvoření Design Systemu. Při vytvoření či vyčlenění repa Admin zajistí
-   alespoň GitHub Read pro každého aktivního člena Organizace včetně
+   vytvoření Design Systemu. Při vytvoření či vyčlenění repa Admin Organizace
+   zajistí alespoň GitHub Read pro každého aktivního Člena Organizace včetně
    automatizovaných účtů. Ověř efektivní granty podle
    `manual/organization-install.md` §Design System; manifest není důkaz přístupu.
 4. **Infra** — restricted Organization-owned repo jako aktivní root nested
@@ -924,8 +925,8 @@ Použij pro první klientský closeout. Pole označené `pokud ...` dokládej je
 - Client `origin`: `<url>` / `not configured (local-first)`
 - GitHub App: `Lazurio for GitHub`; repository selection: `all` / `not configured (local-first)`
 - Base repository permission: `none` / `not configured (local-first)`
-- Builders: Team `builders` immutable ID `<id>`; complete paginated roster exactly equals approved members `<logins>`; ordinary repo WRITE read-back pass/fail / `not configured (local-first)`
-- Restricted access: deterministic inventory of all active `default_access: restricted|private` slots; non-admin Builders excluded pass/fail; Organization owners recorded as `owner_role_exception`; / `not configured (local-first)`
+- Module Contributors: Team `builders` immutable ID `<id>`; complete paginated roster exactly equals approved members `<logins>`; ordinary repo WRITE read-back pass/fail / `not configured (local-first)`
+- Restricted access: deterministic inventory of all active `default_access: restricted|private` slots; Module Contributors without the `admin` role excluded pass/fail; Organization Owners recorded as `owner_role_exception`; / `not configured (local-first)`
 - Origin ancestry + push dry-run: pass/fail + excerpt (pokud se `origin` připojoval)
 - Apps discovered: `<n>`; client apps: `<ids>` (pokud jsou app moduly materializované)
 - `bun run check`: pass/fail + excerpt
@@ -948,10 +949,11 @@ GEN3 je ready pro prvního klienta, když:
 - zvolený rollout režim odpovídá remote stavu: github-first má klientem schválený `origin`, local-first nemá `origin` a `template` má zakázaný push;
 - pokud se předává nebo instaluje klientská Builder Mašina, prošel §0a:
   `Lazurio for GitHub` má `All repositories`, base repository permission je
-  `none`, zamýšlení Builders jsou aktivní členové Teamu `builders`, Team má
-  WRITE na canonical rootu a všech aktivních běžných repech a žádný non-admin
-  Builder nemá grant na `infra` ani jiný restricted slot; Organization-owner
-  přístup se eviduje odděleně jako `owner_role_exception`; čistě `local-first` checkout
+  `none`, zamýšlení Přispěvatelé modulů jsou aktivní členové Teamu
+  `builders`, Team má WRITE na canonical rootu a všech aktivních běžných repech
+  a žádný Přispěvatel modulu bez role `admin` nemá grant na `infra` ani jiný
+  restricted slot; přístup Vlastníka Organizace se eviduje odděleně jako
+  `owner_role_exception`; čistě `local-first` checkout
   bez `origin` reportuje `not configured` a nevydává se za install-ready
   klientskou Mašinu;
 - první klientský pilot modul má validní manifest, nekolidující port a vysvětlitelný dependency/runtime stav;

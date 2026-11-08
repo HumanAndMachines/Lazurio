@@ -413,7 +413,7 @@ test("404 absence proof fails closed for scoped, incomplete or contradictory vie
     ),
   ).toEqual({
     confirmed: false,
-    message: "přihlášený gh účet nemá aktivní Organization Owner roli",
+    message: "přihlášený gh účet nemá aktivní roli Vlastník Organizace",
   });
 
   const scopedProvider = ownerAbsenceProvider([visiblePrivate]);

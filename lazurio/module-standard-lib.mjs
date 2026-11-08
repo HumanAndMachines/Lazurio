@@ -35,7 +35,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
 ]);
 
 const CHECK_ACTIONS = Object.freeze({
-  "MS-01": "Přepište port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověřte start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
+  "MS-01": "Přepište port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověřte start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Admin Organizace v Organization manifestu.",
   // MS-02 names the toolchain manifest's default Bun (ms02Action).
   "MS-03": "Doplňte lazurio.runtime s listenery, health a existujícím dev_script (a start_script, pokud ho App deklaruje) podle manual/module-setup.md.",
   "MS-04": "Doplňte lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",

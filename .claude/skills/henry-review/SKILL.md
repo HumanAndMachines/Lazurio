@@ -61,8 +61,8 @@ persony, nereviewuje: schvaluje ho člověk.
 
 Přiřazení nepřidává práva a neobchází branch rules. Release, apply,
 přístupy, secrets a změna záměru mají vlastní mandát. Kde repozitář dovoluje
-merge jen Ownerovi (typicky `infra`), persona po review předá dokončení
-Ownerovi.
+merge jen Vlastníkovi Organizace (typicky `infra`), persona po review předá
+dokončení Vlastníkovi Organizace.
 
 ## Ověření
 
@@ -80,6 +80,6 @@ Ownerovi.
   `requested_reviewers` nebo už reviewoval
   (`gh api repos/<owner>/<repo>/pulls/<n> --jq '{draft, requested: [.requested_reviewers[].login]}'`).
   Pak to řekni uživateli; bot tomu, kdo mu práci zadal. Druhou cestu
-  nezakládej. Owner mimo rozsah intake, vypnuté předání, pozastavený intake,
+  nezakládej. GitHub owner repozitáře mimo rozsah intake, vypnuté předání, pozastavený intake,
   chybějící přihlášení nebo plná fronta jsou konkrétní blokátory pro
   odpovědného uživatele Prostředí persony.

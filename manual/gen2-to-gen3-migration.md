@@ -76,7 +76,7 @@ Template hranice během migrace (decision 0033 a decision 0077 v
   managed bloku se dělá už při zakládání kanonického layoutu (Fáze 5) z template
   mountu jako **reference checkout**, ne až po wired remote — verbatim, ověřený
   md5. Po cutoveru přes wired remote pak běží jen průběžný **drift** sync bloku
-  a managed **souborů** (Steward review). Detail seedu je ve Fázi 5.
+  a managed **souborů** (review Správce modulu). Detail seedu je ve Fázi 5.
 - Přímá propagace Organizace → Organizace je zakázaná. Template-first je
   default pro platformní změny; promotion z Organizace je výjimka pro inovace
   zrozené v reálné práci.
@@ -116,10 +116,12 @@ dokončený cutover.
 
 Pojmenuj:
 
-- Organization Admina, který schvaluje access, archive a rollback;
-- Workspace/Organization Stewarda pro Doctor, Launchpad a app smoke;
-- Productionspace Stewarda pro potvrzení, že se production runtime nemění;
-- Builder ownera migračního Mission Control plánu;
+- Admina Organizace, který schvaluje access, archive a rollback;
+- Správce modulu pro workspace a kořenové repo Organizace, který ověří Doctor,
+  Launchpad a app smoke;
+- Správce modulu pro productionspace, který potvrdí, že se production runtime
+  nemění;
+- Přispěvatele modulu, který vlastní migrační Mission Control plán;
 - scope migrace: jedna mašina/jeden uživatel, cohorta, nebo týmový cutover.
 
 Veškerá evidence musí být metadata-only. Doporučené lokální custody cesty:
@@ -786,8 +788,9 @@ odpovídá stavu sourozeneckých Organizací.
 
 Rozliš „managed **blok** při zakládání layoutu" (tady, verbatim, hned) od
 „průběžný managed content **sync** přes wired template remote" (post-cutover).
-Managed **soubory** (generické skilly) zůstávají post-cutover — org-tuned drift
-potřebuje Steward review — ale managed **blok** kolaborace se seedne hned.
+Managed **soubory** (generické skilly) zůstávají post-cutover — org-tuned
+drift potřebuje review Správce modulu — ale managed **blok** kolaborace se
+seedne hned.
 
 ### Doctor adaptation checklist
 
@@ -850,7 +853,7 @@ nesplní všechny decision-0036 gates:
 3. přesný rollback na legacy nebo poslední published data SHA;
 4. rollback rehearsal/smoke, případně explicitně schválená výjimka;
 5. credential authority, path allowlist, branch policy a audit metadata;
-6. owner/steward approval;
+6. schválení Správce modulu nebo Vlastníka Organizace;
 7. post-cutover monitor se stále dostupným fallbackem.
 
 Do splnění všech bodů nepiš „data repo je sole source“. Po cutoveru smaž nebo
@@ -926,8 +929,9 @@ duplicitní/cizí reference odhalit.
 ## Fáze 8 — bezpečný per-machine přesun nested checkoutů
 
 Tracked PR nejdřív změní manifesty, čtenáře, `.gitignore` a docs. Nested
-checkouty jsou gitignored, proto je po merge musí každý Builder/Host přesunout
-lokálně. Přesun se neprovádí ve feature worktree a nikdy před consumer census.
+checkouty jsou gitignored, proto je po merge musí každý Přispěvatel modulu
+nebo Host přesunout lokálně. Přesun se neprovádí ve feature worktree a nikdy
+před consumer census.
 
 Zvol variantu podle toho, co se děje s GEN2 checkoutem:
 
@@ -1111,7 +1115,7 @@ labelu i app URL/bundle id a po změně znovu přečti plist. Nikdy nekopíruj
 číselný index z jiného stroje. Nejbezpečnější je ruční odebrání v Dock UI;
 automatizace smí pokračovat jen s čerstvou zálohou a jednoznačnou shodou.
 
-Týmový cutover smí Organization Admin schválit až když:
+Týmový cutover smí Admin Organizace schválit až když:
 
 1. všichni uživatelé a automatizované účty v scope mají GEN3 access a ověřený daily flow;
 2. GEN2 maintenance commits po `SOURCE_SHA` jsou všechny ported/skipped/deferred

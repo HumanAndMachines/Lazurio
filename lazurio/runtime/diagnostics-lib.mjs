@@ -857,7 +857,7 @@ async function worktreePackageRoots({ companiesRoot, worktree, absoluteWorktreeP
     targetPath: organizationRoot,
   });
   if (!organizationBoundary.ok || !organizationBoundary.targetRealPath) {
-    return { ok: false, detail: "Organization owner root nelze bezpečně ukotvit." };
+    return { ok: false, detail: "Root Organizace, které worktree patří, nelze bezpečně ukotvit." };
   }
   const worktreeBoundary = await inspectDirectoryWithinCanonicalBoundary({
     rootPath: organizationRoot,
@@ -1703,7 +1703,7 @@ function unevaluatedTeamAccess() {
     status: "not_evaluated",
     memberships: [],
     reason: "github_team_membership_adapter_not_connected",
-    message: "Členství Buildera v Teamech zatím Launchpad živě neověřuje. Manifest určuje přiřazení modulů; skutečný přístup vždy určuje GitHub.",
+    message: "Členství Přispěvatele modulu v Teamech zatím Launchpad živě neověřuje. Manifest určuje přiřazení modulů; skutečný přístup vždy určuje GitHub.",
   };
 }
 
@@ -2154,7 +2154,7 @@ function classifyModuleSlotReadiness(
       return {
         severity: "neutral",
         reason: "restricted_not_materialized",
-        message: "Restricted slot není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen explicitní Admin `lazurio organization install <login>` bez --role.",
+        message: "Restricted slot není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen Admin Organizace explicitním `lazurio organization install <login>` bez --role.",
       };
     }
     return {

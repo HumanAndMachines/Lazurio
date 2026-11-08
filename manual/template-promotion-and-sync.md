@@ -49,10 +49,11 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
    stojí za ruční převzetí.
 4. Otevři plnohodnotný PR do repa své Organizace s popisem, které managed
    soubory se synchronizovaly a odkud (commit/tag template). Merge patří
-   Organization Stewardovi.
+   tomu, komu ho živá práva ke kořenovému repu dovolí: Správci modulu nebo
+   Adminovi Organizace.
 5. Hromadný rozvoz do více Organizací („Template Sync Sweep") běží stejně,
-   jen paralelně: jeden agent per Organizace, per-org PR, merguje Steward
-   dané Organizace.
+   jen paralelně: jeden agent per Organizace, per-org PR, merguje Správce
+   modulu nebo Admin dané Organizace.
 
 ## Směr 2: update Template z Organizace (promotion)
 
@@ -63,8 +64,8 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
    placeholdery (`<Organization>`, example-company). Anonymizační brána:
    grep na jména reálných Organizací musí být čistý.
 4. Otevři PR do template repa; v popisu uveď reálnou bolest, obecný pattern
-   a dopad na sync (které soubory se stanou managed). Merge patří ownerovi
-   template (Admin/Steward).
+   a dopad na sync (které soubory se stanou managed). Merge patří Správci
+   modulu nebo Adminovi Organizace, která template vlastní.
 5. Do Organizací se změna dostane až ze zmergnutého template směrem 1 —
    nikdy ne přímým kopírováním mezi Organizacemi.
 
@@ -73,8 +74,10 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
 - Agent: worktrees a plnohodnotné PRs v obou směrech bez ptaní; merge jen na
   explicitní svolení uživatele v threadu a jen tam, kde to GitHub uživateli
   dovoluje (decisions 0103/0112).
-- Organization Steward: merge sync PRs své Organizace.
-- Owner template (Admin/Steward): merge promotion PRs do template.
+- Správce modulu nebo Admin Organizace s právem ke kořenovému repu: merge sync
+  PRs své Organizace.
+- Správce modulu template nebo Admin Organizace, která template vlastní:
+  merge promotion PRs do template.
 - Nejistý kandidát na promotion nezakládá PR — technickou nejistotu připrav
   jako GitHub Issue v přesném owning repu podle `manual/github-issues.md` a
   rozhodnutí/prioritu zapiš do Mission Controlu nebo TODO s tagem

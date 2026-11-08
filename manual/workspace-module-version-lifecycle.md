@@ -230,7 +230,7 @@ Povinné vlastnosti:
 Příklady:
 
 - Deals v3: `<Org>/deals-data@v3`, mount `modules/deals/db`, schema `deals-data@3.0.0-alpha.0`, destructive-sync guard, explicit publish.
-- Warehouse v3: `<Org>/warehouse-data@v3`, mount `modules/warehouse/db`, schema `warehouse-data@3.0.0-alpha.0`, writer pro items/movements/suppliers/purchase orders, hosted Steward smoke.
+- Warehouse v3: `<Org>/warehouse-data@v3`, mount `modules/warehouse/db`, schema `warehouse-data@3.0.0-alpha.0`, writer pro items/movements/suppliers/purchase orders, hosted smoke persony Organizace.
 
 #### Závazný v3 UI kontrakt: indikátor nepublikovaných změn + Publikovat + pull
 
@@ -350,7 +350,7 @@ tyto vrstvy:
 
 Standardní cesta je **flagship Organizace → template → klientský fork**.
 
-1. **Ověřit ve flagship Organizaci.** Nový v3 pattern se nejdřív prokáže na reálném modulu, protože tam je celý lifecycle, data objem, hosted Steward i produkční QA.
+1. **Ověřit ve flagship Organizaci.** Nový v3 pattern se nejdřív prokáže na reálném modulu, protože tam je celý lifecycle, data objem, hostovaná persona Organizace i produkční QA.
 2. **Zobecnit bez dat.** Z patternu se odstraní firemní názvy, reálná data, secrets, lokální paths a organization-only taxonomie.
 3. **Promovat do template vrstvy.** Obecný Organization/runtime contract jde do `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`; modulově specifická app/data kostra patří do budoucího `<Module>Template` repa nebo do schválené module template vrstvy, ne do konkrétního klientského workspace.
 4. **Aktualizovat Lazurio manuál.** Root agenti musí vidět novou verzi a upgrade flow v `manual/`.

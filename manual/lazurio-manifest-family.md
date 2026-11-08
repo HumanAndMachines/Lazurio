@@ -10,7 +10,7 @@
 
 Status: **Organization contract accepted by decision amendments 0026, 0031 and
 0042; Personalspace naming remains a separate proposal and rollout**
-Decision owner: Lazurio maintainers
+Decision owner: Lazurio developers
 Tracking: `DEV-6488`
 
 ## Proposed target
@@ -184,10 +184,11 @@ decision 0162 (addendum 2026-10-09):
 - **New Organizations** start with `"allowed": false`; the Core scaffold
   (`lazurio/core/organization-scaffold-lib.mjs`) writes it. The migrator never
   adds the section to an existing Organization.
-- **Who changes it:** an Admin, as an exact change approved in the Dashboard
-  and written with the Admin's own rights, or an agent's pull request that the
-  Admin approves; the approval is Publication (decision 0194 point 2). Secrets
-  never live here; a setting names a vault entry instead.
+- **Who changes it:** an Organization Admin, as an exact change approved in
+  the Dashboard and written with the Organization Admin's own rights, or an
+  agent's pull request that the Organization Admin approves; the approval is
+  Publication (decision 0194 point 2). Secrets never live here; a setting
+  names a vault entry instead.
 - **Delivery:** Environments ask the Dashboard what applies to them; a local
   install with a cloned root reads the same document from Git through
   `readOrganizationRoot(...).settings` (or `readOrganizationSettings`).

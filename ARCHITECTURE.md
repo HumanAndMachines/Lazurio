@@ -2,11 +2,11 @@
 
 > **Cílový přístupový model, 2026-10-06 (0192):**
 > [Účet, zařízení a přístupy k Environmentům](manual/environment-access-model.md)
-> rozlišuje Lazurio uživatele, schválení zařízení Adminem, plný/aplikační
-> přístup a směrové vzdálené operace. Platí i pro týmový Environment bez
-> GitHub identity návštěvníka. GitHub Team dál vymezuje zdrojové schopnosti
-> Environmentu. Níže popsané Team/GitHub vstupní vazby jsou dosavadní
-> implementace k migraci; nejde o okamžitou změnu runtime.
+> rozlišuje Lazurio uživatele, schválení zařízení Adminem Organizace,
+> plný/aplikační přístup a směrové vzdálené operace. Platí i pro týmový
+> Environment bez GitHub identity návštěvníka. GitHub Team dál vymezuje
+> zdrojové schopnosti Environmentu. Níže popsané Team/GitHub vstupní vazby
+> jsou dosavadní implementace k migraci; nejde o okamžitou změnu runtime.
 
 
 > **Buddy v Osobním Prostředí (decision 0210).** Buddy je Hermes Agent, který
@@ -72,11 +72,12 @@ Lazurio                             distribuce, životní cyklus a koordinace
 Environment ovládá, a tím ovládá i Agenty, které v něm spouští. Agenti jednají
 za něj a v jeho živých právech; uživatel dává pokyn k Publikaci a má poslední
 slovo. Uživatelem je vždy člověk: na osobním Environmentu jeho Owner, na
-pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na týmovém
-Remote Environmentu právě připojený člen Teamu a na Environmentu Henry
-odpovědný Owner nebo Admin Organizace (decision 0175 s dodatkem
-z 2026-10-21; starší záznamy mu říkají Operátor). Není to role User
-v Organizaci. Ve sdíleném Hosted Team Workspace je Ownerem Organizace a
+pracovním Remote Environmentu Přidělený uživatel, tedy ten, komu ho
+Organizace přiřadila, na týmovém Remote Environmentu právě připojený člen
+Teamu a na Environmentu Henry odpovědný Vlastník Organizace nebo Admin
+Organizace (decision 0175 s dodatkem z 2026-10-21; starší záznamy mu říkají
+Operátor). Není to role v Organizaci ani Uživatel aplikace (role podle
+decision 0234). Ve sdíleném Hosted Team Workspace je Ownerem Organizace a
 jednotliví uživatelé ho používají s oprávněním; používáním Mašiny její
 vlastnictví ani org-wide pravomoci nezískávají. V Organizaci
 rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový název role.
@@ -121,10 +122,11 @@ rovnocenně silnou infrastrukturní izolaci.
 
 Hranice mohou být vrstevnaté. Organization Host může být providerovou Mašinou
 a současně hostit několik Mašin typu Hosted Team Workspace na tenantní vrstvě.
-Pro Buildera a Agenta je nejbližší hranicí jeho Team Workspace; root nebo
-srovnatelná autorita hostu ale zůstává vyšší doménou kompromitace a obnovy a
-může ovlivnit všechny Workspaces na hostu. Izolace sourozeneckých Teamů proto
-není tvrzením, že jsou izolované od oprávněného host operatora nebo provideru.
+Pro Přispěvatele modulu a Agenta je nejbližší hranicí jeho Team Workspace;
+root nebo srovnatelná autorita hostu ale zůstává vyšší doménou kompromitace a
+obnovy a může ovlivnit všechny Workspaces na hostu. Izolace sourozeneckých
+Teamů proto není tvrzením, že jsou izolované od oprávněného host operatora
+nebo provideru.
 
 V komunikaci vždy používej konkrétní druh hranice: například „lokální Mašina
 Kolegy“, „osobní hostovaná Mašina“, „Hosted Team Workspace Mašina“ nebo
@@ -192,7 +194,7 @@ vlastním GitHub účtem persony a ve kterém může pracovat i uživatel (decis
 | Vlastnost | Buddy | Prostředí Henry |
 | --- | --- | --- |
 | Owner | jeden uživatel | Organizace |
-| Odpovědný uživatel | Owner Osobního Prostředí | Owner nebo Admin Organizace, který automatizace nastavuje |
+| Odpovědný uživatel | Owner Osobního Prostředí | Vlastník Organizace nebo Admin Organizace, který automatizace nastavuje |
 | Mandát | osobní | pracovní a organizační |
 | Paměť | osobní GBrain | paměť Lazurio MausBotu, oddělená pro každou Organizaci |
 | Síťová bezpečnostní hranice | Ownerova | organizační |
@@ -207,8 +209,9 @@ zadává jen jeho uživatel.
 
 S personou Prostředí Henry se běžně spolupracuje přes GitHub: pull requesty,
 review a přiřazení. SSH do něj má jen jeho odpovědný uživatel pro servisní
-zákroky a vlastní pull requesty persony schvaluje člověk: Owner, Admin nebo
-Steward (decision 0169 body 1 a 5). Persona je jméno a charakter agentů
+zákroky a vlastní pull requesty persony schvaluje člověk: Vlastník
+Organizace, Admin Organizace nebo Správce modulu (decision 0169 body 1 a 5,
+názvy rolí podle 0234). Persona je jméno a charakter agentů
 v Prostředí, ne uživatel ani pravomoc.
 
 Pravidla pro práci s Buddym, jeho profilem a pamětí drží
@@ -219,9 +222,9 @@ Workspace popisuje [manuál Residentů](manual/lazurio-resident-profiles.md).
 
 ## Pracovní prostory
 
-Lokální a hostovaný Workspace mají pro Buildera stejný model: Lazurio root,
-Organization checkouty, worktrees, nástroje Agentů, Launchpad a vývojové
-procesy Modulů. Liší se infrastrukturním a síťovým obalem.
+Lokální a hostovaný Workspace mají pro Přispěvatele modulu stejný model:
+Lazurio root, Organization checkouty, worktrees, nástroje Agentů, Launchpad a
+vývojové procesy Modulů. Liší se infrastrukturním a síťovým obalem.
 
 ### Individuální hostovaná VM
 
@@ -308,10 +311,10 @@ Launchpad proto používá tři oddělené lifecycle profily:
   `Stop` modul zastaví až do dalšího otevření. Browserové požadavky na pozadí
   (fetch, asset nebo WebSocket reconnect) nejsou nové otevření; ingress je
   pouze zkontroluje. Navigace a přímí nebrowseroví klienti mohou App otevřít.
-  Spuštěnou App manager udržuje
-  v aktuální session, dostupnost katalogu ani health kontrola ji neprobouzí.
-  Cold start nic nespouští; první otevření použije `main`. Builderova volba
-  worktree žije jen v aktuální session a ingress ji zachovává;
+  Spuštěnou App manager udržuje v aktuální session, dostupnost katalogu ani
+  health kontrola ji neprobouzí. Cold start nic nespouští; první otevření
+  použije `main`. Volba worktree Přispěvatele modulu žije jen v aktuální
+  session a ingress ji zachovává;
 - **production** přijímá jen reprodukovatelný Build a běží na samostatném
   produkčním runtime. Team katalog, Launchpad proces ani worktree nejsou
   deployment input.

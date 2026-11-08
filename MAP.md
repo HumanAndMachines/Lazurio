@@ -85,13 +85,13 @@ pracovní Root.
   v `lazurio/migrations/organization-manifest/`). Drží Organization-wide pravidla včetně poolu
   pro přidělování nových portů. Přesný port vlastní každý Modul ve svém
   `lazurio.module.json`; globální registr neexistuje.
-- `launchpad/` — vývojový povrch pro Buildery. Objevuje Organizace, Teamy a
+- `launchpad/` — vývojový povrch pro Přispěvatele modulů. Objevuje Organizace, Teamy a
   Moduly, spouští aplikace z `main` i worktrees a ukazuje read-only
   productionspace. Dlaždice Guide odkazuje na lokalizovanou část veřejné
   dokumentace na `documentation.lazurio.ai`; Launchpad její obsah neduplikuje.
-  Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
+  Konfigurace Admina Organizace a produkční aplikace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI agenty; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
-- Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Organization Users do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
+- Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admina Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Členů Organizace do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
 - `manual/module-standard.md` — Lazurio Module Standard (decision 0171): jak Modul vypadá, startuje, na čem stojí a jak vzniká; konformance `lazurio module setup`, skill `.agents/skills/lazurio-module-standard/`
 - `manual/mission-control-trusted-builder-smoke.md` — živý cross-Lazurio audit GitHub-only writeru, root pointerů a progresivního `trusted-process` / `provider-enforced` režimu

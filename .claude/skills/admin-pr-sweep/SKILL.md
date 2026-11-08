@@ -14,26 +14,26 @@ metadata:
 
 ## Overview
 
-Admin PR Sweep je práce **Organization Admina** napříč všemi GitHub
+Admin PR Sweep je práce **Admina Organizace** napříč všemi GitHub
 Organizacemi, kde jeho účet drží admin práva. Cíl: každý otevřený PR od jiného
 autora dostat do koncového stavu — merged, closed jako nahrazený, nebo
 předaný jmenovanému ownerovi s konkrétní next action. Task Agent opravuje
 a připravuje pull requesty a Publikaci (merge/close) provádí jen na explicitní
 pokyn uživatele platný v aktuálním threadu.
 
-Liší se od nočního Steward sweepu, který běží pro právě jednu Organizaci
-pod Steward seatem a Steward autoritou. Admin sweep je interaktivní,
-cross-Organization, a používá živá admin práva uživatele — včetně bypassu
-tam, kde ho ruleset dovolí a kde je to zdůvodněné.
+Liší se od nočního sweepu persony Organizace (Steward sweep), který běží pro
+právě jednu Organizaci pod účtem persony a v jejích grantech. Admin sweep je
+interaktivní, cross-Organization, a používá živá admin práva uživatele —
+včetně bypassu tam, kde ho ruleset dovolí a kde je to zdůvodněné.
 
 ## Kdy použít
 
-- Uživatel (Admin) chce přehled cizích PR napříč Organizacemi a jejich
+- Uživatel (Admin Organizace) chce přehled cizích PR napříč Organizacemi a jejich
   dotažení „na main“.
 - Fronta obsahuje PR od Kolegů, botů i klientských Organizací.
 
 Nepoužívej pro vlastní PR uživatele (ty si řeší sám), pro Release, ani jako
-náhradu review v jedné Organizaci se Steward seatem.
+náhradu review personou jedné Organizace.
 
 ## Předpoklady
 
@@ -126,7 +126,7 @@ autorita) zavři s vysvětlením, ne s mlčením.
 - Strict status checks: po merge jiného PR je branch BEHIND — `gh pr
   update-branch` a počkat na CI.
 - Ruleset „approval od někoho jiného než posledního pushera“: po vlastním
-  rebase nemůžeš schválit; předej review Stewardovi (`--add-reviewer
+  rebase nemůžeš schválit; předej review Správci modulu (`--add-reviewer
   --add-assignee` + komentář).
 - `--admin` bypass použij jen pro známou environmentální CI baseline
   (stejná chyba na main/ostatních PR), a důvod napiš do review.

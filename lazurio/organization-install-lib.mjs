@@ -13,6 +13,9 @@ import {
 import {
   ORGANIZATION_INSTALL_ROLES,
   githubRoleReadinessNotRequested,
+  organizationInstallRoleIdentifier,
+  organizationInstallRoleLabel,
+  resolveOrganizationInstallRoleOption,
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
   observeGitHubRoleReadiness,
@@ -887,7 +890,7 @@ function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, r
     ...repositoryDbResultIdentity({ source, organizationPath, slot }),
     state: "current",
     reason: "excluded_by_role_scope",
-    message: `Restricted slot ${restricted[1]} je záměrně mimo scope role-scoped Organization instalace; repository-db mount pod ním neproběhl a žádná GitHub operace se nespustila. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+    message: `Restricted slot ${restricted[1]} je záměrně mimo scope role-scoped Organization instalace; repository-db mount pod ním neproběhl a žádná GitHub operace se nespustila. Materializaci provede jen Admin Organizace explicitním \`lazurio organization install <login>\` bez --role.`,
     materialization_scope: "excluded_by_role_scope",
   };
 }
@@ -1157,8 +1160,8 @@ export function renderHumanOrganizationInstall(report) {
   const lines = [
     `Lazurio Organization install: ${report.state}`,
     `Organization: ${report.organization.login ?? report.organization.locator}${report.organization.id ? ` · ID ${report.organization.id}` : ""}`,
-    `Access: ${report.access.status}${report.access.role ? ` · role ${report.access.role}` : ""}`,
-    `Scope: ${report.scope.role ?? "admin (bez --role)"} · restricted sloty ${report.scope.restricted_slots === "include" ? "zahrnuté" : "vyloučené bez provider operace"}`,
+    `Access: ${report.access.status}${report.access.role ? ` · role ${organizationInstallRoleIdentifier(report.access.role) ?? report.access.role}` : ""}`,
+    `Scope: ${report.scope.role ? organizationInstallRoleIdentifier(report.scope.role) ?? report.scope.role : "organization-admin (bez --role)"} · restricted sloty ${report.scope.restricted_slots === "include" ? "zahrnuté" : "vyloučené bez provider operace"}`,
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
   if (report.access.account) lines.push(`  GitHub account: ${report.access.account.login} · ID ${report.access.account.id}`);
@@ -1368,8 +1371,7 @@ function roleAccessNotReadyCode(role) {
 }
 
 function roleAccessNotReadyMessage(role) {
-  const label = role.charAt(0).toUpperCase() + role.slice(1);
-  return `GitHub účet nesplňuje deklarovaný ${label} access kontrakt.`;
+  return `GitHub účet nesplňuje přístupový kontrakt role ${organizationInstallRoleLabel(role)}.`;
 }
 
 function rootOutcome(state, reason, path, message = null) {
@@ -1472,12 +1474,16 @@ function normalizeOptionalOrganizationId(value) {
   return id;
 }
 
+// Přijímá nasazenou hodnotu role (`builder`, `steward`) i identifikátor role
+// z volby `--role` (`module-contributor`, `module-maintainer`, rozhodnutí
+// 0234); report dál nese nasazenou hodnotu.
 function normalizeOptionalInstallRole(value) {
   if (value === null || value === undefined || value === "") return null;
-  if (!ORGANIZATION_INSTALL_ROLES.includes(value)) {
-    throw new TypeError("Organization install --role podporuje pouze hodnoty builder a steward; Admin instaluje bez --role.");
+  const resolved = resolveOrganizationInstallRoleOption(value);
+  if (!resolved || !ORGANIZATION_INSTALL_ROLES.includes(resolved.role)) {
+    throw new TypeError("Organization install --role podporuje pouze hodnoty module-contributor a module-maintainer; Admin Organizace instaluje bez --role.");
   }
-  return value;
+  return resolved.role;
 }
 
 async function readJson(path, { optional = false } = {}) {

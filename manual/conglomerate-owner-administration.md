@@ -1,4 +1,4 @@
-# Správa Conglomerate Hostu vlastníky Organizace
+# Správa Conglomerate Hostu Vlastníky Organizace
 
 > **Veřejný domov GEN4.** Tento standard od 2026-11-02 veřejně popisuje stránka
 > [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
@@ -12,19 +12,25 @@ ohraničené vstupy nebo reference; nevytvářejí další autoritu nad společn
 hostem a nekopírují přístupová data jiných tenantů. Text
 standardu sám nezakládá oprávnění a nedokazuje, že je daná Organizace nasazená.
 
-## Běžná práce Ownera
+## Běžná práce Vlastníka Organizace
 
-Aktivní GitHub Organization Owner musí mít po schváleném onboardingu možnost
-spravovat vlastní Conglomerate Host z konkrétně povoleného osobního počítače a
-osobní hostované Mašiny. Spojení vede přes Headscale a nativní SSH, pod vlastní
-jmenovitou identitou se samostatně odvolatelnými klíči. Nezávisí na domácí IP,
-počítači, přihlášení ani privátním klíči jiného Ownera nebo dodavatele.
+Aktivní Vlastník Organizace na GitHubu musí mít po schváleném onboardingu
+možnost spravovat vlastní Conglomerate Host z konkrétně povoleného osobního
+počítače a osobní hostované Mašiny. Spojení vede přes Headscale a nativní SSH,
+pod vlastní jmenovitou identitou se samostatně odvolatelnými klíči. Nezávisí
+na domácí IP, počítači, přihlášení ani privátním klíči jiného Vlastníka
+Organizace nebo dodavatele.
 
-Členství v tailnetu, společný Headscale user, tag pracovního prostředí ani jméno
-mašiny nejsou důkaz role Owner. Ověř živou GitHub roli a přesnou vazbu zařízení
-na schváleného Ownera. Přístup se nedává automaticky všem uzlům Organizace.
-Telefon a pracovní VM správní práva implicitně nezískávají; výjimkou je výslovně jmenované Pracovní Prostředí Ownera (v 0202 „Owner nebo Admin“, tatáž role) podle rozhodnutí 0202 (servisní SSH do Pracovních a Týmových Prostředí členů téže Organizace a správa jejího Conglomerate Hostu). Jejich běžný SSH a
-webový přístup do pracovních prostředí je samostatná věc.
+Členství v tailnetu, společný Headscale user, tag pracovního prostředí ani
+jméno mašiny nejsou důkaz role Vlastník Organizace. Ověř živou GitHub roli a
+přesnou vazbu zařízení na schváleného Vlastníka Organizace. Přístup se nedává
+automaticky všem uzlům Organizace. Telefon a pracovní VM správní práva
+implicitně nezískávají; výjimkou je výslovně jmenované Pracovní Prostředí
+Vlastníka Organizace (v 0202 „Owner nebo Admin“, tatáž role na GitHubu; cílově
+ho podle 0228 odvozuje role Admin Organizace) podle rozhodnutí 0202 (servisní
+SSH do Pracovních a Týmových Prostředí Členů téže Organizace a správa jejího
+Conglomerate Hostu). Jejich běžný SSH a webový přístup do pracovních prostředí
+je samostatná věc.
 
 Privátní klíč zůstává na zdrojové mašině. Server má jmenovité SSH účty, přesné
 síťové granty a potřebné správní oprávnění. Povol jen schválené protokoly a
@@ -51,7 +57,7 @@ není vydaná, platí bod 7 „SSH na Mašiny v tailnetu“ root `AGENTS.md`
 
 ## Samostatnost a odpovědnost
 
-Úspěšné SSH není dokončený onboarding. Owner musí pod svým účtem:
+Úspěšné SSH není dokončený onboarding. Vlastník Organizace musí pod svým účtem:
 
 1. ověřit stav Headscale a načíst potřebnou konfiguraci;
 2. přistupovat k vlastnímu infrastrukturnímu repozitáři;
@@ -66,17 +72,19 @@ Nezávislá kontrola může vyžadovat oprávněného Kolegu, nesmí však stát
 údajích, které vlastní jen dodavatel. Popiš rozdíl mezi technickou závislostí a
 vědomě nastaveným schvalovacím procesem.
 
-Při odchodu Ownera, změně role nebo ztrátě zařízení odvolej síťové granty,
-klíče a podle možností aktivní relace. Uveď, zda je revokace automatická, nebo
-jde o ruční offboarding. Kontrola role při nasazení není průběžná kontrola
-každého SSH přihlášení; automatickou ochranu bez implementace netvrď.
+Při odchodu Vlastníka Organizace, změně role nebo ztrátě zařízení odvolej
+síťové granty, klíče a podle možností aktivní relace. Uveď, zda je revokace
+automatická, nebo jde o ruční offboarding. Kontrola role při nasazení není
+průběžná kontrola každého SSH přihlášení; automatickou ochranu bez
+implementace netvrď.
 
 ## Hranice a recovery
 
-Správa Conglomerate Hostu má dopad na všechny jeho tenanty. Owner jedné
+Správa Conglomerate Hostu má dopad na všechny jeho tenanty. Vlastník jedné
 Organizace nemá automaticky právo spravovat host dalších Organizací; schválení
-musí odpovídat vlastnictví a celé sdílené hranici hostu. Vlastník osobní VM tím
-nepředává oprávnění číst svůj Personalspace jinému Ownerovi ani uživateli.
+musí odpovídat vlastnictví a celé sdílené hranici hostu. Vlastník osobní VM
+tím nepředává oprávnění číst svůj Personalspace jinému Vlastníkovi Organizace
+ani uživateli.
 
 Plné ovládání osobního počítače z pracovní VM může umožnit nepřímé použití
 jeho správních přístupů. Síťový zákaz přímé cesty toto neřeší. Rozsah computer
@@ -91,8 +99,8 @@ následně promítni do autoritativního stavu a auditního záznamu.
 ## Evidence skutečného nasazení
 
 Deployment Repo vlastníka hostu eviduje schválené zdrojové mašiny, vazby na
-aktuální Ownery,
-verzi implementace, nasazovací důkaz a úspěšné i negativní testy. Test proveď
-z každého povoleného zdroje včetně skutečného SSH/sudo ověření. Nepovolené
-zdroje nesmějí navázat správní spojení. Diagram označí cílové a ověřené cesty.
-Obecný standard, plán, otevřený PR a živé nasazení jsou různé stavy.
+aktuální Vlastníky Organizace, verzi implementace, nasazovací důkaz a úspěšné
+i negativní testy. Test proveď z každého povoleného zdroje včetně skutečného
+SSH/sudo ověření. Nepovolené zdroje nesmějí navázat správní spojení. Diagram
+označí cílové a ověřené cesty. Obecný standard, plán, otevřený PR a živé
+nasazení jsou různé stavy.

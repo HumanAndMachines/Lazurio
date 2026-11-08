@@ -40,7 +40,7 @@ pohledy, bez DML, DDL, DMS zápisu a execute práv k zapisujícím procedurám.
 
 ## Discovery gate
 
-Organization owner jmenuje technického ownera ESO9 nebo implementačního
+Vlastník Organizace jmenuje technického ownera ESO9 nebo implementačního
 partnera. Ten před jakýmkoli prototypem nad živým endpointem metadata-only
 potvrdí:
 
@@ -66,7 +66,7 @@ nepatří.
 Bridge běží jako služba Služeb serveru (root rozhodnutí 0209 a jeho dodatky
 z 2026-10-19): v každých Službách serveru, jejichž Prostředí ho mají
 povolené, právě jedna nasazená instance ze stejného repozitáře a pinu.
-Instance je kontejner s limity a credentialem v custody Služeb serveru, do kterých vstupují jen Owneři a Admini
+Instance je kontejner s limity a credentialem v custody Služeb serveru, do kterých vstupují jen Vlastníci a Admini
 Organizace. Agenti v ostatních Prostředích téhož serveru na něj dosáhnou po
 vnitřní síti serveru, jen když jim to povolí Deployment Repo Organizace;
 povolené Prostředí ho uvidí v Integracích jako MCP server bez ručního
@@ -78,13 +78,13 @@ Task Agent v Prostředí -> MCP bridge ve Službách serveru -> HTTPS -> ESO9 AP
                                    |-> vlastní audit volajících   |-> ESO9 audit
 ```
 
-Vstup Služeb serveru sdělí bridge, ze kterého Prostředí požadavek přišel a komu
-je Prostředí přidělené. Bridge to zapisuje do vlastního auditu, protože ESO9
-vidí jen identitu bridge; je to záznam, ne oprávnění, a sdílené Prostředí
+Vstup Služeb serveru sdělí bridge, ze kterého Prostředí požadavek přišel a
+komu je Prostředí přidělené. Bridge to zapisuje do vlastního auditu, protože
+ESO9 vidí jen identitu bridge; je to záznam, ne oprávnění, a sdílené Prostředí
 (0192) může používat víc uživatelů. Vnější chatovací klient, například ChatGPT
 desktop, se k bridge nepřipojuje: uživatel přes něj chatuje s agenty ve svém
-Prostředí. Bridge nemá vlastní adresu; případnou stránku otevírají Owneři a
-Admini jen na localhostu v prohlížeči Služeb serveru.
+Prostředí. Bridge nemá vlastní adresu; případnou stránku otevírají Vlastníci a
+Admini Organizace jen na localhostu v prohlížeči Služeb serveru.
 
 Bridge má vlastní repozitář v productionspace Organizace, který sestaví jeho
 obraz s ověřeným původem; Deployment Repo obraz připne přesným otiskem. GitHub

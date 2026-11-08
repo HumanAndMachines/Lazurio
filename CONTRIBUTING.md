@@ -95,19 +95,18 @@ Otevřený PR je Draft — je vidět, dá se editovat a dá se zavřít. Během 
 práce je PR GitHub Draft; jakmile je práce hotová a ověřená, přepne ho agent
 na Ready for review sám, ještě před handoffem — Ready není Publikace
 (decisions 0103/0112 v manual/decision-register.md). Merge se řídí živými
-GitHub právy, ne textovým labelem role: chráněnou `main` merguje Organization
-Steward nebo Organization Admin (včetně vlastního PR, decision 0095);
-nechráněnou `main` mladého repozitáře smí publikovat i Builder, dokud ji
-Admin vědomě nezamkne (progresivní zamykání). Task Agent merguje jen na
-explicitní pokyn svého uživatele platný v aktuálním threadu; z týmového
+GitHub právy, ne textovým labelem role: chráněnou `main` merguje Správce
+modulu nebo Admin Organizace (včetně vlastního PR, decision 0095); nechráněnou
+`main` mladého repozitáře smí publikovat i Přispěvatel modulu, dokud ji Admin
+Organizace vědomě nezamkne (progresivní zamykání, 0232). Task Agent merguje
+jen na explicitní pokyn svého uživatele platný v aktuálním threadu; z týmového
 Environmentu nemerguje vůbec a pull request předá jmenovanému uživateli, který
-ho schválí, publikuje a odpovídá za něj (decision 0148, dodatek
-z 2026-10-05). Přímý push na
-`main` tohoto repa nemá nikdo kromě Admina. Otevřené PRs zachytává Nightly
-Steward PR Sweep, je-li pro repo aktivní; GitHub Draft PR bez aktivity delší
-než 48 hodin uvede v reportu jako stale draft vyžadující pozornost.
-Otevření PR nezakládá nárok na merge — nekvalitní nebo scope-cizí PR
-Steward zavře s vysvětlením.
+ho schválí, publikuje a odpovídá za něj (decision 0148, dodatek z 2026-10-05).
+Přímý push na `main` tohoto repa nemá nikdo kromě Admina Organizace. Otevřené
+PRs zachytává noční PR Sweep persony Organizace (Nightly Steward PR Sweep),
+je-li pro repo aktivní; GitHub Draft PR bez aktivity delší než 48 hodin uvede
+v reportu jako stale draft vyžadující pozornost. Otevření PR nezakládá nárok
+na merge — nekvalitní nebo scope-cizí PR Správce modulu zavře s vysvětlením.
 
 ## Jak se změna dostane k uživatelům
 

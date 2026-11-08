@@ -149,7 +149,7 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
     },
   });
   expect(guideEn.short_prompt).toContain(
-    "lazurio organization install <github-organization> --role builder --json",
+    "lazurio organization install <github-organization> --role module-contributor --json",
   );
   expect(guideEn.short_prompt).toContain("Prepare this Machine");
   expect(guideCs).toMatchObject({

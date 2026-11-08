@@ -1056,7 +1056,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "organization_port_pool_missing",
       `${context.company} nemá aktivní module_port_pool`,
-      "Organization Admin musí v Organization manifestu aktivovat stabilní module_port_pool.",
+      "Admin Organizace musí v Organization manifestu aktivovat stabilní module_port_pool.",
       context,
     );
   }
@@ -1273,7 +1273,7 @@ async function resolveModuleSetupContext(options) {
         throw new ModuleSetupActionRequired({
           code: "organization_port_pool_invalid",
           message: pool.issues.join("; "),
-          action: "Organization Admin musí opravit Organization manifest#module_port_pool.",
+          action: "Admin Organizace musí opravit Organization manifest#module_port_pool.",
           context: fallbackContext(options),
         });
       }
@@ -1314,7 +1314,7 @@ async function resolveModuleSetupContext(options) {
       message: context.slot.status === "planned_slot"
         ? `${context.slot.path} je stále planned_slot`
         : "Owning Organization nemá platný company.slug",
-      action: "Organization Admin musí reviewovaně aktivovat slot a Git souřadnice před Module setupem.",
+      action: "Admin Organizace musí reviewovaně aktivovat slot a Git souřadnice před Module setupem.",
       context,
     });
   }

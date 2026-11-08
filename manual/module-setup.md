@@ -133,7 +133,7 @@ Existující lease CLI nikdy nemění, ani uvnitř poolu, ani mimo něj. Lease m
 pool je nález standardu (`MS-01`) s navrženým volným portem poolu; přesun je
 ruční úprava manifestu v PR Modulu (kapitola níže).
 
-## Co musí připravit Organization Admin
+## Co musí připravit Admin Organizace
 
 `action_required` je očekávaný výsledek, když:
 
@@ -144,7 +144,7 @@ ruční úprava manifestu v PR Modulu (kapitola níže).
 - port už vlastní jiný Modul;
 - manifest nebo runtime mají cizí identitu či nejednoznačný custom stav.
 
-Admin opraví pouze owning Organization deklaraci a Agent příkaz zopakuje.
+Admin Organizace opraví pouze owning Organization deklaraci a Agent příkaz zopakuje.
 Stabilní porty jiných Modulů se kvůli pohodlnější alokaci neposouvají.
 
 ## Konformance se standardem (MS-01–MS-14)

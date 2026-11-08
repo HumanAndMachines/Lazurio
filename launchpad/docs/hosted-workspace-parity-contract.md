@@ -57,12 +57,12 @@ stabilní vstupy do dílny a modulový lifecycle nevlastní. Produkční aplikac
 projektuje jen z ověřeného deployment katalogu, nikdy z vývojového lifecycle
 stavu Workspace.
 
-Launchpad je jediný owner modulových procesů. Po vlastní readiness z Organization
-manifestů odvodí všechny workspace moduly exact Teamu a výchozí App každého z
-nich udržuje asynchronně. Chyba jednoho Modulu neblokuje ostatní. Na restartu
-začne každý Modul z `main`; Builder může pro aktuální Launchpad session přepnout
-Modul na exact Mission Control-owned worktree. Kliknutí se nepersistuje a hosted
-`Stop` je odmítnutý.
+Launchpad je jediný owner modulových procesů. Po vlastní readiness z
+Organization manifestů odvodí všechny workspace moduly exact Teamu a výchozí
+App každého z nich udržuje asynchronně. Chyba jednoho Modulu neblokuje
+ostatní. Na restartu začne každý Modul z `main`; Přispěvatel modulu může pro
+aktuální Launchpad session přepnout Modul na exact Mission Control-owned
+worktree. Kliknutí se nepersistuje a hosted `Stop` je odmítnutý.
 
 Hosted identitu tvoří pouze:
 

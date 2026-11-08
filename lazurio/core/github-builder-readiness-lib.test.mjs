@@ -5,6 +5,9 @@ import {
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
   observeGitHubRoleReadiness,
+  organizationInstallRoleIdentifier,
+  organizationInstallRoleLabel,
+  resolveOrganizationInstallRoleOption,
 } from "./github-builder-readiness-lib.mjs";
 import { hostedInstallSlotScope } from "../organization-install-lib.mjs";
 import { createHostedWorkspaceConfiguration } from "../runtime/hosted-app-url-lib.mjs";
@@ -540,4 +543,26 @@ test("Steward readiness follows the same effective WRITE rule without Team bindi
 
   expect(report.status).toBe("ready");
   expect(report.blockers).toEqual([]);
+});
+
+test("--role option values map the 0234 role identifiers to the deployed install roles", () => {
+  expect(resolveOrganizationInstallRoleOption("module-contributor"))
+    .toEqual({ role: "builder", option: "module-contributor", deprecated: false });
+  expect(resolveOrganizationInstallRoleOption("module-maintainer"))
+    .toEqual({ role: "steward", option: "module-maintainer", deprecated: false });
+  expect(resolveOrganizationInstallRoleOption("builder"))
+    .toEqual({ role: "builder", option: "module-contributor", deprecated: true });
+  expect(resolveOrganizationInstallRoleOption("steward"))
+    .toEqual({ role: "steward", option: "module-maintainer", deprecated: true });
+  for (const unknown of ["admin", "reader", "module-reader", "organization-admin", "Builder", "", null, undefined, "toString"]) {
+    expect(resolveOrganizationInstallRoleOption(unknown)).toBeNull();
+  }
+  // Every option resolves to a deployed value the manifests' required_roles and report v0 carry.
+  for (const option of ["module-contributor", "module-maintainer", "builder", "steward"]) {
+    expect(ORGANIZATION_INSTALL_ROLES).toContain(resolveOrganizationInstallRoleOption(option).role);
+  }
+  expect(organizationInstallRoleIdentifier("builder")).toBe("module-contributor");
+  expect(organizationInstallRoleIdentifier("steward")).toBe("module-maintainer");
+  expect(organizationInstallRoleLabel("builder")).toBe("Přispěvatel modulu");
+  expect(organizationInstallRoleLabel("steward")).toBe("Správce modulu");
 });

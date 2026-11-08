@@ -12,18 +12,18 @@ vložením nahraď `<github-organization>` přesným GitHub loginem Organizace.
 tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 
 <!-- lazurio-guide:organization-install-short:start -->
-> Připrav tuto Mašinu jako Lazurio Builder pro GitHub Organization
+> Připrav tuto Mašinu pro práci Přispěvatele modulu v GitHub Organization
 > `<github-organization>`. Nejdřív pouze čtením ověř platformu, aktuální účet,
-> Git stav a živá oprávnění. Organization owner musí ještě před instalací této
+> Git stav a živá oprávnění. Vlastník Organizace musí ještě před instalací této
 > Mašiny nainstalovat GitHub App **Lazurio for GitHub** pro **All repositories**
-> a dokončit jednorázovou aktivaci; jako Builder jeho `admin:org` kontrolu
-> neopakuj ani z její nedostupnosti neodvozuj stav App.
-> Před první Builder instalací musí Organization owner také nastavit
+> a dokončit jednorázovou aktivaci; jako Přispěvatel modulu jeho `admin:org`
+> kontrolu neopakuj ani z její nedostupnosti neodvozuj stav App.
+> Před první instalací Přispěvatele modulu musí Vlastník Organizace také nastavit
 > base repository permission `none`, ověřit Team `builders` a jeho aktivní členy,
 > udělit tomuto Teamu `WRITE` na canonical root a každý aktivní non-restricted
-> repo a neudělit Builderům přístup k `infra` ani jinému restricted repu.
-> Pokud live read-back tento stav nedokáže, instalaci nezačínej a vrať ownerovi
-> přesný chybějící member, Team nebo repository grant.
+> repo a neudělit Přispěvatelům modulů přístup k `infra` ani jinému restricted
+> repu. Pokud live read-back tento stav nedokáže, instalaci nezačínej a vrať
+> Vlastníkovi Organizace přesný chybějící member, Team nebo repository grant.
 >
 > Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js LTS,
 > Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů, použít k tomu
@@ -72,7 +72,7 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 >
 > Spusť konvergentně `lazurio install --json`,
 > `lazurio doctor --tool-updates --json`,
-> `lazurio organization install <github-organization> --role builder --json`
+> `lazurio organization install <github-organization> --role module-contributor --json`
 > a finální
 > `lazurio doctor`; všechny bezpečně opravitelné required nálezy v tomto
 > mandátu vyřeš a kontroly opakuj. Přístupy, secrets ani cizí Organizace
@@ -81,8 +81,9 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > nepřeskakuj: ukaž mi přesný rozpor a vyžádej moje rozhodnutí o navrhované
 > změně. Nakonec spusť Launchpad stejnou podporovanou cestou, ověř health
 > aktivních aplikací a předej matici `runtime ready` / `editing ready` /
-> `publishing ready`. `READ` nikdy nevydávej za Builder-ready `WRITE`; access
-> blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
+> `publishing ready`. `READ` nikdy nevydávej za `WRITE`, které Přispěvatel
+> modulu potřebuje; access blocker pojmenuj přesným účtem, Teamem
+> a repozitářem pro Vlastníka Organizace.
 <!-- lazurio-guide:organization-install-short:end -->
 
 ### Volitelný mandát pro upgrade; zápis Issues
@@ -131,10 +132,10 @@ membership/Teamů ani instalaci GitHub App mimo výslovně určenou Organizaci.
 
 Prvním konstitutivním krokem je instalace oficiální GitHub App
 **Lazurio for GitHub** do cílové GitHub Organization. Pro běžný onboarding
-Organization owner v GitHub installeru zvolí **All repositories**. Tím vznikne
+Vlastník Organizace v GitHub installeru zvolí **All repositories**. Tím vznikne
 provider-side vazba Organizace na Lazurio a budoucí repozitáře se nestanou
-skrytým partial-access stavem. Dokud App chybí, ownerova read-only kontrola
-vrací `github_app_installation_required` a vzdálená aktivace nesmí pokračovat.
+skrytým partial-access stavem. Dokud App chybí, read-only kontrola Vlastníka
+Organizace vrací `github_app_installation_required` a vzdálená aktivace nesmí pokračovat.
 
 `All repositories` je kanonický onboarding standard, ne druhý Lazurio ACL.
 GitHub dál zůstává jedinou autoritou přístupů. Vědomě omezená instalace
@@ -143,22 +144,22 @@ canonical Organization root a všechny repozitáře, které má Lazurio skutečn
 obsluhovat, a její partial access se nikdy nesmí vydávat za plný Organization
 scope.
 
-### Design System: Read pro každého člena Organizace
+### Design System: Read pro každého Člena Organizace
 
-Každý aktivní člen Organizace, včetně účtů jejích Prostředí Henry,
+Každý aktivní Člen Organizace, včetně účtů jejích Prostředí Henry,
 má mít alespoň GitHub **Read** ke všem organizačním i produktovým Design
 Systemům, které Organizace vlastní. Pravidlo musí být také v jejím vlastním
 `AGENTS.md`; při forku nebo synchronizaci zachovej příslušný blok z
 `OrganizationTemplate_GEN3`. Organization-scoped práce se tak neopírá jen
 o pravidla nadřazeného Lazurio rootu.
 
-Při vytvoření či vyčlenění Design System repa, přijetí člena a instalaci
+Při vytvoření či vyčlenění Design System repa, přijetí Člena Organizace a instalaci
 Environmentu porovnej aktivní GitHub členy včetně automatizovaných účtů se
-skutečným repo přístupem. Existující vyšší práva nesnižuj. Admin se schváleným
-mandátem doplní Read přes existující Teamy nebo scoped repo grant pro účty,
+skutečným repo přístupem. Existující vyšší práva nesnižuj. Admin Organizace se
+schváleným mandátem doplní Read přes existující Teamy nebo scoped repo grant pro účty,
 které Team nepokrývá, a znovu ověří efektivní oprávnění. Bez tohoto readbacku
 není onboarding nebo migrace dokončená; handoff jmenuje chybějící účet, repo
-a odpovědného Admina. Samotný úspěch installeru tento procesní gate nedokazuje.
+a odpovědného Admina Organizace. Samotný úspěch installeru tento procesní gate nedokazuje.
 
 Read není Write, veřejná viditelnost ani přístup jiné Organizace. Nevytvářej
 druhý ACL nebo automatický grant bez mandátu. Dosud nevytvořený `planned_slot`
@@ -166,21 +167,23 @@ neopravňuje k založení repa; kontrola jeho přístupu nastane při aktivaci.
 
 ### Access baseline před první Builder Mašinou
 
-Instalace App sama ještě nedokazuje, že nový Builder smí pracovat ve správných
-repech a současně nevidí restricted scope. Organization owner před první
-Builder instalací dokončí a read-only ověří jednu providerovou konfiguraci:
+Instalace App sama ještě nedokazuje, že nový Přispěvatel modulu smí pracovat
+ve správných repech a současně nevidí restricted scope. Vlastník Organizace
+před první instalací Přispěvatele modulu dokončí a read-only ověří jednu
+providerovou konfiguraci:
 
 1. Organization base repository permission / API
    `default_repository_permission` je `none`; samotné Organization membership
    neuděluje přístup k privátním repozitářům.
-2. Obecnou Builder roli vlastní GitHub Team `builders`. Zamýšlený Builder je
-   aktivní Organization member i aktivní člen Teamu, ne pending invitation.
+2. Roli Přispěvatel modulu dává na GitHubu Team `builders` (nasazený
+   identifikátor, rozhodnutí 0234). Zamýšlený Přispěvatel modulu je aktivní
+   Člen Organizace i aktivní člen Teamu, ne pending invitation.
 3. Team `builders` má user-facing **Write** (GitHub API `push`) na canonical
-   Organization rootu a každém aktivním non-restricted repu určeném Builderovi
-   verzovaným Organization manifestem.
-4. Team ani jednotliví Builders nemají Teamový nebo přímý grant na `infra` ani
-   jiný slot s `default_access: restricted` / `private`. Organization Adminův
-   přístup vycházející z admin role není Builder grant.
+   Organization rootu a každém aktivním non-restricted repu určeném
+   Přispěvateli modulu verzovaným Organization manifestem.
+4. Team ani jednotliví Přispěvatelé modulů nemají Teamový nebo přímý grant na
+   `infra` ani jiný slot s `default_access: restricted` / `private`. Přístup
+   Admina Organizace z jeho role na GitHubu není grant Přispěvatele modulu.
 
 GitHub nenabízí trvalý grant „všechna budoucí repo kromě `infra`“. Každý nový
 non-restricted repo proto dostane explicitní Team `builders` `WRITE` grant ve
@@ -188,7 +191,7 @@ stejném provisioning kroku, ve kterém se aktivuje v manifestu; restricted repo
 se nepřidá. Canonical read-back a přesné příkazy drží
 `manual/first-client-organization-rollout.md` §0a. Chybějící App scope, base
 permission jiné než `none`, neaktivní membership, READ místo WRITE nebo
-Builder grant na restricted repo blokují instalaci Mašiny. Lokální manifest ani
+grant Přispěvatele modulu na restricted repo blokují instalaci Mašiny. Lokální manifest ani
 Lazurio installer tento GitHub stav neopravují a nevytvářejí paralelní ACL.
 
 GitHub App sama nenahrazuje source Organizace. Použitelná Lazurio Organization
@@ -200,25 +203,25 @@ má současně:
 3. lokální mount vytvořený až konvergentním příkazem
    `lazurio organization install`.
 
-Po instalaci App ji **GitHub Organization owner** jednou ověří přes immutable
-GitHub Organization ID:
+Po instalaci App ji **Vlastník Organizace** na GitHubu jednou ověří přes
+immutable GitHub Organization ID:
 
 ```sh
 lazurio organization activate --check --github-id <immutable-id> --json
 ```
 
-Teprve ownerem pozorovaný výsledek `outcome: "active"`, odpovídající App
+Teprve Vlastníkem Organizace pozorovaný výsledek `outcome: "active"`, odpovídající App
 installation scope a validní root dokazují vzdálenou aktivaci. GitHub settings
 stránka nebo textový název Organizace samy nejsou důkaz.
 
-Tato aktivace je provider-side owner gate, ne krok na každé pracovní mašině.
-Builder ji neopakuje a nepotřebuje `admin:org`: installations endpoint je pro
+Tato aktivace je provider-side gate Vlastníka Organizace, ne krok na každé
+pracovní mašině. Přispěvatel modulu ji neopakuje a nepotřebuje `admin:org`: installations endpoint je pro
 něj záměrně nepozorovatelný a GitHub může hranici vrátit jako HTTP 403 i skryté
-404. Taková odpověď nedokazuje chybějící App ani rozbitý transport. Builder
-materializuje už aktivní Organizaci přes
-`lazurio organization install <github-login> --role builder`. Před klonem
-tím prokáže, že přihlášený účet má efektivní WRITE nebo vyšší oprávnění ke
-každému Builder repozitáři instalačního scope.
+404. Taková odpověď nedokazuje chybějící App ani rozbitý transport.
+Přispěvatel modulu materializuje už aktivní Organizaci přes
+`lazurio organization install <github-login> --role module-contributor`. Před
+klonem tím prokáže, že přihlášený účet má efektivní WRITE nebo vyšší oprávnění
+ke každému repozitáři instalačního scope své role.
 
 ## Předpoklady
 
@@ -226,11 +229,11 @@ každému Builder repozitáři instalačního scope.
 - Git, přesně pinovaný Bun, podporovaný Node.js a GitHub CLI jsou dostupné
   v `PATH` nového čistého procesu;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
-- Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
-- Organization owner už read-only ověřil base repository permission `none`,
+- Vlastník Organizace už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
+- Vlastník Organizace už read-only ověřil base repository permission `none`,
   aktivní členství v Teamu `builders`, jeho `WRITE` granty na všechny aktivní
-  non-restricted repozitáře a nulový Builder grant na `infra` i další
-  restricted repozitáře;
+  non-restricted repozitáře a nulový grant Přispěvatelů modulů na `infra`
+  i další restricted repozitáře;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
@@ -240,25 +243,29 @@ Příkaz je local-only. Nikdy nevytváří nebo nemění GitHub repo, GitHub App
 Team membership, branch rules, visibility, port ani commit. K založení remote
 Organization slouží oddělený explicitní activation postup.
 
-Role gate (`--role builder` i `--role steward`) rozhoduje stejně jako GitHub:
-role je připravená, když přihlášený účet má na každém repozitáři
-instalačního scope efektivní WRITE nebo vyšší (`GET /repos/{owner}/{repo}` →
-`permissions`). Jakou cestou přístup vznikl — kterýkoli Team, přímý
-collaborator nebo Organization role — gate nezkoumá; Team membership, Team
-granty ani `teams[].forge_binding` nejsou podmínkou. Neaktivní členství nebo
-odebraný grant se projeví chybějícím efektivním WRITE a gate blokuje; stejně
-blokuje neověřitelný účet, jiná identita root repa i každá neúspěšná provider
-observace. Scope tvoří Organization root a aktivní ordinary sloty určené dané
-roli; `planned_slot`, restricted/Admin-only sloty a sloty s malformed access
-deklarací se záměrně nezařazují a gate nad nimi neprovede žádné provider
-čtení. Na hostované Organization Mašině (`LAZURIO_WORKSPACE_PROFILE=hosted`)
-gate pokrývá jen to, co instalace pro Team Mašiny (`LAZURIO_TEAM_ID`)
-skutečně materializuje: root, jeho root sloty a Workspace Moduly, jejichž
-`teams` Team Mašiny obsahují, včetně jejich `workspace/<module>/db`; Moduly
-jiných Teamů ani productionspace ji neblokují. Hostovaná Mašina instaluje jen
-svou Organizaci (`LAZURIO_ORGANIZATION_SLUG` = `company.slug`) a Team, který
-manifest deklaruje; nevalidní konfigurace (`workspace_configuration_invalid`),
-cizí Organizace (`hosted_organization_mismatch`) nebo nedeklarovaný Team
+Role gate volí `--role module-contributor` pro Přispěvatele modulu nebo
+`--role module-maintainer` pro Správce modulu. Staré hodnoty `builder` a
+`steward` CLI přijímá jen jako zastaralé aliasy s varováním na stderr; report
+a `required_roles` manifestu dál nesou tyto nasazené hodnoty (rozhodnutí
+0234). Gate rozhoduje stejně jako GitHub: role je připravená, když přihlášený
+účet má na každém repozitáři instalačního scope efektivní WRITE nebo vyšší
+(`GET /repos/{owner}/{repo}` → `permissions`). Jakou cestou přístup vznikl —
+kterýkoli Team, přímý collaborator nebo Organization role — gate nezkoumá;
+Team membership, Team granty ani `teams[].forge_binding` nejsou podmínkou.
+Neaktivní členství nebo odebraný grant se projeví chybějícím efektivním WRITE
+a gate blokuje; stejně blokuje neověřitelný účet, jiná identita root repa i
+každá neúspěšná provider observace. Scope tvoří Organization root a aktivní
+ordinary sloty určené dané roli; `planned_slot`, restricted sloty jen pro
+Admina Organizace a sloty s malformed access deklarací se záměrně nezařazují a
+gate nad nimi neprovede žádné provider čtení. Na hostované Organization Mašině
+(`LAZURIO_WORKSPACE_PROFILE=hosted`) gate pokrývá jen to, co instalace pro
+Team Mašiny (`LAZURIO_TEAM_ID`) skutečně materializuje: root, jeho root sloty
+a Workspace Moduly, jejichž `teams` Team Mašiny obsahují, včetně jejich
+`workspace/<module>/db`; Moduly jiných Teamů ani productionspace ji neblokují.
+Hostovaná Mašina instaluje jen svou Organizaci (`LAZURIO_ORGANIZATION_SLUG` =
+`company.slug`) a Team, který manifest deklaruje; nevalidní konfigurace
+(`workspace_configuration_invalid`), cizí Organizace
+(`hosted_organization_mismatch`) nebo nedeklarovaný Team
 (`hosted_team_not_declared`) instalaci zablokují ještě před čtením repozitářů
 a před materializací rootu, s `--role` i bez něj.
 
@@ -589,7 +596,7 @@ Instalační prompt pro novou Builder Mašinu musí tuto hranici uvést výslovn
   svolení k této přesné změně přístupu;
 - po přihlášení nebo opravě klíče vždy ověř exact root pomocí `git ls-remote`
   a teprve potom spusť
-  `lazurio organization install <github-login> --role builder`.
+  `lazurio organization install <github-login> --role module-contributor`.
 
 Chce-li uživatel bez dalšího přerušení autorizovat SSH bootstrap, prompt má
 říct: „Pokud pro tento účet chybí použitelný SSH klíč, máš svolení vytvořit na
@@ -600,8 +607,8 @@ klíč nikdy nevypisuj ani nekopíruj mimo standardní SSH custody této Mašiny
 ## Konvergentní postup
 
 ```sh
-lazurio organization install <github-login> --role builder --json
-lazurio organization install <github-login> --role builder --json
+lazurio organization install <github-login> --role module-contributor --json
+lazurio organization install <github-login> --role module-contributor --json
 lazurio doctor
 ```
 
@@ -612,7 +619,7 @@ ověření, dokud současně neplatí:
 2. `lazurio doctor --tool-updates --json` nemá žádný required `fail`,
    `blocked` ani `incomplete`; chybějící nebo nečitelná verze povinného Gitu,
    GitHub CLI, Node.js či Codexu není warning, ale nedokončená instalace;
-3. `lazurio organization install <github-login> --role builder --json` je
+3. `lazurio organization install <github-login> --role module-contributor --json` je
    `current` nebo bezpečně `updated`, `access.status` je `ready` a exact SSH
    root probe prošel;
 4. finální `lazurio doctor` je zelený včetně všech deklarovaných podřízených
@@ -622,51 +629,51 @@ ověření, dokud současně neplatí:
 
 Organization manifest deklaruje u každého slotu `default_access` a
 `required_roles`. Slot s `default_access: restricted` (nebo `private`) je
-**restricted** — Admin-only scope. Klasifikace se čte výhradně z této
-deklarace, nikdy z názvu nebo cesty (`infra` není restricted proto, že se tak
-jmenuje). `expected`, `optional` i `role_based` jsou běžné sloty: Sync se o ně
-pokusí a chybějící GitHub grant vrátí pravdivě jako
+**restricted** — scope jen pro Admina Organizace. Klasifikace se čte výhradně
+z této deklarace, nikdy z názvu nebo cesty (`infra` není restricted proto, že
+se tak jmenuje). `expected`, `optional` i `role_based` jsou běžné sloty: Sync
+se o ně pokusí a chybějící GitHub grant vrátí pravdivě jako
 `materialization_source_unavailable`. Neznámý režim nebo malformed
 `required_roles` je fail-safe `access_classification_unknown`: nic se
-neklonuje, nic se na GitHubu nečte a Organization owner opraví manifest.
+neklonuje, nic se na GitHubu nečte a Vlastník Organizace opraví manifest.
 
 Tři cesty se liší jen v tom, co udělají s **absentním** restricted slotem:
 
 ```sh
 lazurio organization install <github-login> --json
-lazurio organization install <github-login> --role steward --json
-lazurio organization install <github-login> --role builder --json
+lazurio organization install <github-login> --role module-maintainer --json
+lazurio organization install <github-login> --role module-contributor --json
 ```
 
-- **Bez `--role`** je instalace explicitní Admin operace
+- **Bez `--role`** je instalace explicitní operace Admina Organizace
   (`scope.restricted_slots: "include"`): absentní restricted slot se
   materializuje stejně jako běžné.
-- **`--role steward` a `--role builder`** (`scope.restricted_slots: "exclude"`)
-  materializují jen běžné sloty a jejich descendants včetně podporovaných
-  aktivních `repository_db_mount` na `mission-control/db` nebo
-  `workspace/<module>/db`; deprecated `modules/<module>/db` se nematerializuje.
-  Restricted slot i každý slot pod
-  ním skončí ve výsledku jako `current` s reason `excluded_by_role_scope`:
-  nad nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`.
-  Tento stav je záměrný a odlišný od chybějícího grantu
+- **`--role module-maintainer` a `--role module-contributor`**
+  (`scope.restricted_slots: "exclude"`) materializují jen běžné sloty a jejich
+  descendants včetně podporovaných aktivních `repository_db_mount` na
+  `mission-control/db` nebo `workspace/<module>/db`; deprecated
+  `modules/<module>/db` se nematerializuje. Restricted slot i každý slot pod
+  ním skončí ve výsledku jako `current` s reason `excluded_by_role_scope`: nad
+  nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`. Tento
+  stav je záměrný a odlišný od chybějícího grantu
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Steward gate před klonem read-only ověří efektivní WRITE přihlášeného účtu
-  na Organization rootu a běžných slotech, jejichž `required_roles` jsou
+  Gate Správce modulu před klonem read-only ověří efektivní WRITE přihlášeného
+  účtu na Organization rootu a běžných slotech, jejichž `required_roles` jsou
   prázdné, `*` nebo jmenují `steward`; blokovaný gate vrátí
   `steward_access_not_ready` a nic nematerializuje.
 - **Běžný `lazurio update`** (`restricted_slot_policy: "defer"`) absentní
   restricted slot nikdy automaticky neklonuje a vrátí `current` s reason
   `restricted_not_materialized`. Už namountované restricted checkouty dál
-  aktualizuje jako každý jiný. Partial Steward instalace tedy zůstane stabilní
-  i po dalších Sync bězích; jediná cesta k restricted slotu je explicitní
-  Admin install výše.
+  aktualizuje jako každý jiný. Částečná instalace podle role tedy zůstane
+  stabilní i po dalších Sync bězích; jediná cesta k restricted slotu je
+  explicitní instalace Admina Organizace výše.
 - **Doctor** hlásí záměrně absentní restricted slot jako advisory
   `restricted_not_materialized` (severity `neutral`) s návodem na explicitní
-  Admin install. Chybějící povinná aplikace (`expected`) nebo povinný datový
+  instalaci Admina Organizace. Chybějící povinná aplikace (`expected`) nebo povinný datový
   mount zůstává required `fail`; malformed deklarace je blocking
   `access_classification_unknown`.
 
-Steward Agent po instalaci reportuje zvlášť: aplikace ready, data mount
+Agent Správce modulu po instalaci reportuje zvlášť: aplikace ready, data mount
 `repository_db_current`/`repository_db_materialized` a seznam
 `excluded_by_role_scope` slotů; vyloučený restricted slot nikdy nevydává za
 access blocker ani neřeší vyžádáním grantu.

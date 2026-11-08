@@ -39,7 +39,7 @@ ownership from a mutable GitHub login/email.
 ## Required integrated proof before activation
 
 - Correct owner over actual Code + PKCE, stock RP, HTTPS gateway and Launchpad.
-- Another owner, an Organization administrator without ownership, anonymous
+- Another owner, an Organization Admin without ownership, anonymous
   requests, forged identity headers, foreign audiences, expiry, native logout,
   unlink/relink and issuer outage all fail closed.
 - Requests do not cache a previous allow. Mutation origin/Fetch Metadata checks

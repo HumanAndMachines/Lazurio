@@ -1115,8 +1115,9 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role builder|steward] [--json]");
-  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role builder|steward] [--json] [--root");
+  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role module-contributor|module-maintainer] [--json]");
+  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role module-contributor|module-maintainer] [--json] [--root");
+  expect(help.stdout.toString()).toContain("builder a steward jsou zastaralé aliasy");
 
   const invalid = Bun.spawnSync([
     process.execPath,
@@ -1163,7 +1164,56 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(invalidRole.exitCode).toBe(2);
-  expect(invalidRole.stderr.toString()).toContain("--role podporuje pouze hodnoty builder a steward");
+  expect(invalidRole.stderr.toString()).toContain("--role podporuje pouze hodnoty module-contributor a module-maintainer");
+});
+
+// Decision 0234: `--role` takes the role identifiers; `builder` and `steward`
+// stay deprecated aliases with a warning on stderr. The report keeps the
+// deployed values. Without gh on PATH the install blocks before any provider
+// call or materialization, so the CLI runs without side effects.
+test("CLI --role takes the 0234 identifiers and keeps builder and steward as deprecated aliases", async () => {
+  const home = await mkdtemp(join(tmpdir(), "lazurio-install-role-option-"));
+  roots.push(home);
+  const emptyBin = join(home, "bin");
+  await mkdir(emptyBin);
+  const runInstall = (role) => Bun.spawnSync([
+    process.execPath,
+    "lazurio/cli.mjs",
+    "organization",
+    "install",
+    login,
+    "--role",
+    role,
+    "--json",
+  ], {
+    cwd: join(import.meta.dirname, ".."),
+    env: { HOME: home, PATH: emptyBin },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  for (const [option, deployed, alias] of [
+    ["module-contributor", "builder", null],
+    ["module-maintainer", "steward", null],
+    ["builder", "builder", "module-contributor"],
+    ["steward", "steward", "module-maintainer"],
+  ]) {
+    const result = runInstall(option);
+    const report = JSON.parse(result.stdout.toString());
+    expect(result.exitCode).toBe(1);
+    expect(report).toMatchObject({
+      state: "blocked",
+      access: { role: deployed, status: "blocked" },
+      scope: { role: deployed, restricted_slots: "exclude" },
+      target: { reason: "github_cli_unavailable" },
+    });
+    const stderr = result.stderr.toString();
+    if (alias) {
+      expect(stderr).toContain(`--role ${option} je zastaralý alias; použijte --role ${alias}`);
+    } else {
+      expect(stderr).not.toContain("zastaralý alias");
+    }
+  }
 });
 
 test("Builder role blocks before materialization when provider observation did not prove readiness", async () => {

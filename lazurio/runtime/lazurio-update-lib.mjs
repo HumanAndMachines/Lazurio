@@ -2206,14 +2206,14 @@ function restrictedSlotMaterializationResult({
     return currentResult(
       repo,
       "excluded_by_role_scope",
-      `Restricted slot${ancestorNote} je záměrně mimo scope role-scoped Organization instalace; žádná GitHub operace nad ním neproběhla. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+      `Restricted slot${ancestorNote} je záměrně mimo scope role-scoped Organization instalace; žádná GitHub operace nad ním neproběhla. Materializaci provede jen Admin Organizace explicitním \`lazurio organization install <login>\` bez --role.`,
       { materialization_scope: "excluded_by_role_scope" },
     );
   }
   return currentResult(
     repo,
     "restricted_not_materialized",
-    `Restricted slot${ancestorNote} není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+    `Restricted slot${ancestorNote} není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen Admin Organizace explicitním \`lazurio organization install <login>\` bez --role.`,
     { materialization_scope: "restricted_deferred" },
   );
 }

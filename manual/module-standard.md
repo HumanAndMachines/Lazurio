@@ -633,11 +633,12 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 ## 8. Generace App a úklid
 
 - Modul drží nejvýše **dvě generace App**: výchozí a jednu další — buď
-  předchozí (ponechanou pro návrat), nebo kandidátní novější, která ještě
-  není výchozí (migrační okno, např. `v2` výchozí a `v3` nad repository-db).
-  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo uživatele,
-  ne oprava konformance. Starší generace (Firebase éra `app/v1`, nepoužívané
-  `v2`) se mažou; Git historie zůstává. Rozhodnutí Matěje 2026-09-30.
+  předchozí (ponechanou pro návrat), nebo kandidátní novější, která ještě není
+  výchozí (migrační okno, např. `v2` výchozí a `v3` nad repository-db).
+  Přepnutí `default_app` na kandidáta je rozhodnutí Správce modulu nebo
+  uživatele, ne oprava konformance. Starší generace (Firebase éra `app/v1`,
+  nepoužívané `v2`) se mažou; Git historie zůstává. Rozhodnutí Matěje
+  2026-09-30.
 - `apps[]` odpovídá adresářům: package bez deklarace v `apps[]` v repu není.
 - Když se adresář App přesouvá (např. `app/` → `app/v1/`) nebo se maže
   generace, zůstanou na existujících checkoutech staré build výstupy
@@ -734,13 +735,14 @@ uspávání.
 Norma platí jen v GEN4: Lazurio Module Standard v LazurioPlatform, oddíl
 [Who came and with which role](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/module-standard.md#who-came-and-with-which-role),
 podle rozhodnutí 0231 v rejstříku LazurioPlatform. Platí stejně pro Moduly,
-které spouští Launchpad tohoto repa na Prostředí na serveru, protože
-tvrzení nastavuje brána Prostředí, ne Launchpad. Ve zkratce: App se dozví, kdo
-přišel a s jakou rolí aplikace (admin aplikace, nebo uživatel aplikace), jen
-přes `appAccess` z `@lazurio/module-kit` (od `v0.3.0`), u každého požadavku
-a roli vynucuje na serveru. Na počítači uživatele vrací vždy místní provoz
-(`entry: "local"`) bez jména. Odpověď není klíč k datům, nic nepodepisuje
-a nemění úroveň přístupu.
+které spouští Launchpad tohoto repa na Prostředí na serveru, protože tvrzení
+nastavuje brána Prostředí, ne Launchpad. Ve zkratce: App se dozví, kdo přišel
+a s jakou rolí aplikace (Admin aplikace, nebo Uživatel aplikace; názvy podle
+rozhodnutí 0234, nasazené hodnoty `appRole: "admin"` a `"user"`), jen přes
+`appAccess` z `@lazurio/module-kit` (od `v0.3.0`), u každého požadavku a roli
+vynucuje na serveru. Na počítači uživatele vrací vždy místní provoz
+(`entry: "local"`) bez jména. Odpověď není klíč k datům, nic nepodepisuje a
+nemění úroveň přístupu.
 
 **Stav: rozhodnuto, zatím nedostupné.** Kontrakt začne platit na Prostředí, až
 vyjde `@lazurio/module-kit` 0.3.0 a Prostředí dostane vydání brány
@@ -792,18 +794,18 @@ v `required_module_slots`, jinak usne.
 ## 12. Migrace (W0–W3)
 
 Program drží Mission Control plán DEV-6634 (privátní; jmenuje konkrétní
-Organizace). Pořadí určil Matěj: pilot = Organizace maintainerů
+Organizace). Pořadí určil Matěj: pilot = Organizace vývojářů Lazuria
 (HumanAndMachine-ai) + největší klientská Organizace → Organizace
 s hostovanými Environmenty → ostatní.
 
 - **W0 kontrakt**: tento manuál, decision 0171, `lazurio-preparation.schema.json`, konformance v `lazurio module setup`, `Lazurio/module-kit` v0.1, root doctor pool disjunktnosti.
-- **W1 pilot**: Organizace maintainerů (14 Modulů, už kanonická) a největší klientská Organizace (20 Modulů): per-Modul PR (jeden Modul = jeden PR = jeden worktree), Organization PR (manifest reconciliation, pooly, org-level repa), ověření startem přes Platform Launchpad na Environmentu.
+- **W1 pilot**: Organizace vývojářů Lazuria (14 Modulů, už kanonická) a největší klientská Organizace (20 Modulů): per-Modul PR (jeden Modul = jeden PR = jeden worktree), Organization PR (manifest reconciliation, pooly, org-level repa), ověření startem přes Platform Launchpad na Environmentu.
 - **Forky šablon** (decision 0174): repozitář založený ze šablony má povolené
   merge commity a synchronizace šablony je PR, jehož head má přesný commit
   šablony jako předka (repozitář bez sdílené historie ji nejdřív naimportuje
   merge s `--allow-unrelated-histories`); slučuje se merge commitem. Squash,
   rebase nebo merge commit nad pouhou kopií souborů návaznost nevytvoří.
-- **W2 zbytek**: šablonové změny (KB 14×, MC 14×) jako jedna změna replikovaná; per-Organization PR pro Stewardy; migrace manifestů `lazurio migrate organization-manifest`.
+- **W2 zbytek**: šablonové změny (KB 14×, MC 14×) jako jedna změna replikovaná; per-Organization PR pro Správce modulů; migrace manifestů `lazurio migrate organization-manifest`.
 - **W3 cutover**: Platforma odstraní legacy env pár, zapne `module-nonconformant`; decision 0171 dostane datum cutoveru.
 
 - **W4 nový Modul podle standardu** (kap. 13): scaffold v Core, založení
@@ -837,16 +839,16 @@ repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
    v Core (`lazurio/templates/module/<stack>/`), ne v Organizaci;
    Organization Template i Dashboard jsou jen konzumenti
    (`manual/module-create.md`).
-2. **Založení repa a slotu z Dashboardu** — tlačítko „Nový Modul" v
-   Dashboardu (Organization Admin): vybere Organizaci, slug, stack, Team(y);
-   Dashboard přes GitHub App založí privátní repo `<Org>/<slug>` s výchozí
-   ochranou `main`, naplní ho scaffoldem (stejný Core kód, stejná šablona), a
-   otevře PR do root repa Organizace, který přidá slot do
-   `modules.manifest.json` (Team, `ui_exposure`, `repository_db_mount` je-li
-   datový). Po merge `lazurio update` Modul materializuje na každém
-   Environmentu; Launchpad ho ukáže bez ručního linkování. Navazuje na plán
-   DEV-6514 (Admin zakládá Moduly jen přes Dashboard a GitHub); GitHub zůstává
-   jedinou autoritou přístupů, Dashboard nevede druhý roster.
+2. **Založení repa a slotu z Dashboardu** — tlačítko „Nový Modul" v Dashboardu
+   (Admin Organizace): vybere Organizaci, slug, stack, Team(y); Dashboard přes
+   GitHub App založí privátní repo `<Org>/<slug>` s výchozí ochranou `main`,
+   naplní ho scaffoldem (stejný Core kód, stejná šablona), a otevře PR do root
+   repa Organizace, který přidá slot do `modules.manifest.json` (Team,
+   `ui_exposure`, `repository_db_mount` je-li datový). Po merge
+   `lazurio update` Modul materializuje na každém Environmentu; Launchpad ho
+   ukáže bez ručního linkování. Navazuje na plán DEV-6514 (Admin Organizace
+   zakládá Moduly jen přes Dashboard a GitHub); GitHub zůstává jedinou
+   autoritou přístupů, Dashboard nevede druhý roster.
 3. **Agenti** — root `AGENTS.md` odkazuje na tento standard; skill
    `.agents/skills/lazurio-module-standard/SKILL.md` říká, jak Modul založit,
    převést a ověřit; Knowledgebase (`lazurio-ai` namespace) drží syntézu „proč

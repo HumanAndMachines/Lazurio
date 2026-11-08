@@ -635,7 +635,7 @@ test("a cancel while the key is being created stops before anything reaches GitH
   expect(machine.state.flows).toHaveLength(0);
 });
 
-test("organization install runs the existing CLI with the builder role and stays off personal Machines", async () => {
+test("organization install runs the existing CLI with the Module Contributor role and stays off personal Machines", async () => {
   const machine = fakeMachine({ signedIn: true, keysOnGitHub: [publicKey] });
   const { controller } = await controllerFor(machine, { cliCommand: ["/usr/bin/bun", "/opt/lazurio/lazurio/cli.mjs"], cliCwd: "/home/anna/Lazurio" });
   // The server re-runs the readiness gate: no install before SSH works.
@@ -646,7 +646,7 @@ test("organization install runs the existing CLI with the builder role and stays
   expect(notReady.state.calls.some(([name]) => name === "bun")).toBe(false);
   const result = await controller.organizationInstall({ organization: "ExampleOrg" });
   expect(result.report.state).toBe("updated");
-  expect(machine.state.calls.at(-1)).toEqual(["bun", "/opt/lazurio/lazurio/cli.mjs", "organization", "install", "ExampleOrg", "--role", "builder", "--json"]);
+  expect(machine.state.calls.at(-1)).toEqual(["bun", "/opt/lazurio/lazurio/cli.mjs", "organization", "install", "ExampleOrg", "--role", "module-contributor", "--json"]);
   await expect(controller.organizationInstall({ organization: "../evil" })).rejects.toMatchObject({ code: "organization_login_invalid" });
 
   // A hosted Organization Machine installs only the Organization whose root declares its slug.

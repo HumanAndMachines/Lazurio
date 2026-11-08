@@ -14,20 +14,20 @@ subsequent chapters of this runbook; the short prompt neither replaces nor
 extends it.
 
 <!-- lazurio-guide:organization-install-short:start -->
-> Prepare this Machine as a Lazurio Builder for the GitHub Organization
-> `<github-organization>`. First, using read-only checks, verify the platform,
-> the current account, the Git state, and live permissions. Before this Machine
-> is installed, the Organization owner must install the GitHub App
-> **Lazurio for GitHub** for **All repositories** and complete the one-time
-> activation; as a Builder, do not repeat their `admin:org` check and do not
-> infer the App state from its unavailability.
-> Before the first Builder installation, the Organization owner must also
-> set base repository permission `none`, verify the Team `builders` and its active
-> members, grant that Team `WRITE` on the canonical root and every active
-> non-restricted repo, and grant Builders no access to `infra` or any other
-> restricted repo. If live read-back cannot prove that state, do not begin the
-> installation; return the exact missing member, Team, or repository grant to
-> the owner.
+> Prepare this Machine for a Module Contributor's work in the GitHub
+> Organization `<github-organization>`. First, using read-only checks, verify
+> the platform, the current account, the Git state, and live permissions.
+> Before this Machine is installed, the Organization Owner must install the
+> GitHub App **Lazurio for GitHub** for **All repositories** and complete the
+> one-time activation; as a Module Contributor, do not repeat their `admin:org`
+> check and do not infer the App state from its unavailability.
+> Before the first Module Contributor installation, the Organization Owner must
+> also set base repository permission `none`, verify the Team `builders` and its
+> active members, grant that Team `WRITE` on the canonical root and every active
+> non-restricted repo, and grant Module Contributors no access to `infra` or any
+> other restricted repo. If live read-back cannot prove that state, do not begin
+> the installation; return the exact missing member, Team, or repository grant
+> to the Organization Owner.
 >
 > You have my explicit permission to install any missing Git, GitHub CLI,
 > Node.js LTS, Codex CLI, and the exactly versioned Bun from their official
@@ -78,7 +78,7 @@ extends it.
 >
 > Run convergently `lazurio install --json`,
 > `lazurio doctor --tool-updates --json`,
-> `lazurio organization install <github-organization> --role builder --json`
+> `lazurio organization install <github-organization> --role module-contributor --json`
 > and the final
 > `lazurio doctor`; resolve all safely fixable required findings within this
 > mandate and repeat the checks. Do not change access, secrets, or foreign
@@ -88,9 +88,9 @@ extends it.
 > exact discrepancy and request my decision on the proposed change. Finally,
 > start the Launchpad through the same supported path, verify the health of the
 > active applications, and hand over the `runtime ready` / `editing ready` /
-> `publishing ready` matrix. Never present `READ` as Builder-ready `WRITE`;
-> name any access blocker by the exact account, Team, and repository for the
-> Organization owner.
+> `publishing ready` matrix. Never present `READ` as the `WRITE` a Module
+> Contributor needs; name any access blocker by the exact account, Team, and
+> repository for the Organization Owner.
 <!-- lazurio-guide:organization-install-short:end -->
 
 ### Optional mandate for upgrades; filing Issues
@@ -141,12 +141,12 @@ explicitly named Organization.
 
 ## What turns a GitHub Organization into a Lazurio Organization
 
-The first constitutive step is installing the official GitHub App
-**Lazurio for GitHub** into the target GitHub Organization. For regular
-onboarding, the Organization owner selects **All repositories** in the GitHub
-installer. This creates the provider-side binding of the Organization to
-Lazurio, and future repositories do not end up in a hidden partial-access
-state. As long as the App is missing, the owner's read-only check returns
+The first constitutive step is installing the official GitHub App **Lazurio
+for GitHub** into the target GitHub Organization. For regular onboarding, the
+Organization Owner selects **All repositories** in the GitHub installer. This
+creates the provider-side binding of the Organization to Lazurio, and future
+repositories do not end up in a hidden partial-access state. As long as the
+App is missing, the Organization Owner's read-only check returns
 `github_app_installation_required` and remote activation must not proceed.
 
 `All repositories` is the canonical onboarding standard, not a second Lazurio
@@ -156,23 +156,24 @@ must include the canonical Organization root and all repositories that Lazurio
 is actually meant to serve, and its partial access must never be presented as
 the full Organization scope.
 
-### Design System: Read for every Organization member
+### Design System: Read for every Organization Member
 
-Every active Organization member, including accounts used by Automated
+Every active Organization Member, including accounts used by Automated
 Environments, must have at least GitHub **Read** access to every Organization
 and product Design System owned by that Organization. The rule must also live
 in its own `AGENTS.md`; preserve the corresponding block from
 `OrganizationTemplate_GEN3` when forking or synchronizing it. Organization-scoped
 work must not depend only on instructions in the enclosing Lazurio root.
 
-When creating or extracting a Design System repository, onboarding a member,
-or installing an Environment, compare active GitHub members, including
-automated accounts, against effective repository access. Preserve existing
-stronger permissions. An Admin with the approved mandate supplies Read through
-existing Teams or a scoped repository grant for accounts not covered by a Team,
-then verifies effective permissions again. Without this readback, onboarding or
-migration is incomplete; the handoff names the missing account, repository, and
-responsible Admin. Installer success alone does not prove this process gate.
+When creating or extracting a Design System repository, onboarding an
+Organization Member, or installing an Environment, compare active GitHub
+members, including automated accounts, against effective repository access.
+Preserve existing stronger permissions. An Organization Admin with the
+approved mandate supplies Read through existing Teams or a scoped repository
+grant for accounts not covered by a Team, then verifies effective permissions
+again. Without this readback, onboarding or migration is incomplete; the
+handoff names the missing account, repository, and responsible Organization
+Admin. Installer success alone does not prove this process gate.
 
 Read does not imply Write, public visibility, or another Organization's access.
 Do not create a second ACL or an automatic grant without a mandate. An uncreated
@@ -181,23 +182,25 @@ slot is activated.
 
 ### Access baseline before the first Builder Machine
 
-Installing the App alone does not prove that a new Builder can work in the
-right repositories while remaining outside restricted scope. Before the first
-Builder installation, the Organization owner completes and read-only verifies
-one provider configuration:
+Installing the App alone does not prove that a new Module Contributor can work
+in the right repositories while remaining outside restricted scope. Before the
+first Module Contributor installation, the Organization Owner completes and
+read-only verifies one provider configuration:
 
 1. The Organization base repository permission / API
    `default_repository_permission` is `none`; Organization membership alone
    grants no access to private repositories.
-2. The GitHub Team `builders` owns the general Builder role. The intended
-   Builder is an active Organization member and an active Team member, not a
-   pending invitation.
+2. The Module Contributor role is granted on GitHub by the Team `builders` (a
+   deployed identifier, decision 0234). The intended Module Contributor is an
+   active Organization Member and an active Team member, not a pending
+   invitation.
 3. The Team `builders` has user-facing **Write** (GitHub API `push`) on the
    canonical Organization root and every active non-restricted repository
-   assigned to Builders by the versioned Organization manifest.
-4. Neither the Team nor individual Builders have a Team or direct grant on
-   `infra` or any other slot with `default_access: restricted` / `private`.
-   An Organization Admin's access from the admin role is not a Builder grant.
+   assigned to Module Contributors by the versioned Organization manifest.
+4. Neither the Team nor individual Module Contributors have a Team or direct
+   grant on `infra` or any other slot with `default_access: restricted` /
+   `private`. An Organization Admin's access from their GitHub role is not a
+   Module Contributor grant.
 
 GitHub offers no persistent “all future repositories except `infra`” grant.
 Every new non-restricted repository therefore receives an explicit Team
@@ -206,7 +209,8 @@ the manifest; a restricted repository is not added. The canonical read-back
 and exact commands live in
 `manual/first-client-organization-rollout.md` §0a. A missing App scope, a base
 permission other than `none`, inactive membership, READ instead of WRITE, or a
-Builder grant on a restricted repository blocks Machine installation. The
+Module Contributor grant on a restricted repository blocks Machine
+installation. The
 local manifest and Lazurio installer neither repair this GitHub state nor
 create a parallel ACL.
 
@@ -219,27 +223,28 @@ Lazurio Organization has all of the following at once:
 3. a local mount created only by the convergent command
    `lazurio organization install`.
 
-After installing the App, the **GitHub Organization owner** verifies it once
+After installing the App, the **Organization Owner** on GitHub verifies it once
 via the immutable GitHub Organization ID:
 
 ```sh
 lazurio organization activate --check --github-id <immutable-id> --json
 ```
 
-Only the owner-observed result `outcome: "active"`, a matching App
-installation scope, and a valid root prove remote activation. The GitHub
+Only the Organization Owner-observed result `outcome: "active"`, a matching
+App installation scope, and a valid root prove remote activation. The GitHub
 settings page or the textual name of the Organization are not proof on their
 own.
 
-This activation is a provider-side owner gate, not a step on every working
-machine. The Builder does not repeat it and does not need `admin:org`: the
+This activation is a provider-side Organization Owner gate, not a step on every
+working machine. The Module Contributor does not repeat it and does not need
+`admin:org`: the
 installations endpoint is deliberately unobservable for them, and GitHub may
 return the boundary as HTTP 403 or even a hidden 404. Such a response proves
-neither a missing App nor a broken transport. The Builder materializes the
-already active Organization via
-`lazurio organization install <github-login> --role builder`. Before cloning,
-this proves that the signed-in account has effective WRITE or higher
-permission on every Builder repository in the install scope.
+neither a missing App nor a broken transport. The Module Contributor
+materializes the already active Organization via
+`lazurio organization install <github-login> --role module-contributor`. Before
+cloning, this proves that the signed-in account has effective WRITE or higher
+permission on every repository in the install scope of their role.
 
 ## Prerequisites
 
@@ -247,12 +252,12 @@ permission on every Builder repository in the install scope.
 - Git, the exactly pinned Bun, a supported Node.js, and the GitHub CLI are
   available in the `PATH` of a new clean process;
 - `gh auth status --hostname github.com` confirms the correct account;
-- the Organization owner has already completed the one-time activation of
+- the Organization Owner has already completed the one-time activation of
   `Lazurio for GitHub`;
-- the Organization owner has already read-only verified base repository
+- the Organization Owner has already read-only verified base repository
   permission `none`, active Team `builders` membership, its `WRITE` grants on
-  all active non-restricted repositories, and no Builder grant on `infra` or
-  any other restricted repository;
+  all active non-restricted repositories, and no Module Contributor grant on
+  `infra` or any other restricted repository;
 - the canonical Lazurio Root `<home>/Lazurio` has already gone through
   `lazurio install` and has a real `organizations/` folder;
 - the Organization root repo `<login>/<login>_GEN3` exists on `main`, contains
@@ -263,25 +268,30 @@ App grant, Team membership, branch rules, visibility, a port, or a commit. A
 separate explicit activation procedure serves to establish a remote
 Organization.
 
-The role gate (`--role builder` and `--role steward`) decides exactly like
-GitHub: the role is ready when the signed-in account has effective WRITE or
-higher on every repository in the install scope (`GET /repos/{owner}/{repo}`
-→ `permissions`). How that access was granted — any Team, a direct
-collaborator, or an Organization role — is not examined; Team membership, Team
-grants, and `teams[].forge_binding` are not conditions. An inactive membership
-or a revoked grant shows up as missing effective WRITE and the gate blocks; it
-also blocks on an unverifiable account, a different root repository identity,
-and every failed provider observation. The scope is the Organization root and
-the active ordinary slots assigned to the given role; `planned_slot`,
-restricted/Admin-only slots, and slots with a malformed access declaration are
-deliberately not included, and the gate performs no provider read over them.
-On a hosted Organization Machine (`LAZURIO_WORKSPACE_PROFILE=hosted`) the gate
-covers only what the install actually materializes for the Machine's Team
-(`LAZURIO_TEAM_ID`): the root, its root slots, and the Workspace Modules whose
-`teams` include the Machine's Team, including their `workspace/<module>/db`;
-other Teams' Modules and productionspace do not block it. A hosted Machine
-installs only its own Organization (`LAZURIO_ORGANIZATION_SLUG` =
-`company.slug`) and a Team the manifest declares; an invalid configuration
+The role gate takes `--role module-contributor` for a Module Contributor or
+`--role module-maintainer` for a Module Maintainer. The CLI accepts the old
+values `builder` and `steward` only as deprecated aliases with a warning on
+stderr; the report and the manifest's `required_roles` keep carrying these
+deployed values (decision 0234). The gate decides exactly like GitHub: the
+role is ready when the signed-in account has effective WRITE or higher on
+every repository in the install scope (`GET /repos/{owner}/{repo}` →
+`permissions`). How that access was granted — any Team, a direct collaborator,
+or an Organization role — is not examined; Team membership, Team grants, and
+`teams[].forge_binding` are not conditions. An inactive membership or a
+revoked grant shows up as missing effective WRITE and the gate blocks; it also
+blocks on an unverifiable account, a different root repository identity, and
+every failed provider observation. The scope is the Organization root and the
+active ordinary slots assigned to the given role; `planned_slot`, restricted
+slots for the Organization Admin only, and slots with a malformed access
+declaration are deliberately not included, and the gate performs no provider
+read over them. On a hosted Organization Machine
+(`LAZURIO_WORKSPACE_PROFILE=hosted`) the gate covers only what the install
+actually materializes for the Machine's Team (`LAZURIO_TEAM_ID`): the root,
+its root slots, and the Workspace Modules whose `teams` include the Machine's
+Team, including their `workspace/<module>/db`; other Teams' Modules and
+productionspace do not block it. A hosted Machine installs only its own
+Organization (`LAZURIO_ORGANIZATION_SLUG` = `company.slug`) and a Team the
+manifest declares; an invalid configuration
 (`workspace_configuration_invalid`), a foreign Organization
 (`hosted_organization_mismatch`), or an undeclared Team
 (`hosted_team_not_declared`) blocks the install before any repository read and
@@ -641,7 +651,7 @@ explicitly:
   contains explicit permission for this exact access change;
 - after login or key repair, always verify the exact root using
   `git ls-remote`, and only then run
-  `lazurio organization install <github-login> --role builder`.
+  `lazurio organization install <github-login> --role module-contributor`.
 
 If the user wants to authorize the SSH bootstrap without further
 interruption, the prompt should say: "If no usable SSH key exists for this
@@ -653,8 +663,8 @@ or copy it outside this Machine's standard SSH custody."
 ## Convergent procedure
 
 ```sh
-lazurio organization install <github-login> --role builder --json
-lazurio organization install <github-login> --role builder --json
+lazurio organization install <github-login> --role module-contributor --json
+lazurio organization install <github-login> --role module-contributor --json
 lazurio doctor
 ```
 
@@ -667,7 +677,7 @@ the same time:
    or `incomplete`; a missing or unreadable version of the mandatory Git,
    GitHub CLI, Node.js, or Codex is not a warning but an incomplete
    installation;
-3. `lazurio organization install <github-login> --role builder --json` is
+3. `lazurio organization install <github-login> --role module-contributor --json` is
    `current` or safely `updated`, `access.status` is `ready`, and the exact
    SSH root probe passed;
 4. the final `lazurio doctor` is green, including all declared subordinate
@@ -677,51 +687,52 @@ the same time:
 
 The Organization manifest declares `default_access` and `required_roles` for
 every slot. A slot with `default_access: restricted` (or `private`) is
-**restricted** — Admin-only scope. The classification is read only from this
+**restricted** — scope for the Organization Admin only. The classification is read only from this
 declaration, never from a name or path (`infra` is not restricted because of
 its name). `expected`, `optional`, and `role_based` are ordinary slots: Sync
 attempts them and a missing GitHub grant is reported truthfully as
 `materialization_source_unavailable`. An unknown mode or malformed
 `required_roles` is the fail-safe `access_classification_unknown`: nothing is
-cloned, nothing is read from GitHub, and the Organization owner fixes the
+cloned, nothing is read from GitHub, and the Organization Owner fixes the
 manifest.
 
 The three paths differ only in what they do with an **absent** restricted slot:
 
 ```sh
 lazurio organization install <github-login> --json
-lazurio organization install <github-login> --role steward --json
-lazurio organization install <github-login> --role builder --json
+lazurio organization install <github-login> --role module-maintainer --json
+lazurio organization install <github-login> --role module-contributor --json
 ```
 
-- **Without `--role`** the installation is an explicit Admin operation
-  (`scope.restricted_slots: "include"`): an absent restricted slot is
-  materialized like an ordinary one.
-- **`--role steward` and `--role builder`**
+- **Without `--role`** the installation is an explicit Organization Admin
+  operation (`scope.restricted_slots: "include"`): an absent restricted slot
+  is materialized like an ordinary one.
+- **`--role module-maintainer` and `--role module-contributor`**
   (`scope.restricted_slots: "exclude"`) materialize only ordinary slots and
   their descendants, including supported active `repository_db_mount` slots at
   `mission-control/db` or `workspace/<module>/db`; deprecated
-  `modules/<module>/db` is not materialized. The restricted slot and every slot below it end up in the result as `current`
-  with reason `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
+  `modules/<module>/db` is not materialized. The restricted slot and every
+  slot below it end up in the result as `current` with reason
+  `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
   runs over them. This state is intentional and distinct from a missing grant
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Before cloning, the Steward gate verifies read-only the signed-in account's
-  effective WRITE on the Organization root and the ordinary slots whose
-  `required_roles` are empty, `*`, or name `steward`; a blocked gate returns
-  `steward_access_not_ready` and materializes nothing.
+  Before cloning, the Module Maintainer gate verifies read-only the signed-in
+  account's effective WRITE on the Organization root and the ordinary slots
+  whose `required_roles` are empty, `*`, or name `steward`; a blocked gate
+  returns `steward_access_not_ready` and materializes nothing.
 - **Generic `lazurio update`** (`restricted_slot_policy: "defer"`) never
   auto-clones an absent restricted slot and returns `current` with reason
   `restricted_not_materialized`. Already mounted restricted checkouts keep
-  updating like any other. A partial Steward installation therefore stays
+  updating like any other. A partial installation by role therefore stays
   stable across further Sync runs; the only path to a restricted slot is the
-  explicit Admin install above.
+  explicit Organization Admin install above.
 - **Doctor** reports an intentionally absent restricted slot as advisory
   `restricted_not_materialized` (severity `neutral`) with guidance towards the
-  explicit Admin install. A missing required application (`expected`) or the
+  explicit Organization Admin install. A missing required application (`expected`) or the
   required data mount remains a required `fail`; a malformed declaration is
   the blocking `access_classification_unknown`.
 
-After the installation, the Steward Agent reports separately: applications
+After the installation, the Module Maintainer's Agent reports separately: applications
 ready, the data mount `repository_db_current`/`repository_db_materialized`,
 and the list of `excluded_by_role_scope` slots; an excluded restricted slot is
 never presented as an access blocker nor resolved by requesting a grant.

@@ -117,12 +117,12 @@ procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
 bod. Odhlášení uživatele nebo restart Windows je pouze fallback, pokud nový
 Codex správné persistentní User/Machine hodnoty stále nevidí.
 
-Builder prompt zároveň vyžaduje user-facing flow bez konzole: Task Agent
-provádí příkazy a změny přes své background nástroje, nikdy po uživateli nechce
-otevřít Terminal nebo PowerShell ani do nich kopírovat příkazy. Nativní
+Prompt pro Builder Mašinu zároveň vyžaduje user-facing flow bez konzole: Task
+Agent provádí příkazy a změny přes své background nástroje, nikdy po uživateli
+nechce otevřít Terminal nebo PowerShell ani do nich kopírovat příkazy. Nativní
 browser/UAC/heslo dialog zůstává dovoleným osobním consentem. Pokud harness
-nedokáže příkaz spustit bez viditelné konzole, Agent vrátí přesný blocker místo
-přesunutí shellové práce na uživatele.
+nedokáže příkaz spustit bez viditelné konzole, Agent vrátí přesný blocker
+místo přesunutí shellové práce na uživatele.
 
 Codex CLI na macOS, Linuxu i Windows instaluj a aktualizuj oficiálním OpenAI
 standalone instalátorem; Homebrew, npm ani WinGet nejsou výchozí cesta Lazuria.
@@ -136,7 +136,7 @@ Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, 
 top-level gate vidí Bun, Git, `gh` a kompatibilní Node.js v PATH a Doctor vidí
 Codex; potom se registruje `lazurio` a z nového Codex procesu projde
 `lazurio cli status --json`.
-Přesný Builder postup a doporučený prompt blok drží
+Přesný postup instalace Přispěvatele modulu a doporučený prompt blok drží
 [`manual/organization-install.md`](organization-install.md).
 
 ## GitHub transport při workstation onboardingu
@@ -164,7 +164,7 @@ Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` login
 Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo
 nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas uživatele,
 privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne celý
-GitHub login. Podrobný owner/Builder postup drží
+GitHub login. Podrobný postup Vlastníka Organizace a Přispěvatele modulu drží
 [`manual/organization-install.md`](organization-install.md).
 
 Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je source
