@@ -15,7 +15,9 @@ export const ORGANIZATION_INSTALL_ROLES = Object.freeze(["builder", "steward"]);
 
 // Hodnoty volby `--role` jsou identifikátory rolí modulu z rozhodnutí 0234
 // a mapují se na nasazené hodnoty výše. Staré hodnoty volby přijímá CLI jen
-// jako zastaralé aliasy (s varováním na stderr) do vlastní migrace.
+// jako zastaralé aliasy (s varováním na stderr) do vlastní migrace. Volba
+// vybírá instalační scope; roli modulu gate nedokazuje (viz
+// `observeGitHubRoleReadiness`).
 export const ORGANIZATION_INSTALL_ROLE_OPTIONS = Object.freeze({
   "module-contributor": "builder",
   "module-maintainer": "steward",
@@ -23,11 +25,6 @@ export const ORGANIZATION_INSTALL_ROLE_OPTIONS = Object.freeze({
 export const DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS = Object.freeze({
   builder: "module-contributor",
   steward: "module-maintainer",
-});
-
-const ORGANIZATION_INSTALL_ROLE_LABELS = Object.freeze({
-  builder: "Přispěvatel modulu",
-  steward: "Správce modulu",
 });
 
 // Přeloží hodnotu volby `--role` na nasazenou hodnotu role. Vrací `null` pro
@@ -49,9 +46,10 @@ export function organizationInstallRoleIdentifier(role) {
   return DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS[role] ?? null;
 }
 
-// Český název role pro texty CLI (rozhodnutí 0234).
-export function organizationInstallRoleLabel(role) {
-  return ORGANIZATION_INSTALL_ROLE_LABELS[role] ?? role;
+// Jak texty CLI jmenují gate pro nasazenou hodnotu role: podle volby, ne
+// jménem role, protože gate roli modulu nedokazuje.
+export function organizationInstallRoleGateLabel(role) {
+  return `instalační WRITE gate pro --role ${organizationInstallRoleIdentifier(role) ?? role}`;
 }
 
 const positiveIdPattern = /^[1-9][0-9]{0,19}$/u;
@@ -82,14 +80,18 @@ export function githubRoleReadinessUnavailable(role, reason, message) {
     repositories: [],
     blockers: [blocker(
       reason ?? "provider_observation_failed",
-      message ?? `Přístup pro roli ${organizationInstallRoleLabel(normalizedRole)} nešlo ověřit čerstvými GitHub provider daty.`,
+      message ?? `Výsledek ${organizationInstallRoleGateLabel(normalizedRole)} nešlo ověřit čerstvými GitHub provider daty.`,
     )],
   });
 }
 
-// Readiness kontrakt `lazurio organization install --role`: role je připravená,
-// když přihlášený účet má efektivní WRITE nebo vyšší oprávnění na každý
-// repozitář instalačního scope. Rozhoduje GitHub sám (`GET /repos/{repo}` →
+// Readiness kontrakt `lazurio organization install --role` je instalační WRITE
+// gate: instalace je připravená, když přihlášený účet má efektivní WRITE nebo
+// vyšší oprávnění na každý repozitář instalačního scope. Roli modulu
+// (rozhodnutí 0232, 0234) gate nedokazuje: Správce modulu potřebuje tam, kde
+// repozitář umí branch rules, `maintain`, a Přispěvatel modulu existuje jen
+// tam, kde je repozitář umí; dostupnost branch rules gate nečte, takže
+// `status: "ready"` znamená jen WRITE, které instalace potřebuje. Rozhoduje GitHub sám (`GET /repos/{repo}` →
 // `permissions` přihlášeného účtu); jakou cestou přístup vznikl — kterýkoli
 // Team, přímý collaborator, Organization role — gate nezkoumá a Team
 // membership ani Team granty nejsou podmínkou. Scope tvoří kořenové repo
@@ -180,7 +182,7 @@ function roleRepositoryPlan({ organization, rootRepository, resource, role, slot
     if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
       blockers.push(blocker(
         "repository_binding_invalid",
-        `Aktivní repository slot pro roli ${organizationInstallRoleLabel(role)} nemá bezpečnou GitHub souřadnici v této Organizaci.`,
+        `Aktivní repository slot ve scope ${organizationInstallRoleGateLabel(role)} nemá bezpečnou GitHub souřadnici v této Organizaci.`,
         { repository: typeof slot?.slug === "string" ? slot.slug : null },
       ));
       continue;

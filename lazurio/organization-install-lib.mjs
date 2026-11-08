@@ -13,8 +13,8 @@ import {
 import {
   ORGANIZATION_INSTALL_ROLES,
   githubRoleReadinessNotRequested,
+  organizationInstallRoleGateLabel,
   organizationInstallRoleIdentifier,
-  organizationInstallRoleLabel,
   resolveOrganizationInstallRoleOption,
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
@@ -1160,7 +1160,7 @@ export function renderHumanOrganizationInstall(report) {
   const lines = [
     `Lazurio Organization install: ${report.state}`,
     `Organization: ${report.organization.login ?? report.organization.locator}${report.organization.id ? ` · ID ${report.organization.id}` : ""}`,
-    `Access: ${report.access.status}${report.access.role ? ` · role ${organizationInstallRoleIdentifier(report.access.role) ?? report.access.role}` : ""}`,
+    `Access: ${report.access.status}${report.access.role ? ` · ${organizationInstallRoleGateLabel(report.access.role)} (roli modulu nedokazuje)` : ""}`,
     `Scope: ${report.scope.role ? organizationInstallRoleIdentifier(report.scope.role) ?? report.scope.role : "organization-admin (bez --role)"} · restricted sloty ${report.scope.restricted_slots === "include" ? "zahrnuté" : "vyloučené bez provider operace"}`,
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
@@ -1371,7 +1371,7 @@ function roleAccessNotReadyCode(role) {
 }
 
 function roleAccessNotReadyMessage(role) {
-  return `GitHub účet nesplňuje přístupový kontrakt role ${organizationInstallRoleLabel(role)}.`;
+  return `GitHub účet nemá na repozitářích scope efektivní WRITE, které vyžaduje ${organizationInstallRoleGateLabel(role)}.`;
 }
 
 function rootOutcome(state, reason, path, message = null) {

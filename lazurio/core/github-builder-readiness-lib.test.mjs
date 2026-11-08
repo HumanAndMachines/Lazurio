@@ -5,8 +5,8 @@ import {
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
   observeGitHubRoleReadiness,
+  organizationInstallRoleGateLabel,
   organizationInstallRoleIdentifier,
-  organizationInstallRoleLabel,
   resolveOrganizationInstallRoleOption,
 } from "./github-builder-readiness-lib.mjs";
 import { hostedInstallSlotScope } from "../organization-install-lib.mjs";
@@ -563,6 +563,38 @@ test("--role option values map the 0234 role identifiers to the deployed install
   }
   expect(organizationInstallRoleIdentifier("builder")).toBe("module-contributor");
   expect(organizationInstallRoleIdentifier("steward")).toBe("module-maintainer");
-  expect(organizationInstallRoleLabel("builder")).toBe("Přispěvatel modulu");
-  expect(organizationInstallRoleLabel("steward")).toBe("Správce modulu");
+  expect(organizationInstallRoleGateLabel("builder")).toBe("instalační WRITE gate pro --role module-contributor");
+  expect(organizationInstallRoleGateLabel("steward")).toBe("instalační WRITE gate pro --role module-maintainer");
+});
+
+// Review on #722: `--role module-maintainer` must not read as proof of the
+// Module Maintainer role. The gate stays an install WRITE gate: `push` passes
+// it for either option, while `pull` blocks, and every text names the gate by
+// its option, never as the role.
+test("the --role gate is an install WRITE gate, not proof of the Module role", () => {
+  for (const role of ["builder", "steward"]) {
+    const ready = observeGitHubRoleReadiness({
+      role,
+      provider: providerFixture({ permission: "write" }),
+      organization,
+      rootRepository,
+      resource: resourceFixture(),
+    });
+    expect(ready.status).toBe("ready");
+    expect(ready.repositories.every((repository) => repository.effective_permission === "write")).toBe(true);
+
+    const readOnly = observeGitHubRoleReadiness({
+      role,
+      provider: providerFixture({ permission: "read" }),
+      organization,
+      rootRepository,
+      resource: resourceFixture(),
+    });
+    expect(readOnly.status).toBe("blocked");
+
+    const unavailable = githubRoleReadinessUnavailable(role);
+    expect(unavailable.status).toBe("blocked");
+    expect(unavailable.blockers[0].message).toContain(organizationInstallRoleGateLabel(role));
+    expect(unavailable.blockers[0].message).not.toMatch(/Správce modulu|Přispěvatel modulu/u);
+  }
 });

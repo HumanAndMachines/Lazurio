@@ -20,6 +20,7 @@ import {
   observeOrganizationInstallIdentity,
   observeOrganizationInstallSource,
   organizationInstallExitCode,
+  renderHumanOrganizationInstall,
 } from "./organization-install-lib.mjs";
 
 const roots = [];
@@ -1207,6 +1208,12 @@ test("CLI --role takes the 0234 identifiers and keeps builder and steward as dep
       scope: { role: deployed, restricted_slots: "exclude" },
       target: { reason: "github_cli_unavailable" },
     });
+    // The human report names the install WRITE gate by its option and says
+    // it is no proof of the Module role (review on #722).
+    const identifier = alias ?? option;
+    expect(renderHumanOrganizationInstall(report))
+      .toContain(`Access: blocked · instalační WRITE gate pro --role ${identifier} (roli modulu nedokazuje)`);
+    expect(renderHumanOrganizationInstall(report)).toContain(`Scope: ${identifier} · restricted sloty`);
     const stderr = result.stderr.toString();
     if (alias) {
       expect(stderr).toContain(`--role ${option} je zastaralý alias; použijte --role ${alias}`);

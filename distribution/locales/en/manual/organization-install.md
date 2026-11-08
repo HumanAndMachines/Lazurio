@@ -272,19 +272,24 @@ The role gate takes `--role module-contributor` for a Module Contributor or
 `--role module-maintainer` for a Module Maintainer. The CLI accepts the old
 values `builder` and `steward` only as deprecated aliases with a warning on
 stderr; the report and the manifest's `required_roles` keep carrying these
-deployed values (decision 0234). The gate decides exactly like GitHub: the
-role is ready when the signed-in account has effective WRITE or higher on
-every repository in the install scope (`GET /repos/{owner}/{repo}` →
-`permissions`). How that access was granted — any Team, a direct collaborator,
-or an Organization role — is not examined; Team membership, Team grants, and
-`teams[].forge_binding` are not conditions. An inactive membership or a
-revoked grant shows up as missing effective WRITE and the gate blocks; it also
-blocks on an unverifiable account, a different root repository identity, and
-every failed provider observation. The scope is the Organization root and the
-active ordinary slots assigned to the given role; `planned_slot`, restricted
-slots for the Organization Admin only, and slots with a malformed access
-declaration are deliberately not included, and the gate performs no provider
-read over them. On a hosted Organization Machine
+deployed values (decision 0234). The option selects the install scope, and the
+gate is an install WRITE gate, not proof of the Module role: a Module
+Maintainer needs `maintain` where the repository can have branch rules, and a
+Module Contributor exists only where it can (decision 0232). The gate does not
+read whether branch rules are available, so `access.status: "ready"` does not
+prove the Module role and the handoff does not present it so. The gate decides
+exactly like GitHub: the installation is ready when the signed-in account has
+effective WRITE or higher on every repository in the install scope
+(`GET /repos/{owner}/{repo}` → `permissions`). How that access was granted —
+any Team, a direct collaborator, or an Organization role — is not examined;
+Team membership, Team grants, and `teams[].forge_binding` are not conditions.
+An inactive membership or a revoked grant shows up as missing effective WRITE
+and the gate blocks; it also blocks on an unverifiable account, a different
+root repository identity, and every failed provider observation. The scope is
+the Organization root and the active ordinary slots assigned to the given
+role; `planned_slot`, restricted slots for the Organization Admin only, and
+slots with a malformed access declaration are deliberately not included, and
+the gate performs no provider read over them. On a hosted Organization Machine
 (`LAZURIO_WORKSPACE_PROFILE=hosted`) the gate covers only what the install
 actually materializes for the Machine's Team (`LAZURIO_TEAM_ID`): the root,
 its root slots, and the Workspace Modules whose `teams` include the Machine's
@@ -716,10 +721,10 @@ lazurio organization install <github-login> --role module-contributor --json
   `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
   runs over them. This state is intentional and distinct from a missing grant
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Before cloning, the Module Maintainer gate verifies read-only the signed-in
-  account's effective WRITE on the Organization root and the ordinary slots
-  whose `required_roles` are empty, `*`, or name `steward`; a blocked gate
-  returns `steward_access_not_ready` and materializes nothing.
+  Before cloning, the gate for `--role module-maintainer` verifies read-only
+  the signed-in account's effective WRITE on the Organization root and the
+  ordinary slots whose `required_roles` are empty, `*`, or name `steward`; a
+  blocked gate returns `steward_access_not_ready` and materializes nothing.
 - **Generic `lazurio update`** (`restricted_slot_policy: "defer"`) never
   auto-clones an absent restricted slot and returns `current` with reason
   `restricted_not_materialized`. Already mounted restricted checkouts keep

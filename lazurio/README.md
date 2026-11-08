@@ -185,16 +185,19 @@ lazurio organization install <github-login> --role module-contributor # Přispě
 Instalace bez `--role` je explicitní opt-in Admina Organizace
 (`scope.restricted_slots: "include"`) a materializuje i absentní restricted
 slot. `--role module-maintainer` a `--role module-contributor` (`"exclude"`)
-materializují jen běžné sloty a jejich
-descendants včetně podporovaných aktivních `repository_db_mount` na
-`mission-control/db` nebo `workspace/<module>/db`; deprecated
-`modules/<module>/db` se nematerializuje. Restricted slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope`
-bez jediného `git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před klonem read-only
-ověří membership a WRITE na běžných repozitářích dané role. Staré hodnoty
-`--role steward` a `--role builder` CLI přijímá jen jako zastaralé aliasy
-s varováním na stderr; report (`access.role`, `scope.role`) a `required_roles`
-manifestu dál nesou nasazené hodnoty `steward` a `builder` (rozhodnutí 0234).
-Běžný
+materializují jen běžné sloty a jejich descendants včetně podporovaných
+aktivních `repository_db_mount` na `mission-control/db` nebo
+`workspace/<module>/db`; deprecated `modules/<module>/db` se nematerializuje.
+Restricted slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope`
+bez jediného `git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před
+klonem read-only ověří WRITE na běžných repozitářích instalačního scope dané
+volby. Je to instalační WRITE gate, ne důkaz role modulu: Správce modulu
+potřebuje tam, kde repozitář umí branch rules, `maintain`, a Přispěvatel
+modulu existuje jen tam, kde je umí (rozhodnutí 0232);
+`access.status: "ready"` proto roli nedokazuje. Staré hodnoty `--role steward`
+a `--role builder` CLI přijímá jen jako zastaralé aliasy s varováním na
+stderr; report (`access.role`, `scope.role`) a `required_roles` manifestu dál
+nesou nasazené hodnoty `steward` a `builder` (rozhodnutí 0234). Běžný
 `lazurio update` (`restricted_slot_policy: "defer"`) absentní restricted slot
 nikdy automaticky neklonuje (`restricted_not_materialized`), namountovaný dál
 aktualizuje; Doctor tento záměrný stav hlásí jen advisory. Neznámý nebo

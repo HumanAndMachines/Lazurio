@@ -101,8 +101,9 @@ Při publikačním mandátu pro instalační vady přečti také
    access blocker. Aktuální CLI nepřijímá `--role admin`; roli Vlastník nebo
    Admin Organizace dokazuj živými GitHub právy a základní materializaci bez
    vymyšlené role, která jako jediná materializuje i restricted sloty.
-   Readiness role modulu a oprávnění Vlastníka nebo Admina Organizace reportuj
-   odděleně.
+   Výsledek instalačního WRITE gate a oprávnění Vlastníka nebo Admina
+   Organizace reportuj odděleně; WRITE gate roli modulu nedokazuje (Správce
+   modulu potřebuje tam, kde repozitář umí branch rules, `maintain`, 0232).
 9. **Opakuj jediný konvergenční tok.** Spusť `lazurio install --json`,
    `lazurio doctor --tool-updates --json`, exact Organization install a finální
    `lazurio doctor`. Required `fail`, `blocked` nebo `incomplete` v uděleném

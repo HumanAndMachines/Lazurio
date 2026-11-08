@@ -247,7 +247,12 @@ Role gate volí `--role module-contributor` pro Přispěvatele modulu nebo
 `--role module-maintainer` pro Správce modulu. Staré hodnoty `builder` a
 `steward` CLI přijímá jen jako zastaralé aliasy s varováním na stderr; report
 a `required_roles` manifestu dál nesou tyto nasazené hodnoty (rozhodnutí
-0234). Gate rozhoduje stejně jako GitHub: role je připravená, když přihlášený
+0234). Volba vybírá instalační scope a gate je instalační WRITE gate, ne důkaz
+role modulu: Správce modulu potřebuje tam, kde repozitář umí branch rules,
+`maintain`, a Přispěvatel modulu existuje jen tam, kde je repozitář umí
+(rozhodnutí 0232). Dostupnost branch rules gate nečte, takže
+`access.status: "ready"` roli modulu nedokazuje a handoff ji tak nepodává.
+Gate rozhoduje stejně jako GitHub: instalace je připravená, když přihlášený
 účet má na každém repozitáři instalačního scope efektivní WRITE nebo vyšší
 (`GET /repos/{owner}/{repo}` → `permissions`). Jakou cestou přístup vznikl —
 kterýkoli Team, přímý collaborator nebo Organization role — gate nezkoumá;
@@ -657,10 +662,10 @@ lazurio organization install <github-login> --role module-contributor --json
   nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`. Tento
   stav je záměrný a odlišný od chybějícího grantu
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Gate Správce modulu před klonem read-only ověří efektivní WRITE přihlášeného
-  účtu na Organization rootu a běžných slotech, jejichž `required_roles` jsou
-  prázdné, `*` nebo jmenují `steward`; blokovaný gate vrátí
-  `steward_access_not_ready` a nic nematerializuje.
+  Gate pro `--role module-maintainer` před klonem read-only ověří efektivní
+  WRITE přihlášeného účtu na Organization rootu a běžných slotech, jejichž
+  `required_roles` jsou prázdné, `*` nebo jmenují `steward`; blokovaný gate
+  vrátí `steward_access_not_ready` a nic nematerializuje.
 - **Běžný `lazurio update`** (`restricted_slot_policy: "defer"`) absentní
   restricted slot nikdy automaticky neklonuje a vrátí `current` s reason
   `restricted_not_materialized`. Už namountované restricted checkouty dál

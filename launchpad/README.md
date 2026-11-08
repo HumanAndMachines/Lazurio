@@ -229,10 +229,13 @@ stejného seznamu.
 
 ### Laptopová strana spojení: Síť a Spojení
 
-Cíl: nový uživatel si při onboardingu naklikne maximum sám, zásah do Headscale
-zůstává na oprávněném uživateli (Vlastník Organizace, která Conglomerate Host
-vlastní) a port 22 mezi nody zůstává grant deklarovaný v Deployment Repu
-Organizace (`workspace_ssh_grants`). Model hran, směrů a politiky drží issue
+Cíl: nový uživatel si při onboardingu naklikne maximum sám a zásah do Headscale
+zůstává na oprávněném uživateli. Zařízení schvaluje Admin každé dotčené
+Organizace (0192, `manual/environment-access-model.md`); správa samotného
+Conglomerate Hostu je jiná věc a cílově ji drží jen ten, kdo je Vlastníkem
+i Adminem Organizace, která host vlastní (0228, zatím nenasazené;
+`manual/conglomerate-owner-administration.md`). Port 22 mezi nody zůstává
+grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`). Model hran, směrů a politiky drží issue
 HumanAndMachines/Lazurio#416.
 
 **Síť** (`/settings/network`, `GET /api/setup/network`): zjistí Tailscale na

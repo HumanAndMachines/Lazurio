@@ -29,7 +29,10 @@
       "properties": {
         "authority": { "const": "github" },
         "role": { "enum": [null, "builder", "steward"] },
-        "status": { "enum": ["not_requested", "ready", "blocked"] },
+        "status": {
+          "enum": ["not_requested", "ready", "blocked"],
+          "description": "Výsledek instalačního WRITE gate pro --role. ready znamená efektivní WRITE nebo vyšší na repozitářích instalačního scope; roli modulu podle rozhodnutí 0232 a 0234 (Správce modulu, Přispěvatel modulu) nedokazuje."
+        },
         "account": {
           "oneOf": [
             { "type": "null" },
