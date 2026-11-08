@@ -5,11 +5,52 @@ import {
   organizationSlotDeclaresHomeOrganization,
 } from "./organization-slot-scope-lib.mjs";
 
-// Role, pro které `lazurio organization install --role` provádí read-only
-// readiness gate. Textový název role nic neautorizuje: rozhodují živá GitHub
-// práva přihlášeného účtu ověřená tímto gate; manifest určuje jen scope
-// repozitářů.
+// Nasazené hodnoty rolí, pro které `lazurio organization install --role`
+// provádí read-only readiness gate. Textový název role nic neautorizuje:
+// rozhodují živá GitHub práva přihlášeného účtu ověřená tímto gate; manifest
+// určuje jen scope repozitářů. Hodnoty `builder` a `steward` nesou
+// `required_roles` manifestů Organizací a report v0, proto zůstávají
+// (rozhodnutí 0234: nasazené identifikátory se jen mapují na názvy rolí).
 export const ORGANIZATION_INSTALL_ROLES = Object.freeze(["builder", "steward"]);
+
+// Hodnoty volby `--role` jsou identifikátory rolí modulu z rozhodnutí 0234
+// a mapují se na nasazené hodnoty výše. Staré hodnoty volby přijímá CLI jen
+// jako zastaralé aliasy (s varováním na stderr) do vlastní migrace. Volba
+// vybírá instalační scope; roli modulu gate nedokazuje (viz
+// `observeGitHubRoleReadiness`).
+export const ORGANIZATION_INSTALL_ROLE_OPTIONS = Object.freeze({
+  "module-contributor": "builder",
+  "module-maintainer": "steward",
+});
+export const DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS = Object.freeze({
+  builder: "module-contributor",
+  steward: "module-maintainer",
+});
+
+// Přeloží hodnotu volby `--role` na nasazenou hodnotu role. Vrací `null` pro
+// neznámou hodnotu; `deprecated` říká, že volající použil starý alias.
+export function resolveOrganizationInstallRoleOption(value) {
+  if (typeof value !== "string") return null;
+  if (Object.hasOwn(ORGANIZATION_INSTALL_ROLE_OPTIONS, value)) {
+    return freeze({ role: ORGANIZATION_INSTALL_ROLE_OPTIONS[value], option: value, deprecated: false });
+  }
+  if (Object.hasOwn(DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS, value)) {
+    return freeze({ role: value, option: DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS[value], deprecated: true });
+  }
+  return null;
+}
+
+// Identifikátor role (`module-contributor`, `module-maintainer`) pro nasazenou
+// hodnotu `builder` nebo `steward`.
+export function organizationInstallRoleIdentifier(role) {
+  return DEPRECATED_ORGANIZATION_INSTALL_ROLE_OPTIONS[role] ?? null;
+}
+
+// Jak texty CLI jmenují gate pro nasazenou hodnotu role: podle volby, ne
+// jménem role, protože gate roli modulu nedokazuje.
+export function organizationInstallRoleGateLabel(role) {
+  return `instalační WRITE gate pro --role ${organizationInstallRoleIdentifier(role) ?? role}`;
+}
 
 const positiveIdPattern = /^[1-9][0-9]{0,19}$/u;
 const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
@@ -39,14 +80,18 @@ export function githubRoleReadinessUnavailable(role, reason, message) {
     repositories: [],
     blockers: [blocker(
       reason ?? "provider_observation_failed",
-      message ?? `${roleLabel(normalizedRole)} access nešlo ověřit čerstvými GitHub provider daty.`,
+      message ?? `Výsledek ${organizationInstallRoleGateLabel(normalizedRole)} nešlo ověřit čerstvými GitHub provider daty.`,
     )],
   });
 }
 
-// Readiness kontrakt `lazurio organization install --role`: role je připravená,
-// když přihlášený účet má efektivní WRITE nebo vyšší oprávnění na každý
-// repozitář instalačního scope. Rozhoduje GitHub sám (`GET /repos/{repo}` →
+// Readiness kontrakt `lazurio organization install --role` je instalační WRITE
+// gate: instalace je připravená, když přihlášený účet má efektivní WRITE nebo
+// vyšší oprávnění na každý repozitář instalačního scope. Roli modulu
+// (rozhodnutí 0232, 0234) gate nedokazuje: Správce modulu potřebuje tam, kde
+// repozitář umí branch rules, `maintain`, a Přispěvatel modulu existuje jen
+// tam, kde je repozitář umí; dostupnost branch rules gate nečte, takže
+// `status: "ready"` znamená jen WRITE, které instalace potřebuje. Rozhoduje GitHub sám (`GET /repos/{repo}` →
 // `permissions` přihlášeného účtu); jakou cestou přístup vznikl — kterýkoli
 // Team, přímý collaborator, Organization role — gate nezkoumá a Team
 // membership ani Team granty nejsou podmínkou. Scope tvoří kořenové repo
@@ -137,7 +182,7 @@ function roleRepositoryPlan({ organization, rootRepository, resource, role, slot
     if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
       blockers.push(blocker(
         "repository_binding_invalid",
-        `Aktivní ${roleLabel(role)} repository slot nemá bezpečnou GitHub souřadnici v této Organizaci.`,
+        `Aktivní repository slot ve scope ${organizationInstallRoleGateLabel(role)} nemá bezpečnou GitHub souřadnici v této Organizaci.`,
         { repository: typeof slot?.slug === "string" ? slot.slug : null },
       ));
       continue;
@@ -186,10 +231,6 @@ function normalizeInstallRole(role) {
     throw new TypeError(`Role readiness supports only ${ORGANIZATION_INSTALL_ROLES.join(", ")}.`);
   }
   return role;
-}
-
-function roleLabel(role) {
-  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 function addRepositoryPlan(repositories, blockers, {

@@ -27,9 +27,9 @@ z 2026-10-09.
   uživatele, v Týmovém Prostředí s týmovým účtem Composia
   ([composio.md](composio.md)), pokud je povolené. Agent ji použije
   v pořadí nástroj aplikace, Executor, Composio.
-- Firemní aplikace Google Workspace a Microsoft 365 nastavuje Admin
-  v Dashboardu s agentem; do Executoru každého Environmentu se dostanou
-  podle rozhodnutí 0194. Pak se Gmail, Outlook a další připojují přímo.
+- Firemní aplikace Google Workspace a Microsoft 365 nastavuje Admin Organizace
+  v Dashboardu s agentem; do Executoru každého Environmentu se dostanou podle
+  rozhodnutí 0194. Pak se Gmail, Outlook a další připojují přímo.
 - Teď používáme Executor 1. Na Executor 2 přejdeme, až vyjde stabilní.
   Executor neforkujeme; co nám chybí, posíláme upstreamu.
 
@@ -176,9 +176,9 @@ servisní přístup ji při potížích otevře v prohlížeči Environmentu na
   není, připojí ji jen na výslovný pokyn uživatele postupem výše.
 - Vlastní MCP server přidat jen na výslovný pokyn uživatele, vždy do
   Executoru Environmentu, ne jen do svého nástroje.
-- Integrační službu Služeb serveru (root 0209, dodatek z 2026-10-19 večer
-  (e)) nepřidávat ani neodebírat: Admin ji povoluje v Deployment Repu a v
-  povoleném Prostředí se v Integracích ukáže sama.
+- Integrační službu Služeb serveru (root 0209, dodatek z 2026-10-19 večer (e))
+  nepřidávat ani neodebírat: Admin Organizace ji povoluje v Deployment Repu a
+  v povoleném Prostředí se v Integracích ukáže sama.
 - Navenek viditelný zápis udělat jen na pokyn uživatele.
 - Kde Executor neběží, nainstalovat ho na pokyn uživatele podle tohoto
   runbooku.

@@ -434,7 +434,7 @@ async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd })
   const resource = resolution.resource;
   const pool = normalizeOrganizationPortPool({ manifest: resource, source: `${organizationRoot}/Organization manifest` });
   if (pool.issues.length > 0) {
-    throw new ModuleCreateRefusal("organization_port_pool_invalid", pool.issues.join("; "), "Organization Admin opraví module_port_pool.");
+    throw new ModuleCreateRefusal("organization_port_pool_invalid", pool.issues.join("; "), "Admin Organizace opraví module_port_pool.");
   }
   const manifestPath = join(organizationRoot, resource.manifests?.modules ?? "modules.manifest.json");
   const modulesManifestText = await readFile(manifestPath, "utf8").catch(() => null);
@@ -597,7 +597,7 @@ function nextSteps({ plan, target, moduleRoot, dryRun, report = null }) {
   for (const issue of report?.issues ?? []) if (issue.action) steps.push(issue.action);
   steps.push(
     `V ${target.organizationRoot} commitněte modules.manifest.json (slot ${plan.module_path}) a otevřete PR do root repa Organizace; merge je rozhodnutí oprávněného uživatele.`,
-    `Založte privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Organization Admin; Dashboard „Nový Modul“ to převezme) a pushněte: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
+    `Založte privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Admin Organizace; Dashboard „Nový Modul“ to převezme) a pushněte: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
   );
   if (plan.lease) {
     const canonical = join(target.primaryRoot, "workspace", plan.module);

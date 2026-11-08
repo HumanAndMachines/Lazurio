@@ -163,7 +163,7 @@ dlouhodobý action layer.
 ### Review checkout
 
 Review cizího pull requestu patří k plánu toho pull requestu, ale nic nemění.
-Reviewer, člověk, Task Agent i Steward persony, založí jeho checkout jedním
+Reviewer, člověk, Task Agent i persona Organizace (preset Steward), založí jeho checkout jedním
 příkazem:
 
 ```text
@@ -300,9 +300,9 @@ Každý member má jednu roli:
 | `edit` | plan-code branch | ano | ano, pokud má změny |
 | `dependency` | detached exact SHA | ne | ne |
 
-Dependency, kterou je potřeba změnit, se nesmí tiše editovat. Builder použije
-explicitní akci `add-edit`/`promote`; Doctor vytvoří branch, doplní member
-metadata a od té chvíle ji kontroluje jako další edit target.
+Dependency, kterou je potřeba změnit, se nesmí tiše editovat. Přispěvatel
+modulu použije explicitní akci `add-edit`/`promote`; Doctor vytvoří branch,
+doplní member metadata a od té chvíle ji kontroluje jako další edit target.
 
 Současná úzká Launchpad lane používá stejnou roli `dependency` pro aktivní
 `repository_db_mount` deklarovaný v `lazurio.runtime.required_module_slots`.
@@ -348,8 +348,10 @@ Pravidla validátoru:
   pattern;
 - chybějící access na `required: true` blokuje create;
 - chybějící access na optional dependency je viditelný warning;
-- productionspace dependency vyžaduje explicitní Organization/owner policy;
-- dependency je read-only, dokud ji builder explicitně nepovýší na `edit`.
+- productionspace dependency vyžaduje explicitní policy Organizace nebo
+  Vlastníka Organizace;
+- dependency je read-only, dokud ji Přispěvatel modulu explicitně nepovýší na
+  `edit`.
 
 `--with <profile>` podporuje přesně `test`, `build` a `runtime` a může se
 opakovat. Každý zvolený profil zahrne transitivní closure stejnojmenných hran:

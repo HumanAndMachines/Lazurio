@@ -35,7 +35,7 @@ export {
 export const GITHUB_LOGIN_SCHEMA = "lazurio.launchpad.setup.github.v1";
 export const GITHUB_DEVICE_URL = "https://github.com/login/device";
 export const GITHUB_KEY_SCOPE = "admin:public_key";
-export const ORGANIZATION_INSTALL_ROLE = "builder";
+export const ORGANIZATION_INSTALL_ROLE = "module-contributor";
 
 const setupGitHubPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
 const deviceCodePattern = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})\b/u;

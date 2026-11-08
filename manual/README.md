@@ -25,7 +25,7 @@ Maintenance agent před zásahem ověřuje:
 - `package.json` — root workflow pro `bun run check`, `bun run doctor` a spuštění Launchpadu.
 - `AGENTS.md` — rozhodovací pravidla pro agenty před vstupem do organizace.
 - `MAP.md` — lidský rozcestník.
-- `launchpad/` — sdílený builder-first Lazurio Launchpad (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Organization Users do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
+- `launchpad/` — sdílený Lazurio Launchpad, dílna Přispěvatelů modulů (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024; role podle 0234): spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; nastavení Admina Organizace, vstup Členů Organizace do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI agenty; mechanismy rootu a Organizací drží `manual/` a MAP.md, dokud nevznikne plánovaná cesta „mapa systému“.
 - `organizations/README.md` — jediné trackované vysvětlení lokálního Organization mountpointu; konkrétní `organizations/*` jsou gitignored nested repos.
 - `personalspace/` — privátní osobní repo mimo GitHub organizace.

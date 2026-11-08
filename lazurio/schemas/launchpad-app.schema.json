@@ -87,18 +87,18 @@
       "pattern": "\\.json$"
     },
     "icon": {
-      "description": "Builder-friendly icon key. Known keys render a dedicated glyph; anything else falls back to the tag/module heuristic with a warning.",
+      "description": "Human-friendly icon key. Known keys render a dedicated glyph; anything else falls back to the tag/module heuristic with a warning.",
       "type": "string",
       "minLength": 1
     },
     "description": {
-      "description": "Human, non-technical one-line popis pro builder karty (čeština). Fallback je surface/module heuristika.",
+      "description": "Human, non-technical one-line popis pro karty aplikací v Launchpadu (čeština). Fallback je surface/module heuristika.",
       "type": "string",
       "minLength": 1,
       "maxLength": 240
     },
     "group": {
-      "description": "Builder-friendly sekce karty (např. 'Denní práce'). Autorita je manifest; missing = default workspace grouping.",
+      "description": "Lidsky čitelná sekce karty (např. 'Denní práce'). Autorita je manifest; missing = default workspace grouping.",
       "type": "string",
       "minLength": 1,
       "maxLength": 80

@@ -15,11 +15,13 @@ import {
 } from "./core/organization-activation-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import { parseBrokeredGitHubEnvironment } from "./core/brokered-github-lib.mjs";
+import { githubRoleReadinessUnavailable } from "./core/github-builder-readiness-lib.mjs";
 import {
   installOrganization,
   observeOrganizationInstallIdentity,
   observeOrganizationInstallSource,
   organizationInstallExitCode,
+  renderHumanOrganizationInstall,
 } from "./organization-install-lib.mjs";
 
 const roots = [];
@@ -1115,8 +1117,9 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role builder|steward] [--json]");
-  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role builder|steward] [--json] [--root");
+  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role module-contributor|module-maintainer] [--json]");
+  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role module-contributor|module-maintainer] [--json] [--root");
+  expect(help.stdout.toString()).toContain("builder a steward jsou zastaralé aliasy");
 
   const invalid = Bun.spawnSync([
     process.execPath,
@@ -1163,7 +1166,62 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(invalidRole.exitCode).toBe(2);
-  expect(invalidRole.stderr.toString()).toContain("--role podporuje pouze hodnoty builder a steward");
+  expect(invalidRole.stderr.toString()).toContain("--role podporuje pouze hodnoty module-contributor a module-maintainer");
+});
+
+// Decision 0234: `--role` takes the role identifiers; `builder` and `steward`
+// stay deprecated aliases with a warning on stderr. The report keeps the
+// deployed values. Without gh on PATH the install blocks before any provider
+// call or materialization, so the CLI runs without side effects.
+test("CLI --role takes the 0234 identifiers and keeps builder and steward as deprecated aliases", async () => {
+  const home = await mkdtemp(join(tmpdir(), "lazurio-install-role-option-"));
+  roots.push(home);
+  const emptyBin = join(home, "bin");
+  await mkdir(emptyBin);
+  const runInstall = (role) => Bun.spawnSync([
+    process.execPath,
+    "lazurio/cli.mjs",
+    "organization",
+    "install",
+    login,
+    "--role",
+    role,
+    "--json",
+  ], {
+    cwd: join(import.meta.dirname, ".."),
+    env: { HOME: home, PATH: emptyBin },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  for (const [option, deployed, alias] of [
+    ["module-contributor", "builder", null],
+    ["module-maintainer", "steward", null],
+    ["builder", "builder", "module-contributor"],
+    ["steward", "steward", "module-maintainer"],
+  ]) {
+    const result = runInstall(option);
+    const report = JSON.parse(result.stdout.toString());
+    expect(result.exitCode).toBe(1);
+    expect(report).toMatchObject({
+      state: "blocked",
+      access: { role: deployed, status: "blocked" },
+      scope: { role: deployed, restricted_slots: "exclude" },
+      target: { reason: "github_cli_unavailable" },
+    });
+    // The human report names the install WRITE gate by its option and says
+    // it is no proof of the Module role (review on #722).
+    const identifier = alias ?? option;
+    expect(renderHumanOrganizationInstall(report))
+      .toContain(`Access: blocked · instalační WRITE gate pro --role ${identifier} (roli modulu nedokazuje)`);
+    expect(renderHumanOrganizationInstall(report)).toContain(`Scope: ${identifier} · restricted sloty`);
+    const stderr = result.stderr.toString();
+    if (alias) {
+      expect(stderr).toContain(`--role ${option} je zastaralý alias; použijte --role ${alias}`);
+    } else {
+      expect(stderr).not.toContain("zastaralý alias");
+    }
+  }
 });
 
 test("Builder role blocks before materialization when provider observation did not prove readiness", async () => {
@@ -1184,10 +1242,22 @@ test("Builder role blocks before materialization when provider observation did n
 
   expect(report).toMatchObject({
     state: "blocked",
-    access: { authority: "github", role: "builder", status: "blocked" },
+    access: {
+      authority: "github",
+      role: "builder",
+      status: "blocked",
+      blockers: [{ reason: "builder_access_not_ready", message: "Instalační WRITE gate pro --role module-contributor neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers." }],
+    },
     scope: { role: "builder", restricted_slots: "exclude" },
-    target: { reason: "builder_access_not_ready" },
+    target: {
+      reason: "builder_access_not_ready",
+      // An unverified observation is not proof of missing WRITE (review on #722).
+      message: "Instalační WRITE gate pro --role module-contributor neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.",
+    },
   });
+  const human = renderHumanOrganizationInstall(report);
+  expect(human).toContain("Access: blocked · instalační WRITE gate pro --role module-contributor (roli modulu nedokazuje)");
+  expect(human).not.toContain("nemá");
   expect(materialized).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
 });
@@ -1210,12 +1280,67 @@ test("Steward role blocks before materialization when provider observation did n
 
   expect(report).toMatchObject({
     state: "blocked",
-    access: { authority: "github", role: "steward", status: "blocked" },
+    access: {
+      authority: "github",
+      role: "steward",
+      status: "blocked",
+      blockers: [{ reason: "steward_access_not_ready", message: "Instalační WRITE gate pro --role module-maintainer neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers." }],
+    },
     scope: { role: "steward", restricted_slots: "exclude" },
-    target: { reason: "steward_access_not_ready" },
+    target: {
+      reason: "steward_access_not_ready",
+      // An unverified observation is not proof of missing WRITE (review on #722).
+      message: "Instalační WRITE gate pro --role module-maintainer neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.",
+    },
   });
+  const human = renderHumanOrganizationInstall(report);
+  expect(human).toContain("Access: blocked · instalační WRITE gate pro --role module-maintainer (roli modulu nedokazuje)");
+  expect(human).not.toContain("nemá");
   expect(materialized).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
+});
+
+// Review on #722: a gate that could not be verified keeps the provider's own
+// blocker in the report; the summary in target.message and in the human
+// output never claims missing WRITE.
+test("a failed provider observation behind the --role gate is reported as unverified, not as missing WRITE", async () => {
+  for (const [deployed, identifier] of [["builder", "module-contributor"], ["steward", "module-maintainer"]]) {
+    const fixture = await organizationRemoteFixture();
+    let materialized = false;
+    const report = await installOrganization({
+      rootPath: fixture.root,
+      githubLogin: login,
+      role: identifier,
+      deps: {
+        observe: async () => ({
+          ...sourceObservation(),
+          access: githubRoleReadinessUnavailable(deployed, "provider_observation_failed", "GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase."),
+        }),
+        runPinnedChild: async () => {
+          materialized = true;
+          throw new Error("must not materialize");
+        },
+      },
+    });
+
+    expect(report).toMatchObject({
+      state: "blocked",
+      access: {
+        role: deployed,
+        status: "blocked",
+        blockers: [{ reason: "provider_observation_failed", message: "GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase." }],
+      },
+      scope: { role: deployed, restricted_slots: "exclude" },
+      target: {
+        reason: `${deployed}_access_not_ready`,
+        message: `Instalační WRITE gate pro --role ${identifier} neprošel nebo nešel ověřit; přesný důvod uvádí access.blockers.`,
+      },
+    });
+    const human = renderHumanOrganizationInstall(report);
+    expect(human).toContain("! GitHub vrátil HTTP 502 pro repos/ExampleOrganization/knowledgebase.");
+    expect(human).not.toContain("nemá");
+    expect(materialized).toBe(false);
+  }
 });
 
 test("Steward install converges ordinary apps and the Mission Control data mount without touching the restricted root slot", async () => {

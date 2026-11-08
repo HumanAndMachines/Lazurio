@@ -95,8 +95,8 @@ consent a writer kroky přijdou jako samostatné řezy nad stejným kontraktem;
 
 ## Read-only aktivace Organization
 
-První activation řez je owner-only provider gate a pouze pozoruje živý GitHub
-stav:
+První activation řez je provider gate jen pro Vlastníka Organizace a pouze
+pozoruje živý GitHub stav:
 
 ```sh
 lazurio organization activate --check --github-id <immutable-id>
@@ -123,12 +123,13 @@ zůstává v prvním DEV-6512 řezu fail-closed, dokud navazující
 reader/activation gate nepřesune všechny consumery na tentýž normalizovaný
 výsledek; activation si vlastní parser nevymýšlí.
 
-Builder tento owner gate na pracovní mašině neopakuje. GitHub installations i
-private-root endpoint mohou owner nebo repo access hranici skrýt jako HTTP 403
-nebo 404; CLI proto u pozorovaného non-ownera dál neprobuje root ani App a
-vrátí stabilní `github_organization_owner_required`. To nevypovídá o tom, zda
-je App nainstalovaná nebo zda Builder root čte. Lokální Builder onboarding
-pokračuje níže přes jeho vlastní repo read access.
+Přispěvatel modulu tento gate Vlastníka Organizace na pracovní mašině
+neopakuje. GitHub installations i private-root endpoint mohou hranici role
+Vlastník Organizace nebo repo access skrýt jako HTTP 403 nebo 404; CLI proto
+u účtu, který podle pozorování Vlastníkem Organizace není, dál neprobuje root
+ani App a vrátí stabilní `github_organization_owner_required`. To nevypovídá
+o tom, zda je App nainstalovaná nebo zda Přispěvatel modulu root čte. Jeho
+lokální onboarding pokračuje níže přes jeho vlastní repo read access.
 
 Exit code `0` znamená `active`, `1` znamená bezpečný další krok a `2`
 technickou chybu. Veřejný tvar drží
@@ -163,7 +164,7 @@ výjimku.
 CLI používá deklarovaný SSH remote a před klonem na něm provede exact
 `git ls-remote`. Selhání vrátí `materialization_source_unavailable` a nic
 nevytvoří; Agent má ověřit repo access a SSH klíč pro tentýž účet, ne opakovat
-owner activation ani několikrát spouštět `gh auth login`. Vytvoření nebo
+aktivaci Vlastníka Organizace ani několikrát spouštět `gh auth login`. Vytvoření nebo
 nahrání klíče zůstává explicitně schvalovanou změnou přístupu.
 
 Report používá stejné veřejné stavy `current`, `updated`, `blocked` jako
@@ -172,23 +173,31 @@ celkový výsledek zůstane `blocked` s přesným GitHub access reasonem. Dirty,
 foreign, diverged nebo symlink target se nepřebírá. Úplný bezpečný postup drží
 [Organization install manuál](../manual/organization-install.md).
 
-Restricted (Admin-only) sloty se poznají výhradně z deklarace
+Restricted sloty (jen pro Admina Organizace) se poznají výhradně z deklarace
 `default_access: restricted`/`private`, ne z názvu nebo cesty:
 
 ```sh
-lazurio organization install <github-login>                # Admin: restricted sloty zahrnuté
-lazurio organization install <github-login> --role steward # Steward: restricted mimo scope
-lazurio organization install <github-login> --role builder # Builder: totéž + Builder gate
+lazurio organization install <github-login>                           # Admin Organizace: restricted sloty zahrnuté
+lazurio organization install <github-login> --role module-maintainer  # Správce modulu: restricted mimo scope
+lazurio organization install <github-login> --role module-contributor # Přispěvatel modulu: totéž + Builder gate
 ```
 
-Instalace bez `--role` je explicitní Admin opt-in (`scope.restricted_slots:
-"include"`) a materializuje i absentní restricted slot. `--role steward` a
-`--role builder` (`"exclude"`) materializují jen běžné sloty a jejich
-descendants včetně podporovaných aktivních `repository_db_mount` na
-`mission-control/db` nebo `workspace/<module>/db`; deprecated
-`modules/<module>/db` se nematerializuje. Restricted slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope`
-bez jediného `git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před klonem read-only
-ověří membership a WRITE na běžných repozitářích dané role. Běžný
+Instalace bez `--role` je explicitní opt-in Admina Organizace
+(`scope.restricted_slots: "include"`) a materializuje i absentní restricted
+slot. `--role module-maintainer` a `--role module-contributor` (`"exclude"`)
+materializují jen běžné sloty a jejich descendants včetně podporovaných
+aktivních `repository_db_mount` na `mission-control/db` nebo
+`workspace/<module>/db`; deprecated `modules/<module>/db` se nematerializuje.
+Restricted slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope`
+bez jediného `git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před
+klonem read-only ověří WRITE na běžných repozitářích instalačního scope dané
+volby. Je to instalační WRITE gate, ne důkaz role modulu: Správce modulu
+potřebuje tam, kde repozitář umí branch rules, `maintain`, a Přispěvatel
+modulu existuje jen tam, kde je umí (rozhodnutí 0232);
+`access.status: "ready"` proto roli nedokazuje. Staré hodnoty `--role steward`
+a `--role builder` CLI přijímá jen jako zastaralé aliasy s varováním na
+stderr; report (`access.role`, `scope.role`) a `required_roles` manifestu dál
+nesou nasazené hodnoty `steward` a `builder` (rozhodnutí 0234). Běžný
 `lazurio update` (`restricted_slot_policy: "defer"`) absentní restricted slot
 nikdy automaticky neklonuje (`restricted_not_materialized`), namountovaný dál
 aktualizuje; Doctor tento záměrný stav hlásí jen advisory. Neznámý nebo

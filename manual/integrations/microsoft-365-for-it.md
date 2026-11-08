@@ -103,4 +103,4 @@ souhlasem správce na fungování nic nemění.
 ## Kontakt
 
 - Lazurio: <jméno, e-mail, telefon>
-- Správce vaší Organizace v Lazuriu: <jméno, e-mail>
+- Admin vaší Organizace v Lazuriu: <jméno, e-mail>

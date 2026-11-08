@@ -2,8 +2,8 @@
 
 `bun run mission-control:smoke` je živý, read-only audit Mission Controlu ve
 všech lokálně namountovaných Organizacích Lazuria. Není součástí běžného
-Builder publish hot pathu a nevytváří druhé ACL. GitHub členství, Teamy a repo
-granty zůstávají jedinou autoritou zápisu.
+publish hot pathu Přispěvatele modulu a nevytváří druhé ACL. GitHub členství,
+Teamy a repo granty zůstávají jedinou autoritou zápisu.
 
 Smoke z worktree automaticky najde primární checkout stejného Lazurio repa;
 prázdný checkout bez Organizací vždy selže, aby nemohl vrátit false green.
@@ -14,12 +14,13 @@ bun run mission-control:smoke
 bun scripts/mission-control-trust-smoke.mjs --workspace-root /exact/Lazurio/root
 ```
 
-Audit používá stejný trusted GitHub provider seam jako Organization activation:
-přesně nalezené `gh`, spuštění bez shellu, sanitizované prostředí a
-strukturované chyby. Vyžaduje přihlášení s právem číst privátní repa, jejich
-collaboratory, branch protection a repo/org rulesety. Pro důkaz, že 404 opravdu
-znamená neexistující privátní repo, vyžaduje aktivní Organization Owner roli;
-bez ní 404 selže zavřeně jako neověřený stav. Audit ověřuje zejména:
+Audit používá stejný trusted GitHub provider seam jako Organization
+activation: přesně nalezené `gh`, spuštění bez shellu, sanitizované prostředí
+a strukturované chyby. Vyžaduje přihlášení s právem číst privátní repa, jejich
+collaboratory, branch protection a repo/org rulesety. Pro důkaz, že 404
+opravdu znamená neexistující privátní repo, vyžaduje aktivní roli Vlastník
+Organizace; bez ní 404 selže zavřeně jako neověřený stav. Audit ověřuje
+zejména:
 
 - lokální Organization root, jeho živý GitHub owner a `mission-control-data`
   jsou svázané přes immutable Organization/repository ID; přejmenovatelný
@@ -28,8 +29,8 @@ bez ní 404 selže zavřeně jako neověřený stav. Audit ověřuje zejména:
   `mission-control-data` pouze k read-only lookupu pod živě ověřeným ownerem;
   výsledek se přijme až po shodě immutable Organization/repository ID;
 - deklarovaný active/planned stav odpovídá živé existenci data repa; jen
-  GitHub 404 potvrzené aktivní Owner rolí znamená „repo neexistuje“, jiné
-  chyby audit zastaví;
+  GitHub 404 potvrzené aktivní rolí Vlastník Organizace znamená „repo
+  neexistuje“, jiné chyby audit zastaví;
 - `provider-enforced` zakazuje force push, delete a bypass buď klasickou
   branch protection, nebo efektivním repo/org rulesetem;
 - silnější nativní GitHub policy — například povinný PR, status checks,
@@ -41,12 +42,12 @@ bez ní 404 selže zavřeně jako neověřený stav. Audit ověřuje zejména:
 
 Smoke není druhý IAM ani úplný credential audit. Počet writerů vychází z
 GitHub collaborators API; write-enabled deploy keys, instalace GitHub Apps a
-workflow tokeny záměrně neinventarizuje. Ty spravuje Organization Admin v
+workflow tokeny záměrně neinventarizuje. Ty spravuje Admin Organizace v
 nativních GitHub surfaces a před přidáním takové unattended write cesty musí
 aktivovat `provider-enforced` ochranu.
 
 Výstup vždy ukazuje skutečný počet writerů. Číslo není druhý ACL ani hardcoded
-limit: Organization Admin posoudí, kdy kruh přestává být malý a osobně
+limit: Admin Organizace posoudí, kdy kruh přestává být malý a osobně
 dohlédnutelný. Před přidáním automatizace, externího writera nebo jiným
 materiálním rozšířením aktivuje placený plán a `provider-enforced` ochranu.
 

@@ -41,13 +41,13 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      bod 2e, nahrazuje 0182 bod 3).
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
-     zachovaná; propojení drží pracovní laptop uživatele nebo jeho osobní strana.
-     Výjimkou je SSH z Pracovního Prostředí člověka do Týmových Prostředí jeho
-     Teamů v téže Organizaci (0224 bod 2b; druhé `ssh` spuštěné v Pracovním
-     Prostředí jeho klíčem) a Správcovský přístup
-     z Pracovního Prostředí Admina do všech ostatních Prostředí jeho
-     Organizace (0202, 0224 bod 2c). Ke službám servisní Mašiny svého serveru (AI pool a další)
-     jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
+     zachovaná; propojení drží pracovní laptop uživatele nebo jeho osobní
+     strana. Výjimkou je SSH z Pracovního Prostředí člověka do Týmových
+     Prostředí jeho Teamů v téže Organizaci (0224 bod 2b; druhé `ssh` spuštěné
+     v Pracovním Prostředí jeho klíčem) a servisní vstup z Pracovního
+     Prostředí Admina Organizace do všech ostatních Prostředí jeho Organizace
+     (0202, 0224 bod 2c). Ke službám servisní Mašiny svého serveru (AI pool a
+     další) jdou Prostředí po vnitřní síti serveru podle povolení v Deployment
      Repu, ne grantem Headscale (0209); SSH ani jiný port z toho neplyne.
      Druhou výjimkou jsou stanoviště Organizace LazurioDevelopment (0217).
      Stanoviště je Pracovní Prostředí jednoho člověka a propojení do
@@ -64,28 +64,29 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    na osobní VM, a to bez výjimky. Na osobní laptop nebo jiné zařízení dosáhne
    Prostředí jen Přístupem na zařízení podle pravidla 8 (0224 bod 2e).
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc uživatelů v jednom OS
-   účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
-   neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
-   nevzniká druhý roster. Příchozí SSH přijímá i z Pracovních Prostředí členů
-   Teamu (0224 bod 2b). Výjimkou je servisní SSH z jmenovaného Pracovního
-   Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
-   uzel a adresa), i když Admin není členem toho Teamu. Odchozí grant na jiné VM
-   nikdy nemá; ke službám servisní Mašiny svého serveru, které jí Deployment
-   Repo povolí, jde po vnitřní síti serveru, ne přes Headscale (0209). Na
-   zařízení dosáhne jen Přístupem na zařízení podle pravidla 8, tedy jen když
-   ho pro toto Týmové Prostředí zapne Owner zařízení; jinak by agenti jednoho
-   člena došli na laptop jiného.
+   účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je
+   vázaná neměnným `github_team_id` (0147/0149); členství se čte živě z
+   GitHubu a nevzniká druhý roster. Příchozí SSH přijímá i z Pracovních
+   Prostředí členů Teamu (0224 bod 2b). Výjimkou je servisní SSH z jmenovaného
+   Pracovního Prostředí Vlastníka nebo Admina téže Organizace podle 0202
+   (přesný zdrojový uzel a adresa), i když Admin Organizace není členem toho
+   Teamu. Odchozí grant na jiné VM nikdy nemá; ke službám servisní Mašiny
+   svého serveru, které jí Deployment Repo povolí, jde po vnitřní síti
+   serveru, ne přes Headscale (0209). Na zařízení dosáhne jen Přístupem na
+   zařízení podle pravidla 8, tedy jen když ho pro toto Týmové Prostředí zapne
+   Owner zařízení; jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi uživateli nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
-7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
-   Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
-   (`owner_admin_ssh_grants`) a podle rozhodnutí 0202 i z jeho jmenovaného
-   Pracovního Prostředí („Owner nebo Admin“ v 0202 je tatáž role Owner,
-   v GitHub API `admin`). Ownerství jiné Organizace obsluhované tímtéž
-   hostem správu nedává; telefon, jiné pracovní VM ani pracovní laptop ji
-   nedostávají. Stanoviště LazurioDevelopment ji smí mít přes headless
-   klienta svého člověka, jen u Organizace, jejímž je živým Ownerem, a jen
-   jak to deklaruje overlay hostu (dodatek 0217 z 2026-10-28).
+7. **Správa Conglomerate Hostu** patří Vlastníkovi té Organizace na GitHubu,
+   která Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní
+   VM (`owner_admin_ssh_grants`) a podle rozhodnutí 0202 i z jeho jmenovaného
+   Pracovního Prostředí („Owner nebo Admin“ v 0202 je tatáž role Vlastník
+   Organizace, v GitHub API `admin`). Role Vlastník Organizace v jiné
+   Organizaci obsluhované tímtéž hostem správu nedává; telefon, jiné pracovní
+   VM ani pracovní laptop ji nedostávají. Stanoviště LazurioDevelopment ji smí
+   mít přes headless klienta svého člověka, jen u Organizace, ve které má
+   živou roli Vlastník Organizace, a jen jak to deklaruje overlay hostu
+   (dodatek 0217 z 2026-10-28).
 
 8. **Přístup na zařízení (0224 bod 2e).** Prostředí smí SSH na konkrétní
    zařízení, například na laptop svého člověka nebo na pracovní stanici
@@ -93,19 +94,19 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    všech podmínek:
    - **Zapíná ho Owner zařízení.** Osobní zařízení zapíná jeho člověk a vybere
      ze svých Prostředí (Osobního i Pracovních), která na ně smějí. Zařízení
-     Organizace zapíná její Admin a vybere Prostředí té Organizace, která na ně
-     smějí. Nikdo jiný přístup na cizí zařízení nezapne.
+     Organizace zapíná Admin Organizace a vybere Prostředí té Organizace,
+     která na ně smějí. Nikdo jiný přístup na cizí zařízení nezapne.
    - **Výslovně, pro každé zařízení zvlášť, nikdy odvozením.** Souhlas se váže
      na konkrétní zařízení a vybraná Prostředí. Neodvozuje se ze jména uzlu,
-     popisu, Headscale usera, role Owner ani z toho, že zařízení smí do
-     Prostředí. Owner ho může kdykoli odvolat; nová spojení pak do 5 minut
-     selžou.
+     popisu, Headscale usera, role Vlastník Organizace ani z toho, že zařízení
+     smí do Prostředí. Owner zařízení ho může kdykoli odvolat; nová spojení
+     pak do 5 minut selžou.
    - **Jen vybraná Prostředí.** Ostatní Prostředí, Organizace téhož
      Conglomerate ani cizí uživatelé z toho nic nezískávají.
    - **Vědomý důsledek.** Zpřístupní-li člověk svůj osobní počítač Pracovnímu
-     Prostředí, dostane technickou cestu do zařízení, na kterém pracuje
-     i soukromě, i autorita nad tímto Prostředím: Owneři a Admini Organizace,
-     Správcovský přístup a každý, kdo smí na Prostředí spouštět práci, včetně
+     Prostředí, dostane technickou cestu do zařízení, na kterém pracuje i
+     soukromě, i autorita nad tímto Prostředím: Vlastníci a Admini Organizace,
+     servisní vstup a každý, kdo smí na Prostředí spouštět práci, včetně
      agentních účtů. Proto rozhoduje jen Owner zařízení a souhlas jde odvolat.
    - **Osobní VM nikdy.** Přístup na zařízení platí pro klientská zařízení, ne
      pro osobní VM. Ta zůstává výhradně v osobní zóně (0153) a pracovní VM na
@@ -154,11 +155,12 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   Headscale usery.
 - **Přechodný stav existujících uzlů:** nové uzly se zakládají rovnou pod
   osobním Headscale userem. Existující uzel pod jiným userem (např. Windows,
-  iPhone a osobní VM Ownera Acme-Tech v `org-acme-tech`) se přesune jen při příležitosti,
-  kdy se zařízení stejně znovu přihlašuje, nebo až Headscale přesun uzlu bez
-  nového přihlášení umožní (v0.29.3 `nodes move` nemá). Znovu párovat zařízení
-  jen kvůli tomuto pravidlu se nesmí. Zóny se do té doby odvozují z
-  deklarovaného záznamu Mašiny v infra, ne z Headscale usera.
+  iPhone a osobní VM Vlastníka Organizace Acme-Tech v `org-acme-tech`) se
+  přesune jen při příležitosti, kdy se zařízení stejně znovu přihlašuje, nebo
+  až Headscale přesun uzlu bez nového přihlášení umožní (v0.29.3 `nodes move`
+  nemá). Znovu párovat zařízení jen kvůli tomuto pravidlu se nesmí. Zóny se do
+  té doby odvozují z deklarovaného záznamu Mašiny v infra, ne z Headscale
+  usera.
 - Technické jméno osobní VM = lowercase GitHub login (stejný slug jako Headscale
   user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí uživatel (osobní VM
@@ -186,24 +188,24 @@ a selhání drží [Cizí tailnety na stanovišti](station-tailnets.md).
   stránka [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
   dokumentace Lazuria, oddíl Jména.
 - **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
-  virtualizační host `<org>-proxmox-NN` (např. `acme-proxmox-01`, aby ho
-  správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
-  je krátký štítek Organizace, který Owner zvolí jednou a který se nemění
-  s přejmenováním GitHub loginu ani DNS slugu); číslování od `01`, smí
-  přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
-  nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
+  virtualizační host `<org>-proxmox-NN` (např. `acme-proxmox-01`, aby ho ten,
+  kdo spravuje více Organizací, rozlišil v konzoli providera, SSH i tailnetu;
+  `<org>` je krátký štítek Organizace, který Vlastník Organizace zvolí jednou
+  a který se nemění s přejmenováním GitHub loginu ani DNS slugu); číslování od
+  `01`, smí přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou
+  Machines nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
   nepřejmenovávají. Veřejně ji pro GEN4 popisuje stránka
   [Servery a Conglomerate Host](https://documentation.lazurio.ai/cs/servers-conglomerate-host/)
   dokumentace Lazuria, oddíl Jména; tento bod zůstává záznamem GEN3.
 - **Jedna servisní Mašina na server (0209).** Každý virtualizační host
   Organizace má právě jednu servisní Mašinu `services-NN` s číslem hostu
   (`<org>-proxmox-01` má `services-01`). Je to Pracovní Prostředí jen pro
-  Ownery a Adminy Organizace a každá její služba (AI pool, brány a další)
+  Vlastníky a Adminy Organizace a každá její služba (AI pool, brány a další)
   běží ve vlastním kontejneru. Když jí dochází výkon, zvětší se; druhá
   servisní Mašina na tomtéž hostu nevzniká. Kde běží diagnostický kolektor,
   zatím otevřeně určí navazující rozhodnutí (0209 bod 7). Host s Osobními
-  Prostředími více uživatelů služby Organizace nemá. Veřejně toto pravidlo
-  pro GEN4 popisuje tatáž stránka, oddíl Jména.
+  Prostředími více uživatelů služby Organizace nemá. Veřejně toto pravidlo pro
+  GEN4 popisuje tatáž stránka, oddíl Jména.
 
 ## Infra je blueprint
 
@@ -218,14 +220,15 @@ Mašin.
 **Síťová lane (cíl):** merge změny, která se týká jen seznamu Mašin, zón a
 Headscale userů, do `main` se na Conglomerate Hostu projeví sám. Proběhne
 render, `headscale policy check`, apply a kontrola z pohledu admin zdroje, že
-se správce nezamkl; jinak se host vrátí na poslední funkční stav. Autoritou
-zůstává GitHub: merge Organization Adminem, nezávislé schválení a povinné
-checky. Mechanismus vybere plný shaping, preferuje se udržovaný standard (např.
-GitHub Actions self-hosted runner na Conglomerate Hostu, jen pro toto privátní
-repo, spouštěný `push` do `main` s chráněným environmentem). Validace
-neprověřeného kódu z PR na Conglomerate Hostu nikdy neběží. Enrollment klíčů,
-balíčky, služby, DNS, certifikáty a credentials zůstávají v push apply s
-jednorázovým Permitem. Do zavedení lane platí push apply i pro síť.
+se správa hostu nezamkla; jinak se host vrátí na poslední funkční stav.
+Autoritou zůstává GitHub: merge Adminem Organizace, nezávislé schválení a
+povinné checky. Mechanismus vybere plný shaping, preferuje se udržovaný
+standard (např. GitHub Actions self-hosted runner na Conglomerate Hostu, jen
+pro toto privátní repo, spouštěný `push` do `main` s chráněným environmentem).
+Validace neprověřeného kódu z PR na Conglomerate Hostu nikdy neběží.
+Enrollment klíčů, balíčky, služby, DNS, certifikáty a credentials zůstávají v
+push apply s jednorázovým Permitem. Do zavedení lane platí push apply i pro
+síť.
 
 ## IPv4 rozsahy
 
@@ -246,20 +249,20 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 
 | Uživatel | Domovský Conglomerate | Osobní zóna | Pracovní zóna |
 | --- | --- | --- | --- |
-| Owner Acme-Tech (`example-owner`) | Acme-Tech | Windows laptop, iPhone, osobní VM „Friday“ | pracovní VM Acme-Tech „Henry“ |
+| Vlastník Organizace Acme-Tech (`example-owner`) | Acme-Tech | Windows laptop, iPhone, osobní VM „Friday“ | pracovní VM Acme-Tech „Henry“ |
 | Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM v HumanAndMachine-ai a ve dvou dalších Organizacích |
 | Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM v další Organizaci |
 
 Pracovní VM na osobní laptop nesmí, dokud Owner laptopu nezapne Přístup na
-zařízení podle pravidla 8. Owner Acme-Techu chce, aby jeho Windows notebook
-byl dosažitelný z pracovního Prostředí Acme-Techu; podle pravidla 8
-to zapne sám jako Owner zařízení. **Dnes to ještě neplatí:** služba, která
-souhlasy převádí na hrany, zatím neběží, takže bez výslovné výjimky
-v `Acme-Tech/infra` pracovní VM Acme-Techu na notebook nedosáhne a notebook
-je v příkladu jen v osobní zóně. Do osobní zóny jiných uživatelů ani jiných
-Organizací se tím nic neotevírá. Uživatel s pracovním laptopem Organizace má SSH
-z pracovního laptopu do přiděleného pracovního Environmentu; opačný směr jen
-Přístupem na zařízení podle pravidla 8.
+zařízení podle pravidla 8. Vlastník Organizace Acme-Tech chce, aby jeho
+Windows notebook byl dosažitelný z pracovního Prostředí Acme-Techu; podle
+pravidla 8 to zapne sám jako Owner zařízení. **Dnes to ještě neplatí:**
+služba, která souhlasy převádí na hrany, zatím neběží, takže bez výslovné
+výjimky v `Acme-Tech/infra` pracovní VM Acme-Techu na notebook nedosáhne a
+notebook je v příkladu jen v osobní zóně. Do osobní zóny jiných uživatelů ani
+jiných Organizací se tím nic neotevírá. Uživatel s pracovním laptopem
+Organizace má SSH z pracovního laptopu do přiděleného pracovního Environmentu;
+opačný směr jen Přístupem na zařízení podle pravidla 8.
 
 Realizace a stav: Mission Control DEV-6614. Konkrétní instanci drží privátní
 Deployment Repo té Organizace (`<Org>/infra`) v `machines/<host>/operator-device-access.md`.

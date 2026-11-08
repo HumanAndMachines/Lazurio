@@ -295,7 +295,7 @@ export function classifyRepositoryProbe(
   response,
   absenceProof = {
     confirmed: false,
-    message: "chybí aktivní Organization Owner proof přihlášeného gh účtu",
+    message: "chybí důkaz aktivní role Vlastník Organizace přihlášeného gh účtu",
   },
 ) {
   if (response?.ok === true) {
@@ -439,7 +439,7 @@ function organizationOwnerProof(provider, organization) {
   if (response.ok) {
     return {
       confirmed: false,
-      message: "přihlášený gh účet nemá aktivní Organization Owner roli",
+      message: "přihlášený gh účet nemá aktivní roli Vlastník Organizace",
     };
   }
   return {
@@ -863,7 +863,7 @@ function inspectOrganization(organizationRoot, { provider, gitReader, resolution
       }),
     );
     result.notes.push(
-      "Writer count vychází z GitHub collaborators API; deploy keys, GitHub Apps a workflow tokeny zůstávají v Organization Admin credential inventáři mimo root audit",
+      "Writer count vychází z GitHub collaborators API; deploy keys, GitHub Apps a workflow tokeny zůstávají v credential inventáři Admina Organizace mimo root audit",
     );
   }
   return result;

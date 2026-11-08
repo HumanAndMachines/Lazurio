@@ -124,11 +124,13 @@ Ruční postup je stejný jako na pracovní stanici
 3. Rezidentní CLI `update`: synchronizuje checkouty Root Repa (decision 0129);
    bez přihlášení Organizaci nenatáhne. Nejde o `lazurio update`
    LazurioPlatform.
-4. Rezidentní CLI `organization install <setup-organizace> --role builder --json`
-   (např. `ExampleOrg`). Gate read-only ověří živé členství uživatele
-   v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
-   pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
-   Restricted Admin-only sloty (`infra`) Buildera neblokují a nemountují se.
+4. Rezidentní CLI `organization install <setup-organizace> --role module-contributor --json`
+   (např. `ExampleOrg`; rezidentní CLI vydané před rozhodnutím 0234 zná jen
+   zastaralou hodnotu `--role builder`). Gate read-only ověří živé členství
+   uživatele v Organizaci a Teamech a WRITE capability na aktivních repech
+   Přispěvatele modulu, pak zmaterializuje Organizaci a její moduly do
+   `~/Lazurio/organizations/`. Restricted sloty jen pro Admina Organizace
+   (`infra`) Přispěvatele modulu neblokují a nemountují se.
 5. Brána dokončení má dvě části: výsledek kroku 4 (`organization install …
    --json`) nehlásí žádný required `fail`, `blocked` ani `incomplete` a
    `bun run doctor:task` v primárním checkoutu Organizace je zelený. Dokud
@@ -161,7 +163,7 @@ zapíše přesný blocker a zastaví se.
 skončila: týmová VM má fungovat s botem Organizace hned po předání. Když na ní
 bot neběží (chybí `/etc/lazurio/github-broker/environment`), je to vada
 Machines k opravě vpřed, ne důvod přihlásit uživatele: Agent osobní přihlášení
-nespouští ani nenavrhuje, zapíše blocker pro Organization Admina (níže) a
+nespouští ani nenavrhuje, zapíše blocker pro Admina Organizace (níže) a
 zastaví se. Osobní účet, který na týmové VM zůstal přihlášený z dřívějška,
 uživatel odhlásí.
 
@@ -181,7 +183,7 @@ i původním úkolem:
   `gh auth status --json hosts` hlásí právě `lazurio-for-github[bot]` (jeden
   host `github.com`, jedna položka, žádná další identita).
 - `gh` bota nehlásí, nebo se vedle bota objeví jiný
-  účet, je to blocker pro Organization Admina (níže): Agent nepokračuje,
+  účet, je to blocker pro Admina Organizace (níže): Agent nepokračuje,
   nespouští rezidentní `update` ani install a nenavrhuje osobní přihlášení.
 - `gh auth login`, `gh auth token` a ostatní `gh auth`/`gh config` příkazy
   brokered `gh` záměrně odmítne. **Osobní přihlášení Agent nikdy nespouští,
@@ -201,7 +203,7 @@ Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
    lokální omezení klonování, ne autorita: o každém tokenu rozhoduje broker
    Organizace a autoritou přístupu zůstávají živé GitHub granty Teamu. Repo v
    rozsahu, ke kterému broker token odmítne (např. po odebrání grantu), je
-   blocker pro Organization Admina, ne důvod k jinému přihlášení.
+   blocker pro Admina Organizace, ne důvod k jinému přihlášení.
 3. `bun run doctor:task` v primárním checkoutu Organizace. Brána dokončení je
    stejná jako v kroku 5 osobní VM (výsledek installu a `doctor:task`);
    identitu bota už prokázala kontrola `gh auth status` výše. Rezidentní CLI
@@ -220,11 +222,11 @@ Pravidla práce na týmové VM (0148):
   oprávněný uživatel, který tím přebírá odpovědnost; na
   GitHub Free to drží proces, ne technika.
 - Repozitář mimo rozsah brokeru Agent neklonuje jinou cestou; přístup Teamu
-  mění Organization Admin grantem GitHub Teamu, ne Agent.
+  mění Admin Organizace grantem GitHub Teamu, ne Agent.
 
 Když brokered identita chybí nebo selhává (`gh auth status` nehlásí bota,
 Doctor `github_broker_*`, Machines readback `vm-<vmid>-github-broker: fail`),
-je to diagnóza pro Organization Admina (`hosted-machine-handover.md`), ne
+je to diagnóza pro Admina Organizace (`hosted-machine-handover.md`), ne
 důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se.
 
 ## Co drží kdo

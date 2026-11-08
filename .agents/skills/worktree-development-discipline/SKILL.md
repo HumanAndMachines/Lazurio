@@ -99,10 +99,10 @@ autoritu.
 7. Ještě před otevřením nebo předáním PR napiš rozhodnutelný popis: motivaci a
    relevantní souvislosti, cílový stav a přínos merge, skutečný rozsah včetně
    vědomě vynechaných částí, ověření a zbývající rizika, blokery či navazující
-   kroky. Steward nesmí být nucen odvozovat „proč" jen z diffu. Popis po změně
-   scope, rebase nebo zásadním review nálezu srovnej se skutečným HEADem a
-   Mission Control plánem; samotný seznam souborů, commitů nebo testů není
-   dokončený handoff.
+   kroky. Reviewer ani Správce modulu nesmí být nucen odvozovat „proč" jen z
+   diffu. Popis po změně scope, rebase nebo zásadním review nálezu srovnej se
+   skutečným HEADem a Mission Control plánem; samotný seznam souborů, commitů
+   nebo testů není dokončený handoff.
 8. Před každým pushem PR branche spusť preflight s cwd v edit worktree.
    `bun run pr:preflight` použij jen tehdy, když tento script deklaruje vlastní
    root `package.json` editovaného repa. U nested repa bez něj spusť přímo
@@ -129,17 +129,16 @@ autoritu.
    práce. Po prvním pushi branch hned otevři PR proti správné base branchi
    jako GitHub Draft PR. Kde plán repozitáře Draft PR neumí (soukromé
    repozitáře na GitHub Free), otevři běžný PR a do popisu napiš, že je
-   rozpracovaný. Pokud uživatel výslovně zakázal PR otevřít,
-   nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
-   koncem práce si nástrojem na otázky vyžádej rozhodnutí: práci zahodit,
-   nebo PR povolit —
-   samotná remote branch bez PR není přípustná náhrada.
-   Jakmile je práce hotová a ověřená, přepni PR na Ready for review
-   sám, ještě před handoffem — Ready není Publikace, říká jen „připraveno
-   ke kontrole"; hotová práce nezůstává viset jako GitHub Draft. Remote
-   branch bez PR není dokončený handoff: snadno zapadne, Steward ji nemusí
-   vidět a další agent ji nemusí převzít. Rozdělaná práce, která existuje
-   jen lokálně, je porušení disciplíny (decisions 0103/0112).
+   rozpracovaný. Pokud uživatel výslovně zakázal PR otevřít, nepokračuj za
+   hranici lokálního experimentu a před dalším pushem nebo koncem práce si
+   nástrojem na otázky vyžádej rozhodnutí: práci zahodit, nebo PR povolit —
+   samotná remote branch bez PR není přípustná náhrada. Jakmile je práce
+   hotová a ověřená, přepni PR na Ready for review sám, ještě před handoffem —
+   Ready není Publikace, říká jen „připraveno ke kontrole"; hotová práce
+   nezůstává viset jako GitHub Draft. Remote branch bez PR není dokončený
+   handoff: snadno zapadne, Správce modulu ji nemusí vidět a další agent ji
+   nemusí převzít. Rozdělaná práce, která existuje jen lokálně, je porušení
+   disciplíny (decisions 0103/0112).
 10. Při pauze, blockeru, předání a před koncem agentního běhu aktualizuj
    `last_touched`, conversation origin aktuálního writera a recovery handoff.
    Při obnově práce lze podle lokálního vodítka dohledat původní chat, ale před
@@ -198,7 +197,7 @@ autoritu.
    nevytváří GitHub práva ani neobchází review a branch rules. Samostatný
    Release, infra apply a změny přístupů mají vlastní podmínky.
    Pokud uživatel nikoho neurčil, polož mu volbu nástrojem na otázky
-   — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
+   — Správce modulu použij bez další otázky jen tehdy, když ho jako výchozí
    rozhodující osobu určuje politika repa. Předej uživateli, kdo teď
    dotažení vlastní. Merge neobcházej ani na
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává

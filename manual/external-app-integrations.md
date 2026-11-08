@@ -36,7 +36,7 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
 - **Integrační služba Služeb serveru není vlastní napojení.** Služba, kterou
   Organizace provozuje ve Službách serveru (root 0209, dodatek z
   2026-10-19 večer), například MCP brána k firemnímu systému, má jediný
-  credential v custody Služeb serveru. Admin ji povoluje Prostředím téhož
+  credential v custody Služeb serveru. Admin Organizace ji povoluje Prostředím téhož
   serveru v Deployment Repu; povolené Prostředí drží jen svůj token a
   služba se v něm ukáže v Integracích sama. Agent ji nepřidává, neodebírá
   ani k ní nikoho nepřihlašuje. Vlastní MCP servery a přihlášení uživatele
@@ -181,9 +181,10 @@ Organizace. Katalog obsahuje:
 - `.codex/config.toml` — totéž pro Codex (načítá se jen v trusted projektu);
   `env_vars` nese jen jména proměnných.
 
-Přidání nebo změna integrace v katalogu = PR ze worktree ke Stewardovi.
-Tím je kurátorovaný obsah katalogu vynucený procesně; vlastní napojení
-uživatele na jeho Environmentu tímto procesem neprochází.
+Přidání nebo změna integrace v katalogu = PR ze worktree ke Správci modulu
+nebo Adminovi Organizace. Tím je kurátorovaný obsah katalogu vynucený
+procesně; vlastní napojení uživatele na jeho Environmentu tímto procesem
+neprochází.
 
 Pojmenování: server `<org_slug>_<provider>` (např. `example_organization_slack`),
 env proměnné `<ORG_SLUG>_<PROVIDER>_<PURPOSE>` (např.
@@ -379,7 +380,7 @@ onboarding checklistu Organizace, ne do per-machine kroků:
 | Canva | Admin týmu povoluje „AI Connector" v Controls and Permissions |
 | Microsoft 365 | Firemní aplikace Organizace (dodatek 0162 z 2026-10-14): jedna aplikace Entra jen pro tenant firmy, veřejný klient bez tajného klíče, kterou založí IT firmy ve svém prohlížeči a jednou udělí souhlas jménem organizace; do nastavení Organizace jdou jen id tenantu, id aplikace, zapnuté aplikace a adresy Launchpadů. Postup [integrations/microsoft-365.md](integrations/microsoft-365.md) |
 | Google Workspace | Organizace vlastní GCP projekt s OAuth clientem; admin řídí povolená API a scopes |
-| ESO9 | Organization owner jmenuje správce nebo implementačního partnera; ten potvrdí API variantu, provider-side oprávnění, audit a samostatnou revokaci před aktivací |
+| ESO9 | Vlastník Organizace jmenuje technického ownera ESO9 nebo implementačního partnera; ten potvrdí API variantu, provider-side oprávnění, audit a samostatnou revokaci před aktivací |
 
 ## Osobní integrace (personalspace scope)
 

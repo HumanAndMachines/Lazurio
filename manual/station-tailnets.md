@@ -184,8 +184,8 @@ nevypíšou ani nespojí a skončí kódem 1:
 
 ## Převzetí existujícího headless klienta
 
-Uzel si zachová identitu (klíč uzlu ve stavu), takže Admin cizího tailnetu
-nic znovu neschvaluje:
+Uzel si zachová identitu (klíč uzlu ve stavu), takže Admin Organizace, které
+cizí tailnet patří, nic znovu neschvaluje:
 
 1. Zjisti statedir klienta (`--statedir` v jeho jednotce), login server
    a jméno uzlu.
@@ -302,12 +302,12 @@ tailscale --socket=/var/lib/lazurio-tailnets/example-org/run/tailscaled.sock sta
   tatáž verze ve dvou buildech, takže `tailscale --socket=…` na hostu vypíše
   `Warning: client version … != tailscaled server version …`. Je neškodné;
   `ssh-proxy` ho při shodné verzi vynechá a skutečný rozdíl verzí ukáže.
-- **Chybí schválení Admina:** uzel je `NeedsLogin` a `up` i `status`
-  ukážou odkaz k přihlášení. Schválený uzel bez grantů je `Running` s nula
-  peery; to opraví grant Admina té Organizace, ne tento nástroj.
+- **Chybí schválení Admina Organizace:** uzel je `NeedsLogin` a `up` i
+  `status` ukážou odkaz k přihlášení. Schválený uzel bez grantů je `Running` s
+  nula peery; to opraví grant Admina té Organizace, ne tento nástroj.
 - **Tailnet nenabízí split DNS:** jména mimo MagicDNS se přeloží jen tehdy,
-  když je Admin tailnetu nastaví; ostatní jména 100.100.100.100 pošle
-  resolveru Dockeru, tedy do veřejného DNS.
+  když je Admin Organizace, které tailnet patří, nastaví; ostatní jména
+  100.100.100.100 pošle resolveru Dockeru, tedy do veřejného DNS.
 - **Login server za adresou z `100.64.0.0/10`** (dosažitelný jen přes jiný
   tailnet) je z kontejneru úmyslně nedosažitelný.
 - **Nová verze Tailscale:** `up … --image tailscale/tailscale:v<verze>`

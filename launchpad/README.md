@@ -1,6 +1,6 @@
 # Lazurio Launchpad
 
-Lazurio Launchpad je sdílený builder-first vstup do jednoho Lazurio Rootu.
+Lazurio Launchpad je sdílený vstup Přispěvatelů modulů do jednoho Lazurio Rootu.
 Patří do Lazurio Rootu, protože má obsluhovat více Organizací a aktualizovat se
 z jednoho společného upstreamu.
 
@@ -163,11 +163,12 @@ deployment, ingress, identity ani MCP.
 Když je Team Workspace zapnutý, T3 Code a Launchpad jsou `desired-running`;
 tenký supervisor hlídá pouze je. Dashboard Development smí projektovat jen
 tyto dva stabilní vstupy a žádný modulový lifecycle nevlastní. Launchpad po
-vlastní readiness automaticky udržuje výchozí App každého Team modulu. Builder
-může v aktuální Launchpad session přepnout Modul z `main` na exact worktree;
-výběr se po restartu neobnovuje a Hosted Workspace znovu konverguje na `main`.
-Produkční aplikace smí Dashboard zobrazit až z pozdějšího ověřeného deployment
-katalogu, nikdy z vývojového lifecycle stavu Workspace.
+vlastní readiness automaticky udržuje výchozí App každého Team modulu.
+Přispěvatel modulu může v aktuální Launchpad session přepnout Modul z `main`
+na exact worktree; výběr se po restartu neobnovuje a Hosted Workspace znovu
+konverguje na `main`. Produkční aplikace smí Dashboard zobrazit až z
+pozdějšího ověřeného deployment katalogu, nikdy z vývojového lifecycle stavu
+Workspace.
 
 Produkční release patří do samostatného follow-upu: protected source/tag →
 reproducible immutable artifact → isolated production runtime s explicitním
@@ -228,10 +229,14 @@ stejného seznamu.
 
 ### Laptopová strana spojení: Síť a Spojení
 
-Cíl: nový uživatel si při onboardingu naklikne maximum sám, zásah do Headscale
-zůstává na oprávněném uživateli (Admin Conglomerate Hostu) a port 22 mezi nody
-zůstává grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`).
-Model hran, směrů a politiky drží issue HumanAndMachines/Lazurio#416.
+Cíl: nový uživatel si při onboardingu naklikne maximum sám a zásah do Headscale
+zůstává na oprávněném uživateli. Zařízení schvaluje Admin každé dotčené
+Organizace (0192, `manual/environment-access-model.md`); správa samotného
+Conglomerate Hostu je jiná věc a cílově ji drží jen ten, kdo je Vlastníkem
+i Adminem Organizace, která host vlastní (0228, zatím nenasazené;
+`manual/conglomerate-owner-administration.md`). Port 22 mezi nody zůstává
+grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`). Model hran, směrů a politiky drží issue
+HumanAndMachines/Lazurio#416.
 
 **Síť** (`/settings/network`, `GET /api/setup/network`): zjistí Tailscale na
 laptopu (macOS: aplikace i CLI, Windows: `Program Files\Tailscale`), aktivní
@@ -241,25 +246,27 @@ tailnet a pro každou Organizaci na tomto počítači stav vůči její síti:
 nemá `conglomerate_host.headscale_login_server`; pole je veřejné metadata a
 jede v `extensions.legacy` manifestu, discovery ho promítá jako
 `organizations[].conglomerate_host`). Pole je **dočasný můstek** jen pro
-laptopy v režimu pracovní stanice: cílově sítě dodá přihlášený Lazurio účet
-z Dashboardu a pole z manifestů zmizí (HumanAndMachines/Lazurio#416,
-migrační README `lazurio/migrations/organization-manifest/`). Tlačítko **Požádat o přijetí do sítě**
-(`POST /api/setup/network/join`) spustí `tailscale login --login-server <url>`,
-z výstupu nebo z `tailscale status --json` (`AuthURL`) vezme registrační URL
-`https://<server>/register/<klíč>` a žádost založí jako GitHub issue v root repu
-Organizace **účtem žadatele** (`gh issue create`): členové tam smějí psát,
-infra zůstává zavřené a GitHub zůstává jedinou autoritou přístupů. Issue
+laptopy v režimu pracovní stanice: cílově sítě dodá přihlášený Lazurio účet z
+Dashboardu a pole z manifestů zmizí (HumanAndMachines/Lazurio#416, migrační
+README `lazurio/migrations/organization-manifest/`). Tlačítko **Požádat o
+přijetí do sítě** (`POST /api/setup/network/join`) spustí
+`tailscale login --login-server <url>`, z výstupu nebo z
+`tailscale status --json` (`AuthURL`) vezme registrační URL
+`https://<server>/register/<klíč>` a žádost založí jako GitHub issue v root
+repu Organizace **účtem žadatele** (`gh issue create`): členové tam smějí
+psát, infra zůstává zavřené a GitHub zůstává jedinou autoritou přístupů. Issue
 obsahuje jméno zařízení, login, registrační klíč a přesné kroky pro Admina
-(`headscale nodes register --user <login> --key <klíč>`, grant portu 22
-v Deployment Repu, zavřít issue); zamítnutí = zavřít bez registrace. Žádost si
-Launchpad pamatuje v `$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/join-requests.json`
-a ukazuje stav issue; zavřené issue bez registrace notebooku znamená stav
-`refused` (zamítnuto nebo vypršelo) a tlačítko **Požádat znovu**. Aktivní síť
-laptopu určuje control server, ke kterému je `tailscaled` přihlášený
-(`tailscale debug prefs` → `ControlURL`), porovnaný s login serverem z manifestu;
-`CurrentTailnet.Name` je jen záložní zdroj. Bez Tailscale ukáže „Zablokováno“
-s odkazem na instalaci; bez přihlášeného `gh` vrátí registrační odkaz pro ruční
-předání Adminovi.
+Organizace (`headscale nodes register --user <login> --key <klíč>`, grant
+portu 22 v Deployment Repu, zavřít issue); zamítnutí = zavřít bez registrace.
+Žádost si Launchpad pamatuje v
+`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/join-requests.json` a ukazuje
+stav issue; zavřené issue bez registrace notebooku znamená stav `refused`
+(zamítnuto nebo vypršelo) a tlačítko **Požádat znovu**. Aktivní síť laptopu
+určuje control server, ke kterému je `tailscaled` přihlášený
+(`tailscale debug prefs` → `ControlURL`), porovnaný s login serverem z
+manifestu; `CurrentTailnet.Name` je jen záložní zdroj. Bez Tailscale ukáže
+„Zablokováno“ s odkazem na instalaci; bez přihlášeného `gh` vrátí registrační
+odkaz pro ruční předání Adminovi Organizace.
 
 **Spojení** (`/settings/connections`, `GET /api/setup/connections`): seznam
 Mašin, kam se z laptopu jde připojit (`~/.ssh/lazurio/*.conf`), a předávka
@@ -305,8 +312,8 @@ v `/etc/lazurio/lazurio.machine.json` přihlášení neomezuje. **Odhlásit**
 odebere z účtu SSH klíč této Mašiny a odhlásí `gh`, takže jde vrátit jakékoli
 přihlášení i rozbitou konfiguraci. Na Mašině s nasazeným
 `lazurio-for-github[bot]` nenabízí nic. Navazující tlačítka volají existující
-`POST /api/update` a `lazurio organization install <login> --role builder
---json`; na lokálním Launchpadu běží update stejně jako CLI z izolovaného
+`POST /api/update` a `lazurio organization install <login> --role
+module-contributor --json`; na lokálním Launchpadu běží update stejně jako CLI z izolovaného
 bundlu mimo pracovní checkout (`runIsolatedLazurioUpdate`), protože Launchpad
 sám běží z checkoutu, který aktualizuje, a engine by ho jinak odmítl
 (`runtime_not_isolated`); hostovaný resident je instalovaný mimo working root
@@ -1050,15 +1057,16 @@ jasný mechanismus:
   Organizations jej mohou stabilně vlastnit, ale na jedné mašině běží daný
   listener vždy jen jednou a další explicitní Start/Open jej převezme.
 - `Logs` čte lokální log mimo Git.
-- **Synchronizovat** je jediná Git update akce pro netechnického Buildera.
-  Engine ověří přesný origin, fetchne `main`, uloží případné tracked,
+- **Synchronizovat** je jediná Git update akce pro netechnického Přispěvatele
+  modulu. Engine ověří přesný origin, fetchne `main`, uloží případné tracked,
   untracked i binary změny do pojmenovaného a ověřeného recovery stashe a
   tento stash automaticky neobnovuje ani nemaže. Cizí branch přepne zpět na
-  `main`, ale její commity zachová. Potom provede jen `pull --ff-only
-  --no-rebase` a stav znovu ověří. Lokální main commity, diverged historie,
-  nebezpečný detached stav nebo rozpracovaný merge/rebase/am vrátí `blocked`
-  s přesným tlačítkem/promptem **Vyřešit s Codexem**. Každé nové spuštění stav
-  znovu zjistí; nevzniká plan/apply/resume ani skrytý update journal.
+  `main`, ale její commity zachová. Potom provede jen
+  `pull --ff-only --no-rebase` a stav znovu ověří. Lokální main commity,
+  diverged historie, nebezpečný detached stav nebo rozpracovaný
+  merge/rebase/am vrátí `blocked` s přesným tlačítkem/promptem **Vyřešit s
+  Codexem**. Každé nové spuštění stav znovu zjistí; nevzniká plan/apply/resume
+  ani skrytý update journal.
 - Nový commit v Organization rootu může změnit manifest. Engine proto po
   update všech Organization rootů jednou znovu načte inventář a teprve pak
   aktualizuje namountovaná

@@ -344,7 +344,7 @@ function normalizeTeams(teams, roster) {
       throw new ModuleScaffoldError(
         "unknown_team",
         `Organizace nedeklaruje Team ${unknown.join(", ")}.`,
-        `Použijte Team z lazurio.organization.json#teams (${roster.join(", ") || "žádný"}); nový Team zakládá Organization Admin.`,
+        `Použijte Team z lazurio.organization.json#teams (${roster.join(", ") || "žádný"}); nový Team zakládá Admin Organizace.`,
       );
     }
   }
@@ -417,7 +417,7 @@ function choosePort(port, organization, slug) {
     throw new ModuleScaffoldError(
       "pool_missing",
       `Organizace ${organization.slug} nemá module_port_pool; Modul s App nemá odkud vzít lease.`,
-      "Organization Admin doplní module_port_pool (100 portů disjunktních s ostatními Organizacemi).",
+      "Admin Organizace doplní module_port_pool (100 portů disjunktních s ostatními Organizacemi).",
     );
   }
   const taken = new Set(organization.existing_leases.map((lease) => lease?.port).filter(Number.isInteger));
@@ -439,7 +439,7 @@ function choosePort(port, organization, slug) {
   throw new ModuleScaffoldError(
     "pool_exhausted",
     `module_port_pool ${pool.start}-${pool.end} Organizace ${organization.slug} je vyčerpaný.`,
-    "Organization Admin rozhodne o rozšíření poolu nebo úklidu nepoužívaných leasů.",
+    "Admin Organizace rozhodne o rozšíření poolu nebo úklidu nepoužívaných leasů.",
   );
 }
 

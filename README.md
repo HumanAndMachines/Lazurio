@@ -132,7 +132,7 @@ Launchpad ho nenahrazuje.
 | Část | Úloha |
 | --- | --- |
 | **Lazurio CLI/Core** | Headless kontrakt pro kontext, diagnostiku, synchronizaci, instalaci a reportování. Současné CLI v0 je interní a nestabilní. |
-| **Launchpad** | Builder-first grafický povrch nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
+| **Launchpad** | Grafický povrch pro Přispěvatele modulů nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
 | **Guide** | Netechnický průvodce spoluprací uživatelů, agentů a digitálních kanceláří. |
 | **Personalspace** | Privátní prostor právě jednoho vlastníka a jeho případného Buddyho; neleží uvnitř firemní Organizace. |
 | **Organizace** | Jedna firma, jedna GitHub Organization, jeden samostatný super-repozitář a jedna access hranice. |
@@ -149,7 +149,7 @@ rozložení repozitářů [MAP.md](MAP.md).
 | Oblast | Stav |
 | --- | --- |
 | Source checkout a Bun workflow | **Funguje dnes.** Obsahuje Launchpad, Guide, CLI v0, Doctory, manuály, šablony a build kontrakty. |
-| Launchpad | **Funguje dnes.** Je builder-first a dynamicky objevuje lokálně připojené Organizace. |
+| Launchpad | **Funguje dnes.** Slouží Přispěvatelům modulů a dynamicky objevuje lokálně připojené Organizace. |
 | Lazurio CLI v0 | **Experimentální.** Umí omezený kontext, Doctor, synchronizaci, instalaci desktopového launcheru a scoped search. Primární checkout lze přes Bun zpřístupnit jako uživatelský příkaz `lazurio`; nejde ještě o stabilní distribuční balíček ani veřejné API. |
 | Resident artefakty | **První funkční řez.** Deterministický build a lifecycle dnes pokrývají vybrané profily a platformy; nejde ještě o obecný onboarding každého uživatele. |
 | Source Root | **Podporovaný dnešní profil.** Ověřený Lazurio Git checkout přímo v home je pracovní Root a smí do migrace zachovat existující název složky; žádná automatická migrace se nyní neprovádí. |
@@ -284,7 +284,7 @@ nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
 | [MAP.md](MAP.md) | Lidská mapa fyzického rootu a jednotlivých scope. |
 | [manual/lazurio-root-for-agents.md](manual/lazurio-root-for-agents.md) | Stručný postup pro Agenty: dnešní Source Root, CLI provenance a bezpečná údržba; Managed Root nahradila decision 0164. |
 | [lazurio/](lazurio/README.md) | Aktuální interní CLI v0 a jeho bezpečnostní kontrakty. |
-| [launchpad/](launchpad/README.md) | Builder-first Launchpad, discovery, runtime a UI kontrakty. |
+| [launchpad/](launchpad/README.md) | Launchpad pro Přispěvatele modulů, discovery, runtime a UI kontrakty. |
 | [distribution/](distribution/README.md) | Deterministický build non-Git Resident rootů, updater a rollback. |
 | [guide/](guide/README.md) | Netechnický onboarding do digitální kanceláře a spolupráce s AI. |
 | [manual/](manual/README.md) | Provozní a maintenance dokumentace Lazurio rootu. |

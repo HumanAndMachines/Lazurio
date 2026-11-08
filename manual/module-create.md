@@ -33,7 +33,7 @@ převezme Dashboard „Nový Modul“.
    ```
 
 4. Commitni `modules.manifest.json` ve worktree Organizace a otevři PR do
-   root repa Organizace. Organization Admin založí privátní GitHub repo
+   root repa Organizace. Admin Organizace založí privátní GitHub repo
    `<github-org>/<slug>` s chráněnou `main`; Modul se do něj pushne
    (`git remote add origin …` a `git push -u origin main`, přesné příkazy
    vypíše report). Merge slotu je Publikace a patří oprávněnému uživateli.
@@ -181,7 +181,7 @@ generátor nevzniká.
 ## Co záměrně nedělá
 
 - Nezakládá GitHub repo, nepushuje, neotevírá PR a nic nemerguje; to je
-  Publikace, Organization Admin a později Dashboard (úkol 407) přes GitHub
+  Publikace, Admin Organizace a později Dashboard (úkol 407) přes GitHub
   App.
 - Nespouští Launchpad ani App; start přes Launchpad ověřuje
   `lazurio module start` po merge slotu. Python start přes Launchpad přijde

@@ -12,8 +12,8 @@ zavádí decision 0210 místo VPS-only Buddyho z decision 0080; shrnutí drží
 externí doplněk. Prostor je samostatné repo `<username>/<username>_GEN3` na
 osobním nebo agentním GitHub účtu (generační marker per decision 0045), mimo
 firemní GitHub organizace. Přístup má pouze uživatel a jeho volitelný Buddy;
-Kolegové, jiní Buddyové ani Organization Builders sem přístup nemají. Firemní
-pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
+Kolegové v jakékoli roli Organizace ani jiní Buddyové sem přístup nemají.
+Firemní pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
 
 Personalspace může fungovat bez Buddyho. Jeho uživatelem je vlastník; Buddy
 binding a přístup ke gbrainu se přidávají jen tehdy, když vlastník Buddyho

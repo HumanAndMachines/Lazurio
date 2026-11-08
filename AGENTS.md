@@ -26,10 +26,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jedna GitHub organizace = jedna access hranice) → workspace Modul
   a `productionspace/` (org-level repa mimo Moduly).
 - Launchpad objevuje Organizace sám (auto-discovery, decision 0042) a pro
-  objevené mounty platí stejně přísné kontroly; `launchpad.gen3.json` drží
-  jen sdílená metadata a není allowlist. Checkout šablony žije jako nested
-  repo v `productionspace/` Admin Organizace, ne jako další Organizace
-  (0127). Podrobnosti drží `launchpad/README.md` a `MAP.md`.
+  objevené mounty platí stejně přísné kontroly; `launchpad.gen3.json` drží jen
+  sdílená metadata a není allowlist. Checkout šablony žije jako nested repo v
+  `productionspace/` Organizace, která šablony vede
+  (`organizations/<AdminOrganization>/`), ne jako další Organizace (0127).
+  Podrobnosti drží `launchpad/README.md` a `MAP.md`.
 - Conglomerate je hranice důvěry svého zakladatele pro sdílený tailnet
   Conglomerate Hostu, ne další access hranice. Do tailnetu se smí přihlásit
   člen kterékoli Organizace, kterou host obsluhuje, ale data, členství,
@@ -70,19 +71,19 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   a nepiš do nich obsah konkrétní Organizace.
 - **Personalspace** je intimní prostor právě jednoho uživatele a jeho Buddyho
   (0091). Každý Kolega má vlastní mašinu s plnými lokálními právy a vlastní
-  privátní Personalspace. Nikdo cizí ho nečte, ani Steward, Admin nebo
-  provozovatel hostingu, a nikdy se nesdílí. Cizí Personalspace se na
-  mašinu nemountuje, Launchpad ho nematerializuje a ty ho nečteš.
-  Spolupráce patří do Organizace nebo do vědomě exportovaného výstupu;
+  privátní Personalspace. Nikdo cizí ho nečte, ani Správce modulu, Admin
+  Organizace nebo provozovatel hostingu, a nikdy se nesdílí. Cizí
+  Personalspace se na mašinu nemountuje, Launchpad ho nematerializuje a ty ho
+  nečteš. Spolupráce patří do Organizace nebo do vědomě exportovaného výstupu;
   sdílená Mašina Organizace Personalspace uživatele nepřebírá.
 - **Přístupy.** GitHub je autorita přístupů ke zdrojovému kódu: repozitáře,
   schopnosti Teamů, branch rules, review a Publikace. Vstup do Prostředí drží
-  Lazurio účet, aktivní členství a konkrétní grant a síť Adminem schválené
-  zařízení v Headscale (0192; cílový kontrakt, ne tvrzení o nasazení, viz
-  `manual/environment-access-model.md`). Zvolí-li si Organizace veřejné DNS
-  (0213), lidé vstupují bez tailnetu jen branami Prostředí a trezor zůstává
-  v tailnetu. Druhý paralelní ACL nevzniká
-  a aktuální práva se neobcházejí.
+  Lazurio účet, aktivní členství a konkrétní grant a síť Adminem Organizace
+  schválené zařízení v Headscale (0192; cílový kontrakt, ne tvrzení o
+  nasazení, viz `manual/environment-access-model.md`). Zvolí-li si Organizace
+  veřejné DNS (0213), lidé vstupují bez tailnetu jen branami Prostředí a
+  trezor zůstává v tailnetu. Druhý paralelní ACL nevzniká a aktuální práva se
+  neobcházejí.
 - **Mašina je hranice**, ne typ hardwaru: fyzické zařízení, virtuální server
   nebo providerem izolovaný hostovaný prostor, který tvoří jednu runtime,
   bezpečnostní a recovery hranici se známým Ownerem. Proces, Modul,
@@ -110,16 +111,24 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 
 ## Kdo je kdo
 
-- **Uživatel** je člověk, pro kterého a s nímž agenti pracují; je to vztah,
-  ne role v Organizaci. Kdo Prostředí ovládá, ovládá i agenty, které v něm
+- **Uživatel** je člověk, pro kterého a s nímž agenti pracují; je to vztah, ne
+  role v Organizaci. Kdo Prostředí ovládá, ovládá i agenty, které v něm
   spouští: jednají za něj v jeho živých právech a poslední slovo má on. Na
-  Osobním Prostředí je to jeho Owner, na Pracovním ten, komu ho Organizace
-  přiřadila, na Týmovém ten, kdo je připojený a má oprávnění, a na Prostředí
-  Henry odpovědný Owner nebo Admin Organizace (0175, 0192). Starší záznamy mu
-  říkají Operátor nebo Principál. Provozovatel hostingu je jiná role.
-- **Kolega** je uživatel v Organizaci. Pravomoce má podle svých rolí
-  (Organization Admin, Steward, Builder, User) a Teamů. Uživateli neříkej
-  Builder, jako by šlo o jiný druh člověka.
+  Osobním Prostředí je to jeho Owner, na Pracovním Přidělený uživatel, tedy
+  ten, komu ho Organizace přiřadila, na Týmovém ten, kdo je připojený a má
+  oprávnění, a na Prostředí Henry odpovědný Vlastník Organizace nebo Admin
+  Organizace (0175, 0192). Starší záznamy mu říkají Operátor nebo Principál.
+  Provozovatel hostingu je jiná role.
+- **Kolega** je uživatel v Organizaci. Pravomoce má podle svých rolí a Teamů.
+  Role mají jeden slovník pro texty, obrazovky i agenty (0234): v Organizaci
+  Vlastník Organizace, Admin Organizace a Člen Organizace, u Modulu Čtenář
+  modulu, Přispěvatel modulu a Správce modulu, který navíc merguje chráněnou
+  `main` a vydává, a u aplikace Admin aplikace a Uživatel aplikace. Roli píšeš
+  s velkým písmenem a vždy s její úrovní, nikdy holé „Admin“ nebo „uživatel“;
+  „Správce“ je jen Správce modulu. Vstup do Prostředí kohokoli jiného než
+  Přiděleného uživatele je servisní vstup, ne role. Builder, Steward ani
+  Organization User už role nejsou a uživateli tak neříkej; nasazené hodnoty
+  jako `--role builder|steward` jsou jen zastaralé aliasy.
 - **Task Agent** jsi ty: pracovní relace nástroje (Claude Code, Codex,
   Cursor…). Nemáš vlastní pravomoce a promptem žádné nezískáš. „Agent“ je
   přípustná zkratka; strojový enum je `task_agent`.
@@ -142,7 +151,7 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - Místo, kde uživatel pracuje, je česky **Prostředí** (velké P, střední rod:
   toto Prostředí), anglicky **Environment** (0170 s dodatky). Druhy jsou
   čtyři: **Osobní**, **Pracovní**, **Týmové Prostředí** a **Prostředí
-  služeb** (Služby serveru jen pro Ownery a Adminy; dodatek 0209
+  služeb** (Služby serveru jen pro Vlastníky a Adminy Organizace; dodatek 0209
   z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní);
   o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
   Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
@@ -197,11 +206,11 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   WireGuard tunel, veřejný port ani DNAT pro něj nezakládej (0154).
 - **Pracovní přístup** (0224): z Osobního Prostředí vede automaticky SSH do
   Pracovních Prostředí jeho člověka ve všech Organizacích Conglomerate; do
-  Týmových Prostředí a jako Admin do ostatních Prostředí Organizace se jde
-  dál přes vlastní Pracovní Prostředí. Přístup na zařízení zapíná jeho
-  Owner. Používáš jen cesty, které zapsalo Lazurio, a chybějící cestu
-  nahlásíš; ruční alias ani nový grant nezakládáš. Model přístupů drží
-  LazurioPlatform `docs/environment-access.md`, podrobnosti GEN3
+  Týmových Prostředí a jako Admin Organizace do ostatních Prostředí se jde dál
+  přes vlastní Pracovní Prostředí. Přístup na zařízení zapíná jeho Owner.
+  Používáš jen cesty, které zapsalo Lazurio, a chybějící cestu nahlásíš; ruční
+  alias ani nový grant nezakládáš. Model přístupů drží LazurioPlatform
+  `docs/environment-access.md`, podrobnosti GEN3
   `manual/environment-access-model.md`.
 - Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
   `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
@@ -223,13 +232,13 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   granty Teamu a branch rules. Sám tam nikdy nemerguješ ani na pokyn
   z chatu; publikuje vždy jmenovaný uživatel a kdo změny schválí
   a publikuje, za ně odpovídá.
-- **Sdílení Pracovního Prostředí** (0192): přidělený uživatel smí po
-  srozumitelném vysvětlení pustit důvěryhodného aktivního člena téže
-  Organizace ke všem schopnostem Prostředí včetně svých pracovních
-  přihlášení; riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci
-  uložených identit neslibuj. Členství a v Organizaci s tailnetem i Adminem
-  schválené zařízení zůstávají povinné (0213), konkrétní Publikace dál čeká
-  na pokyn odpovědného uživatele a Personalspace se nesdílí
+- **Sdílení Pracovního Prostředí** (0192): Přidělený uživatel smí po
+  srozumitelném vysvětlení pustit důvěryhodného aktivního Člena téže
+  Organizace ke všem schopnostem Prostředí včetně svých pracovních přihlášení;
+  riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci uložených identit
+  neslibuj. Členství a v Organizaci s tailnetem i Adminem Organizace schválené
+  zařízení zůstávají povinné (0213), konkrétní Publikace dál čeká na pokyn
+  odpovědného uživatele a Personalspace se nesdílí
   (`manual/environment-access-model.md`).
 - **Neseš architektonickou odpovědnost** (0132). Uživatel určuje výsledek,
   priority a omezení, ty odpovídáš za elegantní a čisté řešení. Odděl záměr
@@ -448,19 +457,19 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - Každé vlákno, které Launchpad, průvodce nebo prompt otevírá v Chatu, začíná
   v projektu Lazurio Folderu a prompt jmenuje Organizaci a práci. Platí
   výchozí model T3 Code z Nastavení (0189).
-- Launchpad je builder-first (0047): spouští aplikace z `main` i z worktrees
-  a productionspace ukazuje jen read-only; admin konfigurace a vstup
-  uživatelů do produkčních aplikací patří do Dashboardu. Port patří Modulu,
-  Organizace drží jen `module_port_pool`; chování leases a procesů drží
-  `launchpad/README.md`. Productionspace repozitáře z rootu nespouštíš ani
-  nereleasuješ bez výslovné politiky Organizace.
+- Launchpad je dílna Přispěvatelů modulů (0047): spouští aplikace z `main` i z
+  worktrees a productionspace ukazuje jen read-only; nastavení Admina
+  Organizace a vstup lidí do produkčních aplikací patří do Dashboardu. Port
+  patří Modulu, Organizace drží jen `module_port_pool`; chování leases a
+  procesů drží `launchpad/README.md`. Productionspace repozitáře z rootu
+  nespouštíš ani nereleasuješ bez výslovné politiky Organizace.
 
 ## Integrace
 
 - Aplikace připojené k Prostředí jsou Integrace (0162). Každá má právě jednu
   cestu: nástroj z Nastavení → Nástroje (`gh`, `wacli`…), přímo Executor
-  Prostředí, nebo Composio s vlastním účtem uživatele (v Týmovém Prostředí
-  s týmovým účtem), pokud ho Organizace povolila. Použij ji tam, kde je
+  Prostředí, nebo Composio s vlastním účtem uživatele (v Týmovém Prostředí s
+  týmovým účtem), pokud ho Organizace povolila. Použij ji tam, kde je
   připojená, v pořadí nástroj, Executor, Composio.
 - Integraci nikdy nepřipojuješ sám: přihlášení je souhlas uživatele. Pošleš
   mu odkaz na její kartu v Apps → Integrace; kde stránka Integrace ještě
@@ -468,9 +477,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   `manual/integrations/executor.md` nebo `manual/integrations/composio.md`
   a přihlášení dokončí on sám. Vlastní MCP server do Executoru přidáš, nebo
   Executor nastavíš, jen na jeho výslovný pokyn. Nastavení celé Organizace
-  (povolení Composia, firemní aplikace) mění Admin v Dashboardu (0194).
-  Integrační službu Služeb serveru (0209)
-  povoluje Admin a ty ji nepřidáváš, neodebíráš ani k ní nikoho
+  (povolení Composia, firemní aplikace) mění Admin Organizace v Dashboardu
+  (0194). Integrační službu Služeb serveru (0209)
+  povoluje Admin Organizace a ty ji nepřidáváš, neodebíráš ani k ní nikoho
   nepřihlašuješ.
 - Nové napojení: oficiální MCP poskytovatele v Executoru → oficiální CLI →
   Composio → reviewnutý pinned OSS → browser. Scraping a cookie-session
@@ -513,17 +522,17 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   jediné výjimce z ploché složky; slot nese `home_organization`. Čteš ho podle
   `AGENTS.md` té složky, nic z něj nekopíruješ a změny v něm jdou pull
   requestem do domovského repozitáře podle pravidel domovské Organizace.
-- **Design System** Organizace má číst každý aktivní člen včetně účtů jejích
-  Prostředí Henry, ve všech Teamech a u organizačních i produktových Design
-  Systemů. Při založení, onboardingu člena i instalaci Prostředí ověř
-  skutečnou dostupnost; chybějící Read grant je nedokončený onboarding.
-  Pravidlo nedává právo zápisu, veřejnou viditelnost ani přístup jiné
-  Organizaci. Grant bez mandátu Admina nerozšiřuješ, předáš konkrétní
-  nápravu.
+- **Design System** Organizace má číst každý aktivní Člen Organizace včetně
+  účtů jejích Prostředí Henry, ve všech Teamech a u organizačních i
+  produktových Design Systemů. Při založení, onboardingu člena i instalaci
+  Prostředí ověř skutečnou dostupnost; chybějící Read grant je nedokončený
+  onboarding. Pravidlo nedává právo zápisu, veřejnou viditelnost ani přístup
+  jiné Organizaci. Grant bez mandátu Admina Organizace nerozšiřuješ, předáš
+  konkrétní nápravu.
 - **Správa Conglomerate Hostu** se řídí
-  `manual/conglomerate-owner-administration.md`: ověř živou roli GitHub
-  Owner, povol jen jmenovitě schválené zdrojové mašiny a běžnou správu veď
-  přes Headscale; provider rescue je nouzová cesta.
+  `manual/conglomerate-owner-administration.md`: ověř živou roli Vlastník
+  Organizace na GitHubu, povol jen jmenovitě schválené zdrojové mašiny a
+  běžnou správu veď přes Headscale; provider rescue je nouzová cesta.
 - **Rollout sdíleného softwaru** (Machines, LazurioPlatform, T3 Code,
   MausBot, změny vstupu v Auth a Dashboardu) jde nejdřív na veřejnou
   referenční Organizaci `LazurioExampleOrganization`; review a brány vydání
@@ -538,7 +547,7 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   (0226); `manual/decision-register.md` je jeho záznam pro GEN3. Nemíchej cílový
   a nasazený stav: `ARCHITECTURE.md` říká, kam systém směřuje, kód
   a configy, co je nasazené. Každý pojem nutný pro práci v Lazuriu je
-  vysvětlený v tomto repu; privátní zdroje maintainerů jsou jen provenience.
+  vysvětlený v tomto repu; privátní zdroje vývojářů Lazuria jsou jen provenience.
 - Mapa je `MAP.md`, manuál `manual/` (rozcestník `manual/README.md`) a skilly
   `.agents/skills/` s registrem `manifest.json` a byte-for-byte mirrorem
   `.claude/skills` (paritu hlídá `bun run doctor:agent-skills`, 0104).
@@ -552,7 +561,7 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   `manual/worktree-management.md`, předání PR `manual/pull-request-handoff.md`,
   přístupy `manual/environment-access-model.md`, Integrace
   `manual/external-app-integrations.md`, forky `manual/forks.md`; closeout
-  cizích PR Adminem drží skill `admin-pr-sweep`.
+  cizích PR Adminem Organizace drží skill `admin-pr-sweep`.
 
 ## Handoff
 

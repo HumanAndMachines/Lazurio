@@ -5,6 +5,9 @@ import {
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
   observeGitHubRoleReadiness,
+  organizationInstallRoleGateLabel,
+  organizationInstallRoleIdentifier,
+  resolveOrganizationInstallRoleOption,
 } from "./github-builder-readiness-lib.mjs";
 import { hostedInstallSlotScope } from "../organization-install-lib.mjs";
 import { createHostedWorkspaceConfiguration } from "../runtime/hosted-app-url-lib.mjs";
@@ -540,4 +543,58 @@ test("Steward readiness follows the same effective WRITE rule without Team bindi
 
   expect(report.status).toBe("ready");
   expect(report.blockers).toEqual([]);
+});
+
+test("--role option values map the 0234 role identifiers to the deployed install roles", () => {
+  expect(resolveOrganizationInstallRoleOption("module-contributor"))
+    .toEqual({ role: "builder", option: "module-contributor", deprecated: false });
+  expect(resolveOrganizationInstallRoleOption("module-maintainer"))
+    .toEqual({ role: "steward", option: "module-maintainer", deprecated: false });
+  expect(resolveOrganizationInstallRoleOption("builder"))
+    .toEqual({ role: "builder", option: "module-contributor", deprecated: true });
+  expect(resolveOrganizationInstallRoleOption("steward"))
+    .toEqual({ role: "steward", option: "module-maintainer", deprecated: true });
+  for (const unknown of ["admin", "reader", "module-reader", "organization-admin", "Builder", "", null, undefined, "toString"]) {
+    expect(resolveOrganizationInstallRoleOption(unknown)).toBeNull();
+  }
+  // Every option resolves to a deployed value the manifests' required_roles and report v0 carry.
+  for (const option of ["module-contributor", "module-maintainer", "builder", "steward"]) {
+    expect(ORGANIZATION_INSTALL_ROLES).toContain(resolveOrganizationInstallRoleOption(option).role);
+  }
+  expect(organizationInstallRoleIdentifier("builder")).toBe("module-contributor");
+  expect(organizationInstallRoleIdentifier("steward")).toBe("module-maintainer");
+  expect(organizationInstallRoleGateLabel("builder")).toBe("instalační WRITE gate pro --role module-contributor");
+  expect(organizationInstallRoleGateLabel("steward")).toBe("instalační WRITE gate pro --role module-maintainer");
+});
+
+// Review on #722: `--role module-maintainer` must not read as proof of the
+// Module Maintainer role. The gate stays an install WRITE gate: `push` passes
+// it for either option, while `pull` blocks, and every text names the gate by
+// its option, never as the role.
+test("the --role gate is an install WRITE gate, not proof of the Module role", () => {
+  for (const role of ["builder", "steward"]) {
+    const ready = observeGitHubRoleReadiness({
+      role,
+      provider: providerFixture({ permission: "write" }),
+      organization,
+      rootRepository,
+      resource: resourceFixture(),
+    });
+    expect(ready.status).toBe("ready");
+    expect(ready.repositories.every((repository) => repository.effective_permission === "write")).toBe(true);
+
+    const readOnly = observeGitHubRoleReadiness({
+      role,
+      provider: providerFixture({ permission: "read" }),
+      organization,
+      rootRepository,
+      resource: resourceFixture(),
+    });
+    expect(readOnly.status).toBe("blocked");
+
+    const unavailable = githubRoleReadinessUnavailable(role);
+    expect(unavailable.status).toBe("blocked");
+    expect(unavailable.blockers[0].message).toContain(organizationInstallRoleGateLabel(role));
+    expect(unavailable.blockers[0].message).not.toMatch(/Správce modulu|Přispěvatel modulu/u);
+  }
 });

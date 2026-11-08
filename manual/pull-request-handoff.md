@@ -8,20 +8,19 @@ samostatně a samotný tento dokument je nezapíná.
 ## Jeden mechanismus předání
 
 Lidé, Task Agenti a boti různých Prostředí, včetně Prostředí Henry (Pablo,
-Henryové Organizací), spolupracují na pull requestu jen přes GitHub.
-Reviewer request žádá o kontrolu. Přiřazení PR jako **assignee** předává
-odpovědnost za dotažení včetně dovoleného merge. Obojí platí jen pro pull
-request v Ready: Draft je rozpracovaný a review ani předání nedostane.
-Reviewera jmenuje `AGENTS.md` owning Organizace, jinak je to Pablo
-(`agentrozjedemeai`). Kde je persona code owner, požádá ji GitHub při Ready
-sám. Po pushi se žádost persony neopakuje: persona, která PR už
-reviewovala, vezme nový head sama; člověka je třeba požádat znovu. Postup
-drží skill `henry-review`. Autor nebo současný
-odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
-musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
-Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
-(například s rolí Triage) nestačí; samotný název persony práva nedokládá.
-Odpovědný Owner/Admin může předání provést v rámci svých práv také.
+Henryové Organizací), spolupracují na pull requestu jen přes GitHub. Reviewer
+request žádá o kontrolu. Přiřazení PR jako **assignee** předává odpovědnost za
+dotažení včetně dovoleného merge. Obojí platí jen pro pull request v Ready:
+Draft je rozpracovaný a review ani předání nedostane. Reviewera jmenuje
+`AGENTS.md` owning Organizace, jinak je to Pablo (`agentrozjedemeai`). Kde je
+persona code owner, požádá ji GitHub při Ready sám. Po pushi se žádost persony
+neopakuje: persona, která PR už reviewovala, vezme nový head sama; člověka je
+třeba požádat znovu. Postup drží skill `henry-review`. Autor nebo současný
+odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající musí
+mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání Publikace
+podle pravidel repozitáře. Pouhá možnost měnit assignees (například s rolí
+Triage) nestačí; samotný název persony práva nedokládá. Odpovědný Vlastník
+Organizace nebo Admin Organizace může předání provést v rámci svých práv také.
 
 Předání uživatel obvykle volí v handoffu: dvojotázku z 0103 i výběr Kolegy
 mu Agent klade nástrojem na otázky (0211). Persona bez uživatele v relaci
@@ -69,8 +68,9 @@ Admin ani oprávnění spravovat infrastrukturu. Technickou možnost merge
 nesmíme popisovat jako providerem zaručené oddělení pravomocí.
 
 Na placeném plánu platí navíc providerem vynucená pravidla. Konkrétní
-repo může vyžadovat Henryho schválení a umožňovat merge jen Ownerům.
-Henry v takovém repozitáři zajistí review a předá dovolený merge Ownerovi.
+repo může vyžadovat Henryho schválení a umožňovat merge jen Vlastníkům
+Organizace. Henry v takovém repozitáři zajistí review a předá dovolený merge
+Vlastníkovi Organizace.
 Přiřazení takové omezení nepřebije.
 
 V `infra` platí dodatek 0169 z 2026-11-01: Henry tam má jen přímý Write
@@ -80,21 +80,20 @@ může spustit apply runnerem a takový merge je nasazení: dělá ho člověk
 a Henry mu PR po review předá (výjimku pro Ring 0 má podle 0218 bodu 4 jen
 Pablo). Na GitHub Free smí Henry po přiřazení od jiného živého Repository
 Admina mergnout jen infra PR, jehož merge nasazení nespouští; na placeném
-plánu předá po review Ownerovi každý PR.
+plánu předá po review Vlastníkovi Organizace každý PR.
 
 ## Trvalý mandát k pinům nástrojů
 
 Trvalý publikační mandát k pinům nástrojů drží Dodatek 0171 z 2026-10-24 v
-`manual/decision-register.md`. Henry smí sám mergnout pull request,
-který sám založil ve workspace repozitáři své Organizace (včetně Mission
-Controlu a design systému, nikdy v infra ani productionspace, 0169) a
-který jen posouvá piny nástrojů o patch nebo minor verzi, nejvýš na
-výchozí verzi Lazuria, a přegeneruje lockfile. Podmínkou je zelené CI a
-čerstvé nezávislé APPROVED na přesném headu a merge jde s
-`--match-head-commit`. Major posun Henry předá Ownerovi GitHub
-organizace přiřazením jako assignee podle tohoto kontraktu. Mandát
-neobchází branch rules ani review, nepokrývá jiný obsah, Release ani
-nasazení a Owner nebo Admin Organizace ho může zúžit nebo odvolat. Živá
+`manual/decision-register.md`. Henry smí sám mergnout pull request, který sám
+založil ve workspace repozitáři své Organizace (včetně Mission Controlu a
+design systému, nikdy v infra ani productionspace, 0169) a který jen posouvá
+piny nástrojů o patch nebo minor verzi, nejvýš na výchozí verzi Lazuria, a
+přegeneruje lockfile. Podmínkou je zelené CI a čerstvé nezávislé APPROVED na
+přesném headu a merge jde s `--match-head-commit`. Major posun Henry předá
+Vlastníkovi Organizace přiřazením jako assignee podle tohoto kontraktu. Mandát
+neobchází branch rules ani review, nepokrývá jiný obsah, Release ani nasazení
+a Vlastník Organizace nebo Admin Organizace ho může zúžit nebo odvolat. Živá
 GitHub práva jsou další podmínkou, ne náhradou za tento rozsah.
 
 ## Stálý mandát koordinátora vývoje

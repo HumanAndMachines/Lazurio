@@ -9,7 +9,7 @@ description: Nainstaluje, opraví nebo dokončí localhost Lazurio na macOS, Lin
 
 Použij pro fresh instalaci, repair, resume nebo dokončení localhost Lazurio
 na Mašině Kolegy. Cílem je prokázaný funkční stav, ne první diagnostický
-výpis. Hosted Resident, Buddy VPS a Organization User bez lokálního footprintu
+výpis. Hosted Resident, Buddy VPS a Člen Organizace bez lokálního footprintu
 mají jiný lifecycle.
 
 Před první mutací přečti root `AGENTS.md`,
@@ -58,7 +58,7 @@ Při publikačním mandátu pro instalační vady přečti také
    `bun run lazurio -- cli install`. Claude Code je volitelný a kontroluje se
    jen tam, kde je instalovaný.
 5. **Měň jen autorizovanou PATH vrstvu.** Obecný nejmenší mandát dovoluje User
-   `PATH`; nový Builder prompt výslovně povoluje i nezbytný
+   `PATH`; nový prompt pro Builder Mašinu výslovně povoluje i nezbytný
    Machine/system-wide `PATH`, standardní elevation a systémový package
    manager. Přidej canonical instalační adresář, ne
    `.exe`, cache, dočasnou cestu ani worktree; zachovej nesouvisející platné
@@ -90,16 +90,20 @@ Při publikačním mandátu pro instalační vady přečti také
    klíč a upload jeho veřejné části proveď pouze s
    explicitním access mandátem. API login není transportní důkaz; před
    materializací musí projít exact `git ls-remote` cílového root repa a branche.
-8. **Odděl ownera od Buildera.** Organization owner ověří jednorázovou GitHub
-   App aktivaci přes immutable Organization ID. Běžný Builder owner gate
-   neopakuje a použije `lazurio organization install <login> --role builder
-   --json`; Steward Mašina použije `--role steward --json`. Obě role vyloučí
-   deklarované restricted sloty a jejich descendants bez provider operace
-   (`excluded_by_role_scope`) a vyloučený slot nikdy nevydávají za access
-   blocker. Aktuální CLI nepřijímá `--role admin`; owner/admin stav dokazuj
-   živými GitHub právy a základní materializaci bez vymyšlené role, která
-   jako jediná materializuje i restricted sloty. Role readiness a owner/admin
-   oprávnění reportuj odděleně.
+8. **Odděl Vlastníka Organizace od Přispěvatele modulu.** Vlastník Organizace
+   ověří jednorázovou GitHub App aktivaci přes immutable Organization ID.
+   Přispěvatel modulu jeho gate neopakuje a použije
+   `lazurio organization install <login> --role module-contributor --json`;
+   Steward Mašina použije `--role module-maintainer --json` pro Správce modulu.
+   Staré hodnoty `builder` a `steward` jsou jen zastaralé aliasy (0234). Obě
+   role vyloučí deklarované restricted sloty a jejich descendants bez provider
+   operace (`excluded_by_role_scope`) a vyloučený slot nikdy nevydávají za
+   access blocker. Aktuální CLI nepřijímá `--role admin`; roli Vlastník nebo
+   Admin Organizace dokazuj živými GitHub právy a základní materializaci bez
+   vymyšlené role, která jako jediná materializuje i restricted sloty.
+   Výsledek instalačního WRITE gate a oprávnění Vlastníka nebo Admina
+   Organizace reportuj odděleně; WRITE gate roli modulu nedokazuje (Správce
+   modulu potřebuje tam, kde repozitář umí branch rules, `maintain`, 0232).
 9. **Opakuj jediný konvergenční tok.** Spusť `lazurio install --json`,
    `lazurio doctor --tool-updates --json`, exact Organization install a finální
    `lazurio doctor`. Required `fail`, `blocked` nebo `incomplete` v uděleném
