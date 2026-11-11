@@ -1740,10 +1740,21 @@ async function firstPresentBunLockfile(cwd) {
   return { ok: true, name: null };
 }
 
+// Lazurio root ignoruje vše pod `organizations/*` a `personalspace/*`: každá
+// Organizace i Personalspace je vlastní Git hranice a balíček pod nimi patří
+// jen jejich vlastnímu managed descriptoru. Když v aktuálním (třeba scoped)
+// inventáři chybí, root ho nezdědí jako fallback (#346); jinak by update
+// obnovil, vyhodnotil nebo sestavil aplikace nevybrané Organizace či
+// Personalspace pod klíčem rootu.
+const ROOT_IGNORED_MOUNTS = new Set(["organizations", "personalspace"]);
+
 function owningManagedRepo(canonicalRepos, cwd) {
-  return canonicalRepos
+  const owner = canonicalRepos
     .filter(({ root }) => pathWithin(root, cwd))
     .sort((left, right) => right.root.length - left.root.length)[0] ?? null;
+  if (owner?.repo?.repo_kind !== "lazurio_root") return owner;
+  const [mount, ...rest] = relative(owner.root, cwd).split(sep);
+  return ROOT_IGNORED_MOUNTS.has(mount) && rest.length > 0 ? null : owner;
 }
 
 function dependencyTargetUsesChangedRepo(target, canonicalRepos, changedRepoKeys) {

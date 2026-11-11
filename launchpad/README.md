@@ -440,7 +440,10 @@ instalaci z verzovaného Bun lockfilu. První pokus zachová existující
 odvozený strom smaže a vytvoří znovu. Běžící managed aplikaci Server před
 změnou balíčků zastaví a znovu spustí pouze po ověřeném úspěchu. Selhání nechá
 danou aplikaci blokovanou; další Repair začne opět čistě. Balíčky jiných
-repozitářů se neskenují ani nemění.
+repozitářů se neskenují ani nemění. Balíček pod `organizations/` nebo
+`personalspace/`, jehož vlastní checkout v aktuálním inventáři chybí (třeba
+nevybraná Organizace při instalaci jedné Organizace), Lazurio root nezdědí:
+update ho neobnoví, nevyhodnotí ani nesestaví.
 
 Lazurio Launchpad čte Lazurio Root a Organization GEN3 manifesty:
 

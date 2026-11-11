@@ -2589,6 +2589,117 @@ test("updated Module refreshes each manifest-declared app package once through t
   });
 });
 
+test("a scoped update never attributes an unselected Organization's or Personalspace's apps to the moved Lazurio root (#346)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-scoped-dependency-owner-"));
+  cleanup.push(root);
+  const selectedOrganizationRoot = join(root, "organizations", "SelectedCo_GEN3");
+  const selectedAppRoot = join(selectedOrganizationRoot, "workspace", "studio", "app");
+  const rootAppRoot = join(root, "launchpad", "app");
+  const otherAppRoot = join(root, "organizations", "OtherCo_GEN3", "workspace", "deals", "app");
+  const personalAppRoot = join(root, "personalspace", "someone_GEN3", "notes", "app");
+  for (const [directory, name] of [
+    [root, "root-package"],
+    [rootAppRoot, "root-app"],
+    [selectedAppRoot, "selected-studio"],
+    [otherAppRoot, "other-deals"],
+    [personalAppRoot, "personal-notes"],
+  ]) {
+    await mkdir(directory, { recursive: true });
+    await writeJson(join(directory, "package.json"), { name, dependencies: { fixture: "1.0.0" } });
+    await writeFile(join(directory, "bun.lock"), "# fixture\n");
+  }
+  const lazurioRoot = repo("lazurio::root", "lazurio_root", null, "root");
+  lazurioRoot.absolute_path = root;
+  lazurioRoot.repo_path = ".";
+  const organization = repo("SelectedCo::root", "organization_root", "SelectedCo", "root");
+  organization.absolute_path = selectedOrganizationRoot;
+  const studio = repo("SelectedCo::studio", "module", "SelectedCo", "studio", "workspace");
+  studio.absolute_path = join(selectedOrganizationRoot, "workspace", "studio");
+  studio.slot_path = "workspace/studio";
+  const head = "c".repeat(40);
+  const refreshed = [];
+  const built = [];
+  const changed = new Set([lazurioRoot.key, organization.key, studio.key]);
+  const builtApp = (id, packagePath, organizationPath = null) => ({
+    id,
+    package_path: packagePath,
+    ...(organizationPath ? { organization_kind: "organization", organization_path: organizationPath } : {}),
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+    build_output: "dist",
+  });
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    organizations: [{ slug: "SelectedCo", path: "organizations/SelectedCo_GEN3" }],
+    deps: {
+      runId: "scoped-dependency-owner",
+      acquireLock: async () => ({ release: async () => {} }),
+      // Scoped inventory: OtherCo and the Personalspace are mounted but not selected.
+      buildInventory: async () => ({ repos: [organization, studio], warnings: [] }),
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: changed.has(item.key) ? "updated" : "current",
+        reason: changed.has(item.key) ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: changed.has(item.key) ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [
+          builtApp("root-app", "launchpad/app/package.json"),
+          builtApp("selected-studio", "organizations/SelectedCo_GEN3/workspace/studio/app/package.json", "organizations/SelectedCo_GEN3"),
+          builtApp("other-deals", "organizations/OtherCo_GEN3/workspace/deals/app/package.json", "organizations/OtherCo_GEN3"),
+          builtApp("personal-notes", "personalspace/someone_GEN3/notes/app/package.json"),
+        ],
+        invalid_apps: [
+          { id: "other-broken", package_path: "organizations/OtherCo_GEN3/workspace/broken/package.json", manifest_issues: ["fixture"] },
+          { id: "personal-broken", package_path: "personalspace/someone_GEN3/broken/package.json", manifest_issues: ["fixture"] },
+        ],
+        failures: [],
+      }),
+      refreshPackageDependencies: async ({ cwd }) => {
+        refreshed.push(cwd);
+        return { ok: true };
+      },
+      refreshAppDependencies: async ({ cwd }) => {
+        refreshed.push(cwd);
+        return { refresh_strategy: "frozen", mode: "frozen" };
+      },
+      resolveModuleBun: async () => ({ executable: process.execPath, binDir: null }),
+      buildCacheRoot: join(root, "..", "build-cache"),
+      ensureAppBuild: async ({ cwd }) => {
+        built.push(cwd);
+        return { ok: true, built: true, output: "dist", key: "fixture" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(report.state, JSON.stringify(report)).toBe("updated");
+  const serialized = JSON.stringify(report.results);
+  expect(serialized).not.toContain("dependency_refresh_failed");
+  expect(serialized).not.toContain("dependency_tree_boundary_invalid");
+  expect(serialized).not.toContain("invalid_app_manifest");
+  expect(serialized).not.toContain("OtherCo");
+  expect(serialized).not.toContain("personalspace");
+  const outOfScope = (cwd) => cwd.includes("OtherCo_GEN3") || cwd.includes("personalspace");
+  expect(refreshed.some(outOfScope)).toBe(false);
+  expect(built.some(outOfScope)).toBe(false);
+  // The selected Organization and the root's own packages are still prepared.
+  const canonicalRoot = await realpath(root);
+  expect(refreshed.filter((cwd) => cwd === canonicalRoot)).toHaveLength(1);
+  expect(refreshed.some((cwd) => cwd.endsWith(join("launchpad", "app")))).toBe(true);
+  expect(refreshed.some((cwd) => cwd.endsWith(join("SelectedCo_GEN3", "workspace", "studio", "app")))).toBe(true);
+  expect(built.some((cwd) => cwd.endsWith(join("SelectedCo_GEN3", "workspace", "studio", "app")))).toBe(true);
+  const rootResult = report.results.find((result) => result.repo_key === lazurioRoot.key);
+  expect(rootResult).toMatchObject({ state: "updated" });
+  expect(rootResult.dependencies.map((item) => item.package_path).sort()).toEqual([".", "launchpad/app"]);
+});
+
 test("updated Organization-level repository refreshes its manifest-declared App package", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-root-repo-app-dependencies-"));
   cleanup.push(root);
