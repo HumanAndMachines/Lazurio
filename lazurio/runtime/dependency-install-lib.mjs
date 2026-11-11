@@ -28,6 +28,8 @@ const LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT = 20_000;
 // regardless of `--backend`. The isolated linker hardlinks the exact declared
 // target into `node_modules/.bun` and exposes it through a junction, which
 // needs no privilege; the lockfile stays byte-identical between both linkers.
+// `bunExecutable` is the Bun the package pins (decision 0171, addendum of
+// 2026-10-24); Bun knows `--linker` since 1.2.19, below Lazurio's minimum.
 export function frozenBunInstallCommand(
   bunExecutable = process.execPath,
   { platform = process.platform } = {},

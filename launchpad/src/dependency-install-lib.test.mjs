@@ -839,7 +839,12 @@ test("an isolated store is rejected when the declared target file is swapped bef
   expect(await readFile(join(fixture.storeRoot, "index.ts"), "utf8")).toBe("export const fixture = true;\n");
 });
 
-test("a real Bun isolated frozen install satisfies the shared Organization-local file dependency postcondition", async () => {
+// On macOS Bun's isolated linker clones store files (clonefile) instead of
+// hardlinking them, so the store is rightly not the target's file objects
+// there; Lazurio uses the isolated linker only on Windows.
+const isolatedHardlinkTest = process.platform === "darwin" ? test.skip : test;
+
+isolatedHardlinkTest("a real Bun isolated frozen install satisfies the shared Organization-local file dependency postcondition", async () => {
   const fixture = await organizationFileDependencyFixture();
   await rm(join(fixture.packageRoot, "bun.lock"), { force: true });
   const lockfileInstall = Bun.spawnSync(

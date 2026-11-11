@@ -714,7 +714,10 @@ standardním ne-elevovaným účtem bez Developer Mode skončí
 Launchpad, Doctor i update proto na Windows spouštějí
 `bun install --frozen-lockfile --linker=isolated`: Bun přesný cíl hardlinkuje
 do `node_modules/.bun` a do `node_modules` vystaví junction, což nevyžaduje
-žádné privilegium ani Developer Mode. Lockfile zůstává byte-identický, Lazurio
+žádné privilegium ani Developer Mode. Příkaz spouští Bun, který App připíná
+v `package.json#packageManager`, a App bez přesného pinu Bun uživatele jako
+dřív (decision 0171 s dodatkem z 2026-10-24); volbu `--linker` zná Bun od
+verze 1.2.19, takže ji umí každá verze od minima v `lazurio/toolchain.json`. Lockfile zůstává byte-identický, Lazurio
 přijme jen store, jehož každý soubor je totožný filesystem objekt se souborem
 deklarovaného cíle, a layout je pnpm-like bez hoistingu tranzitivních balíčků.
 Agent tento stav neobchází spuštěním Codexu „jako správce“, zapnutím Developer

@@ -774,7 +774,11 @@ standard non-elevated account without Developer Mode, regardless of
 Launchpad, Doctor and update therefore run
 `bun install --frozen-lockfile --linker=isolated` on Windows: Bun hardlinks the
 exact target into `node_modules/.bun` and exposes a junction in `node_modules`,
-which requires no privilege and no Developer Mode. The lockfile stays
+which requires no privilege and no Developer Mode. The command runs under the
+Bun the App pins in `package.json#packageManager`, and an App without an exact
+pin under the user's Bun as before (decision 0171, addendum of 2026-10-24); Bun
+knows `--linker` since version 1.2.19, so every version from
+the minimum in `lazurio/toolchain.json` supports it. The lockfile stays
 byte-identical, Lazurio accepts only a store whose every file is the same
 filesystem object as the file of the declared target, and the layout is
 pnpm-like without hoisting of transitive packages. The Agent does not work

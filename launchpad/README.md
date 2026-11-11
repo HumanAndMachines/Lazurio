@@ -968,7 +968,10 @@ repozitáře cíle zahrne do post-update obnovy i jinak nezměněného App consu
 Personalspace, template, absolutní/UNC cíle a cross-Organization odkazy tuto
 výjimku nezískávají.
 
-Na Windows Lazurio spouští `bun install --frozen-lockfile --linker=isolated`.
+Na Windows Lazurio spouští `bun install --frozen-lockfile --linker=isolated`,
+a to Bunem, který App připíná, nebo bez přesného pinu Bunem uživatele (viz
+výše); volbu `--linker` zná Bun od verze
+1.2.19, takže ji umí každá verze od minima v `lazurio/toolchain.json`.
 Hoisted linker materializuje `file:` adresář přes kopírovací cestu, která pod
 ne-elevovaným účtem bez Developer Mode skončí `EPERM` bez ohledu na
 `--backend`; isolated linker přesný cíl hardlinkuje do `node_modules/.bun` a
