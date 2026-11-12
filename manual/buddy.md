@@ -40,8 +40,8 @@ Mašina uživatele (0153) je jeho Osobní Prostředí; kdo ho nemá, Buddyho nem
   nastaví v Nastavení → Buddy v Launchpadu; do té doby platí oslovení
   zapsané v SOUL.md (dodatek 0210 z 2026-10-20).
 
-Kudy se do Osobního Prostředí vstupuje (vždy přes tailnet), určují
-rozhodnutí 0154, 0207 a 0243; tento manuál je nemění.
+Kudy se do Osobního Prostředí vstupuje, určují rozhodnutí 0154, 0207
+a 0243; tento manuál je nemění.
 
 ## Kde leží profil a paměť
 
