@@ -7,8 +7,10 @@
 > záznamem GEN3 s podrobnostmi, které do veřejného modelu nepatří.
 > Rozhodnutí 0243 (2026-11-12) ruší vstup bez tailnetu: do každého Prostředí
 > se vstupuje jen přes tailnet a Osobní Prostředí mimo Conglomerate jsou
-> v osobním tailnetu Lazuria. Pasáže níže o veřejném DNS (0213) a o Osobním
-> Prostředí bez tailnetu (0207) jsou záznam, ne platné pravidlo.
+> v osobním tailnetu Lazuria. Pasáže níže o Osobním Prostředí bez tailnetu
+> (0207) jsou záznam, ne platné pravidlo. Pasáže o veřejném DNS (0213) platí
+> už jen pro stávající veřejný vstup referenční Organizace, a to do jejího
+> návratu do tailnetu (0204); jinak jsou také záznam.
 
 Rozhodnutí Matěje z 2026-10-06, root decision **0192**, včetně následného
 rozhodnutí o vědomém sdílení na základě důvěry. [Architektonické review](environment-access-review-2026-10-06.md)
