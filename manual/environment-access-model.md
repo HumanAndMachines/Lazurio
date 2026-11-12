@@ -2,9 +2,13 @@
 
 > **GEN4 je autorita.** Veřejný model přístupu drží od 2026-11-01
 > LazurioPlatform: [`docs/environment-access.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/environment-access.md),
-> rozhodnutí 0192, 0196, 0213 a 0224 jsou ve veřejném rejstříku
+> rozhodnutí 0192, 0196, 0213, 0224 a 0243 jsou ve veřejném rejstříku
 > [`docs/decision-register.md`](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/decision-register.md). Tento soubor zůstává
 > záznamem GEN3 s podrobnostmi, které do veřejného modelu nepatří.
+> Rozhodnutí 0243 (2026-11-12) ruší vstup bez tailnetu: do každého Prostředí
+> se vstupuje jen přes tailnet a Osobní Prostředí mimo Conglomerate jsou
+> v osobním tailnetu Lazuria. Pasáže níže o veřejném DNS (0213) a o Osobním
+> Prostředí bez tailnetu (0207) jsou záznam, ne platné pravidlo.
 
 Rozhodnutí Matěje z 2026-10-06, root decision **0192**, včetně následného
 rozhodnutí o vědomém sdílení na základě důvěry. [Architektonické review](environment-access-review-2026-10-06.md)
