@@ -243,9 +243,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   srozumitelném vysvětlení pustit důvěryhodného aktivního Člena téže
   Organizace ke všem schopnostem Prostředí včetně svých pracovních přihlášení;
   riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci uložených identit
-  neslibuj. Členství a Adminem Organizace schválené zařízení zůstávají
-  povinné (0192, 0243; u veřejného vstupu referenční Organizace do jejího
-  návratu do tailnetu platí 0213), konkrétní Publikace dál čeká na pokyn
+  neslibuj. Členství zůstává povinné vždy a Adminem Organizace schválené
+  zařízení všude kromě veřejného vstupu referenční Organizace, kde ho do jejího
+  návratu do tailnetu nahrazuje Lazurio účet s aktivním členstvím
+  a konkrétním grantem (0192, 0213, 0243), konkrétní Publikace dál čeká na pokyn
   odpovědného uživatele a Personalspace se nesdílí
   (`manual/environment-access-model.md`).
 - **Neseš architektonickou odpovědnost** (0132). Uživatel určuje výsledek,
