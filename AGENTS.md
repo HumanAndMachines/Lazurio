@@ -80,9 +80,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   schopnosti Teamů, branch rules, review a Publikace. Vstup do Prostředí drží
   Lazurio účet, aktivní členství a konkrétní grant a síť Adminem Organizace
   schválené zařízení v Headscale (0192; cílový kontrakt, ne tvrzení o
-  nasazení, viz `manual/environment-access-model.md`). Zvolí-li si Organizace
-  veřejné DNS (0213), lidé vstupují bez tailnetu jen branami Prostředí a
-  trezor zůstává v tailnetu. Druhý paralelní ACL nevzniká a aktuální práva se
+  nasazení, viz `manual/environment-access-model.md`). Do každého Prostředí
+  se vstupuje jen přes tailnet (0243): do Prostředí Organizace přes tailnet
+  jejího Conglomerate, do Osobního Prostředí mimo Conglomerate přes osobní
+  tailnet Lazuria. Druhý paralelní ACL nevzniká a aktuální práva se
   neobcházejí.
 - **Mašina je hranice**, ne typ hardwaru: fyzické zařízení, virtuální server
   nebo providerem izolovaný hostovaný prostor, který tvoří jednu runtime,
@@ -199,11 +200,12 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   změny přístupů a merge, publish či release mimo výslovný mandát vždy
   vyžadují souhlas uživatele k přesné operaci. Mandát si Buddy nevydává,
   nerozšiřuje ani neobnovuje.
-- Buddy z Produktu 1 nemá tailnet ani SSH: vstupuje se do něj Lazurio účtem
-  z webu (0207) a Headscale mu nezakládej. Osobní Prostředí, které v tailnetu
-  už je (piloty, Produkt 2), je výhradně nodem Headscale tailnetu Conglomerate
-  Hostu pod osobním Headscale userem svého uživatele. Samostatný VPN,
-  WireGuard tunel, veřejný port ani DNAT pro něj nezakládej (0154).
+- Osobní Prostředí s Buddym je nodem právě jednoho tailnetu (0243), vždy pod
+  osobním Headscale userem svého uživatele: u člověka, který pracuje
+  v Organizaci s Lazuriem, tailnetu jejího Conglomerate, jinak osobního
+  tailnetu Lazuria. Tailnet i uzly v něm zakládá a spravuje Lazurio, ručně je
+  nezakládej. Samostatný VPN, WireGuard tunel, veřejný port ani DNAT pro něj
+  nezakládej (0154).
 - **Pracovní přístup** (0224): z Osobního Prostředí vede automaticky SSH do
   Pracovních Prostředí jeho člověka ve všech Organizacích Conglomerate; do
   Týmových Prostředí a jako Admin Organizace do ostatních Prostředí se jde dál
@@ -236,8 +238,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   srozumitelném vysvětlení pustit důvěryhodného aktivního Člena téže
   Organizace ke všem schopnostem Prostředí včetně svých pracovních přihlášení;
   riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci uložených identit
-  neslibuj. Členství a v Organizaci s tailnetem i Adminem Organizace schválené
-  zařízení zůstávají povinné (0213), konkrétní Publikace dál čeká na pokyn
+  neslibuj. Členství a Adminem Organizace schválené zařízení zůstávají
+  povinné (0192, 0243), konkrétní Publikace dál čeká na pokyn
   odpovědného uživatele a Personalspace se nesdílí
   (`manual/environment-access-model.md`).
 - **Neseš architektonickou odpovědnost** (0132). Uživatel určuje výsledek,
@@ -513,9 +515,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   živého grantu na GitHubu (0186). `productionspace/` drží org-level repa
   s vlastním branch a release modelem (0041) a `personalspace/` není
   Organizace (0046). Hostovaná jména aplikací určuje 0146: dílna
-  `<app>.<vm>.<org>.lazurio.io` jen z tailnetu, u Organizace s veřejným DNS
-  (0213) i z internetu přes veřejný vstup serveru k bráně s přihlášením
-  Lazurio účtem, a produkční aplikace `<app>.<org>.lazurio.io`. Podrobný model
+  `<app>.<vm>.<org>.lazurio.io` jen z tailnetu (0243) a produkční aplikace
+  `<app>.<org>.lazurio.io`. Podrobný model
   drží `MAP.md`.
 - **Hostující Moduly** (0221): Organizace smí namountovat Modul jiné
   Organizace jako kontext ve `workspace/<DomovskáOrganizace>_GEN3/<repozitář>`,
