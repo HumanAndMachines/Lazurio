@@ -83,8 +83,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   nasazení, viz `manual/environment-access-model.md`). Do každého Prostředí
   se vstupuje jen přes tailnet (0243): do Prostředí Organizace přes tailnet
   jejího Conglomerate, do Osobního Prostředí mimo Conglomerate přes osobní
-  tailnet Lazuria. Druhý paralelní ACL nevzniká a aktuální práva se
-  neobcházejí.
+  tailnet Lazuria. Přechodnou výjimkou je stávající veřejný vstup referenční
+  Organizace bez tailnetu, který běží do jejího návratu do tailnetu (0204,
+  0213). Druhý paralelní ACL nevzniká a aktuální práva se neobcházejí.
 - **Mašina je hranice**, ne typ hardwaru: fyzické zařízení, virtuální server
   nebo providerem izolovaný hostovaný prostor, který tvoří jednu runtime,
   bezpečnostní a recovery hranici se známým Ownerem. Proces, Modul,
@@ -243,7 +244,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   Organizace ke všem schopnostem Prostředí včetně svých pracovních přihlášení;
   riziko nese on. Odhlašování ani výmaz nevynucuj a izolaci uložených identit
   neslibuj. Členství a Adminem Organizace schválené zařízení zůstávají
-  povinné (0192, 0243), konkrétní Publikace dál čeká na pokyn
+  povinné (0192, 0243; u veřejného vstupu referenční Organizace do jejího
+  návratu do tailnetu platí 0213), konkrétní Publikace dál čeká na pokyn
   odpovědného uživatele a Personalspace se nesdílí
   (`manual/environment-access-model.md`).
 - **Neseš architektonickou odpovědnost** (0132). Uživatel určuje výsledek,
@@ -519,8 +521,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   živého grantu na GitHubu (0186). `productionspace/` drží org-level repa
   s vlastním branch a release modelem (0041) a `personalspace/` není
   Organizace (0046). Hostovaná jména aplikací určuje 0146: dílna
-  `<app>.<vm>.<org>.lazurio.io` jen z tailnetu (0243) a produkční aplikace
-  `<app>.<org>.lazurio.io`. Podrobný model
+  `<app>.<vm>.<org>.lazurio.io` jen z tailnetu (0243; u referenční
+  Organizace do jejího návratu do tailnetu i přes veřejný vstup serveru, 0213)
+  a produkční aplikace `<app>.<org>.lazurio.io`. Podrobný model
   drží `MAP.md`.
 - **Hostující Moduly** (0221): Organizace smí namountovat Modul jiné
   Organizace jako kontext ve `workspace/<DomovskáOrganizace>_GEN3/<repozitář>`,

@@ -4,7 +4,9 @@
 > decision 0146 (veřejný rejstřík `docs/decision-register.md` v
 > `Lazurio/LazurioPlatform`): každá aplikace běží na kořeni
 > vlastního hostname `https://<app>.<machine>.<domain>/` (dílna = hostovaná VM,
-> jen z tailnetu, decision 0243), produkční workspace aplikace na `<app>.<org>.lazurio.io`,
+> jen z tailnetu podle decision 0243; referenční Organizace do svého návratu do
+> tailnetu i přes veřejný vstup serveru podle decision 0213), produkční workspace
+> aplikace na `<app>.<org>.lazurio.io`,
 > bare hostname VM je rozcestník. Pre-0146 tvar `<module>.<team>.<domain>` a
 > jeho path routing jsou **superseded**; tento dokument dál platí jen pro
 > parity rozsah synchronizace, jednu logickou Builder mašinu, runner a
