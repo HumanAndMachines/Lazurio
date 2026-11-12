@@ -203,8 +203,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - Osobní Prostředí s Buddym je nodem právě jednoho tailnetu (0243), vždy pod
   osobním Headscale userem svého uživatele: u člověka, který pracuje
   v Organizaci s Lazuriem, tailnetu jejího Conglomerate, jinak osobního
-  tailnetu Lazuria. Tailnet i uzly v něm zakládá a spravuje Lazurio, ručně je
-  nezakládej. Samostatný VPN, WireGuard tunel, veřejný port ani DNAT pro něj
+  tailnetu Lazuria na jeho Personal Conglomerate Hostu (funguje jako
+  Conglomerate Host, jen pro Osobní Prostředí mimo jakýkoli Conglomerate).
+  Tailnet i uzly v něm zakládá a spravuje Lazurio, ručně je nezakládej. Samostatný VPN, WireGuard tunel, veřejný port ani DNAT pro něj
   nezakládej (0154).
 - **Pracovní přístup** (0224): z Osobního Prostředí vede automaticky SSH do
   Pracovních Prostředí jeho člověka ve všech Organizacích Conglomerate; do
@@ -214,10 +215,13 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   alias ani nový grant nezakládáš. Model přístupů drží LazurioPlatform
   `docs/environment-access.md`, podrobnosti GEN3
   `manual/environment-access-model.md`.
-- Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační
-  `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS slug je
-  lowercase login zmrazený při přidělení Prostředí (0153, 0154, 0216,
-  `ARCHITECTURE.md`).
+- Osobní URL stávajících Osobních Prostředí je
+  `<app>.<personal-dns-slug>.lazurio.io`, v osobním tailnetu Lazuria
+  `<app>.<login>.personal.lazurio.io` (0243, rozhodnuté, zatím nenasazené),
+  organizační `<app>.<machine>.<github-org-login>.lazurio.io`; osobní DNS
+  slug je lowercase login zmrazený při přidělení Prostředí (0153, 0154, 0216,
+  `ARCHITECTURE.md`). Adresu konkrétního Prostředí ber z jeho záznamu,
+  neskládej ji.
 - Prostředí vznikají předem do zásoby jako volná a lidem se přidělují
   zápisem v Lazurio Auth; použité Prostředí se nepředává, zanikne a vznikne
   nové (0216; cíl, zatím nenasazený, plán DEV-6688).
