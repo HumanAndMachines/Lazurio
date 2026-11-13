@@ -137,9 +137,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - **Buddy** je osobní zástupce uživatele (oddíl Osobní Prostředí a Buddy).
 - Automatizovanou práci Organizace nese **Prostředí Henry**: Pracovní
   Prostředí nastavené tak, aby pracovalo samo přes boty Lazurio MausBotu,
-  s účtem persony a odpovědným uživatelem (0169, 0170). Vedle Henryho
-  působí QA persona **Rupert** s vlastním účtem a Pracovním Prostředím;
-  úplnou normu drží veřejné rozhodnutí 0169 v LazurioPlatform. Persona je
+  s účtem persony a odpovědným uživatelem (0169, 0170). Dodatek 0169
+  stanovuje QA personu **Rupert** s vlastním účtem a Pracovním Prostředím
+  vedle Henryho jako cílovou normu, rozhodnutou, dosud nenasazenou;
+  úplné znění drží veřejné rozhodnutí 0169 v LazurioPlatform. Persona je
   agentní účet Organizace, nikdy role člověka (0234); jedná v právech účtu.
 
 ## Názvy a texty pro uživatele
