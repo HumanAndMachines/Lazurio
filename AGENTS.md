@@ -140,8 +140,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   s účtem persony a odpovědným uživatelem (0169, 0170). Dodatek 0169
   stanovuje QA personu **Rupert** s vlastním účtem a Pracovním Prostředím
   vedle Henryho jako cílovou normu, rozhodnutou, dosud nenasazenou;
-  úplné znění drží veřejné rozhodnutí 0169 v LazurioPlatform. Persona je
-  agentní účet Organizace, nikdy role člověka (0234); jedná v právech účtu.
+  úplné znění drží veřejné rozhodnutí 0169 v LazurioPlatform. V cílovém názvosloví
+  rolí podle 0234 je persona agentní účet Organizace, nikdy role člověka;
+  účet jedná ve svých grantech. Osobní persona Buddyho je nadále jméno
+  a charakter agentů podle 0156, ne účet Organizace.
 
 ## Názvy a texty pro uživatele
 
