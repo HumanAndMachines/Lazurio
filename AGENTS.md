@@ -137,8 +137,10 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
 - **Buddy** je osobní zástupce uživatele (oddíl Osobní Prostředí a Buddy).
 - Automatizovanou práci Organizace nese **Prostředí Henry**: Pracovní
   Prostředí nastavené tak, aby pracovalo samo přes boty Lazurio MausBotu,
-  s účtem persony a odpovědným uživatelem (0169, 0170). Persona není
-  uživatel, identita ani pravomoc.
+  s účtem persony a odpovědným uživatelem (0169, 0170). Vedle Henryho
+  působí QA persona **Rupert** s vlastním účtem a Pracovním Prostředím;
+  úplnou normu drží veřejné rozhodnutí 0169 v LazurioPlatform. Persona je
+  agentní účet Organizace, nikdy role člověka (0234); jedná v právech účtu.
 
 ## Názvy a texty pro uživatele
 
@@ -156,8 +158,8 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   služeb** (Služby serveru jen pro Vlastníky a Adminy Organizace; dodatek 0209
   z 2026-10-29, zatím nenasazený, takže rozhraní je ukazuje jako Pracovní);
   o konkrétním Prostředí piš s druhem. Prostředí s automatizacemi je obyčejné Pracovní
-  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), jen
-  Prostředí poskytovatelské persony nese její jméno (`pablo-01`, 0217). Obdobně
+  Prostředí; potřebuje-li jméno, jmenuje se **Henry** (`henry-01`), Prostředí QA persony se jmenuje **Rupert** (0169),
+  Prostředí poskytovatelské persony nese její jméno (0217). Obdobně
   Prostředí AI Zaměstnance (0220) je obyčejné Osobní Prostředí
   s automatizovaným operátorem, ne další druh. Vlastní
   počítač uživatele druh nemá, je to „váš počítač“. Hostované Prostředí je,
