@@ -175,6 +175,10 @@ decision 0162 (addendum 2026-10-09):
   `workspace.tabs` (GEN4's Apps tabs) is validated and reported here so that
   an Organization that sets it keeps its other settings; the GEN3 Launchpad
   shows no tabs.
+  `tools` (the Organization's tools, LazurioPlatform decision F73: a catalog
+  tool and a minimum version each) is validated and reported the same way:
+  GEN4's `lazurio update` installs them in the Organization's Environments,
+  while GEN3 installs nothing on a person's computer.
 - **Absent value:** the Organization does not govern it and every Environment
   decides for itself, exactly as before the section existed. Existing
   Organizations therefore change nothing.
