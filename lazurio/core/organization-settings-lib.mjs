@@ -50,6 +50,17 @@ const WORKSPACE_MODULE_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const WORKSPACE_TABS_MAX = 12;
 const WORKSPACE_TAB_MODULES_MAX = 500;
 
+// The Organization's tools (LazurioPlatform decision F73): each a tool the
+// Platform's catalog has a recipe for and a minimum `major.minor.patch`,
+// each tool once. GEN4's `lazurio update` installs them in the
+// Organization's Environments; GEN3 installs nothing and only validates and
+// reports them, so an Organization that declares them keeps every other
+// setting here too. The same ids, pattern and bound as LazurioPlatform's
+// `organizationSettings`.
+export const ORGANIZATION_TOOL_IDS = Object.freeze(["cargo", "pnpm"]);
+const TOOL_MINIMUM_PATTERN = /^(?:0|[1-9][0-9]{0,5})\.(?:0|[1-9][0-9]{0,5})\.(?:0|[1-9][0-9]{0,5})$/;
+const ORGANIZATION_TOOLS_MAX = 32;
+
 const CANONICAL_SOURCE = "lazurio.organization.json";
 
 // The whole contract as one closed tree. The contract and its schema belong
@@ -110,6 +121,10 @@ const SETTINGS_CONTRACT = objectNode({
     },
     ["tabs"],
   ),
+  tools: arrayLeaf(
+    objectNode({ tool: enumItem(ORGANIZATION_TOOL_IDS), minimum: stringLeaf(TOOL_MINIMUM_PATTERN) }, ["tool", "minimum"]),
+    { minItems: 1, maxItems: ORGANIZATION_TOOLS_MAX },
+  ),
 });
 
 const SETTINGS_LEAVES = leaves(SETTINGS_CONTRACT, [], true);
@@ -157,7 +172,10 @@ export function resolveOrganizationSettings({ authority, canonicalManifest }) {
   }
   const issues = [];
   validateNode(canonicalManifest.settings, SETTINGS_CONTRACT, "/settings", issues);
-  if (issues.length === 0) workspaceIssues(canonicalManifest.settings, issues);
+  if (issues.length === 0) {
+    workspaceIssues(canonicalManifest.settings, issues);
+    toolsIssues(canonicalManifest.settings, issues);
+  }
   if (issues.length > 0) {
     return settingsResult({
       status: "invalid",
@@ -255,6 +273,17 @@ function workspaceIssues(settings, issues) {
       if (modules.has(module)) issues.push({ code: "settings_value_invalid", path: `${at}/modules/${position}` });
       modules.add(module);
     });
+  });
+}
+
+// What the closed tree cannot say about the tools: a tool is declared once.
+function toolsIssues(settings, issues) {
+  const tools = settings.tools;
+  if (tools === undefined) return;
+  const seen = new Set();
+  tools.forEach((entry, index) => {
+    if (seen.has(entry.tool)) issues.push({ code: "settings_value_invalid", path: `/settings/tools/${index}/tool` });
+    seen.add(entry.tool);
   });
 }
 

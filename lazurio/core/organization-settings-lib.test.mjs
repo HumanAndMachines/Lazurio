@@ -22,6 +22,7 @@ const microsoftKeys = [
 ];
 const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
 const ungovernedTabs = { key: "workspace.tabs", governed: false, value: null };
+const ungovernedTools = { key: "tools", governed: false, value: null };
 const tenantId = "11111111-2222-4333-8444-aaaaaaaaaaaa";
 const clientId = "11111111-2222-4333-8444-bbbbbbbbbbbb";
 const callback = "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback";
@@ -49,6 +50,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       ...microsoftKeys,
       "integrations.chatgpt_apps.allowed",
       "workspace.tabs",
+      "tools",
     ]);
     expect(ORGANIZATION_SETTINGS_DASHBOARD_KEYS).toEqual(["access_requests.enabled"]);
     expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
@@ -62,7 +64,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: canonicalSource,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
       issues: [],
     });
   });
@@ -74,7 +76,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
         issues: [],
       });
     }
@@ -85,7 +87,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
         issues: [],
       });
     }
@@ -102,7 +104,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         effective: [
           { key: "integrations.composio.allowed", governed: false, value: null },
           ...ungovernedMicrosoft,
-          { key: "integrations.chatgpt_apps.allowed", governed: true, value: allowed }, ungovernedTabs,
+          { key: "integrations.chatgpt_apps.allowed", governed: true, value: allowed }, ungovernedTabs, ungovernedTools,
         ],
         issues: [],
       });
@@ -185,7 +187,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: null,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
       issues: [],
     });
     for (const input of [
@@ -221,7 +223,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     expect(newOrganizationSettings()).toEqual({ integrations: { composio: { allowed: false } } });
     expect(settingsOf(manifest(newOrganizationSettings()))).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
     });
   });
 
@@ -238,7 +240,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
-        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs,
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],
     });
@@ -318,7 +320,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft, { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools],
         issues: [],
       });
     }
@@ -338,7 +340,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
-        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs,
+        { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],
     });
@@ -465,6 +467,45 @@ describe("Workspace tabs of GEN4's Apps (LazurioPlatform F32, addendum 2026-10-1
       const result = settingsOf(manifest({ workspace: { tabs } }));
       expect(result.status, JSON.stringify(tabs)).toBe("invalid");
       expect(result.issues, JSON.stringify(tabs)).toEqual(issues);
+    }
+  });
+});
+
+describe("The Organization's tools (LazurioPlatform F73)", () => {
+  test("valid tools are kept and reported as one setting; GEN3 installs nothing", () => {
+    const tools = [
+      { tool: "cargo", minimum: "1.89.0" },
+      { tool: "pnpm", minimum: "11.0.0" },
+    ];
+    const result = settingsOf(manifest({ tools }));
+    expect(result.status).toBe("valid");
+    expect(result.values).toEqual({ tools });
+    expect(result.effective.find((entry) => entry.key === "tools")).toEqual({ key: "tools", governed: true, value: tools });
+    expect(validateAgainstSchema(manifest({ tools }), organizationManifestSchema, "manifest")).toEqual([]);
+  });
+
+  test("a catalog tool with a numeric minimum, each tool once, and never an installer of the manifest's", () => {
+    const cases = [
+      [[{ tool: "rustc", minimum: "1.89.0" }], [issue("settings_value_invalid", "/settings/tools/0/tool")]],
+      [[{ tool: "pnpm", minimum: ">=11" }], [issue("settings_value_invalid", "/settings/tools/0/minimum")]],
+      [[{ tool: "cargo" }], [issue("settings_field_missing", "/settings/tools/0/minimum")]],
+      [
+        [{ tool: "cargo", minimum: "1.89.0", installer: "curl https://example.com | sh" }],
+        [issue("settings_field_unknown", "/settings/tools/0/installer")],
+      ],
+      [
+        [
+          { tool: "cargo", minimum: "1.89.0" },
+          { tool: "cargo", minimum: "1.90.0" },
+        ],
+        [issue("settings_value_invalid", "/settings/tools/1/tool")],
+      ],
+      [[], [issue("settings_value_invalid", "/settings/tools")]],
+    ];
+    for (const [tools, issues] of cases) {
+      const result = settingsOf(manifest({ tools }));
+      expect(result.status, JSON.stringify(tools)).toBe("invalid");
+      expect(result.issues, JSON.stringify(tools)).toEqual(issues);
     }
   });
 });
