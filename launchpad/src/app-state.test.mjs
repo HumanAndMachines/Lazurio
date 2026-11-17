@@ -1170,6 +1170,32 @@ test("zdravá výchozí verze neutralizuje jen očekávaný mismatch staršího 
   expect(independentDependencyFailure.blockers).toBe(1);
 });
 
+test("declared version packages need no version suffix in their display titles", () => {
+  const moduleApps = { state: "declared", open_target_app_id: "studio-v3" };
+  const current = {
+    ...app("studio-v3", "ExampleOrg", "ready"), title: "Studio", module: "studio",
+    module_apps: moduleApps,
+    module_app: { default: true, declared: true, package: "app/v3/package.json" },
+    host: "127.0.0.1", port: 24302, runtime_status: "healthy",
+  };
+  const previous = {
+    ...app("studio-v2", "ExampleOrg", "ready"), title: "Studio", module: "studio",
+    module_apps: moduleApps,
+    module_app: { default: false, declared: true, package: "app/v2/package.json" },
+    host: "127.0.0.1", port: 24302, runtime_status: "unhealthy",
+    runtime: { owner: "foreign-port", failure_kind: "port_owner_cwd_mismatch" },
+  };
+  const health = (old, active = current) => summarizeOrganizationSpaceHealth({
+    organization: { slug: "ExampleOrg", workspaces: [] }, apps: [old, active],
+  });
+  expect(health(previous)).toMatchObject({ blockers: 0, warnings: 0, running: 1 });
+  expect(health({ ...previous, dependencies: { state: "missing_package" } }).blockers).toBe(1);
+  expect(health({ ...previous, module_app: { ...previous.module_app, package: "app/catalog/package.json" } }).blockers).toBe(1);
+  expect(health({ ...previous, port: 24303 }).blockers).toBe(1);
+  expect(health({ ...previous, runtime: { failure_kind: "health_probe_failed" } }).blockers).toBe(1);
+  expect(health(previous, { ...current, runtime_status: "stopped" }).blockers).toBe(1);
+});
+
 test("starší běžící rollback dál blokuje výchozí novější verzi", () => {
   const rollback = {
     ...app("knowledgebase-v1", "ExampleOrg", "ready"),
