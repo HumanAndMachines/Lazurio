@@ -100,6 +100,11 @@ const SETTINGS_CONTRACT = objectNode({
         client_id: stringLeaf(GUID_PATTERN),
         apps: arrayLeaf(enumItem(MICROSOFT365_APPS), { minItems: 1 }),
         callbacks: arrayLeaf(stringLeaf(LAUNCHPAD_CALLBACK_PATTERN), { maxItems: MICROSOFT365_MAX_CALLBACKS }),
+        // Whether agents may send mail the person approved (decision 0162,
+        // amended 2026-11-17; LazurioPlatform F42): Outlook's mail part then
+        // asks for Mail.Send, which the tenant's admin consents to. Optional;
+        // absent and false are off.
+        send_mail: booleanLeaf(),
       },
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),

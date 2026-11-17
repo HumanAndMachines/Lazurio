@@ -60,9 +60,11 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
   stejně jako u Composia. Firemní aplikace se nabízí na každém druhu
   Environmentu; na týmovém Environmentu připojený účet používají všichni jeho
   agenti.
-- **Odesílání pošty je vypnuté.** `Mail.Send` aplikace ve výchozím stavu
-  nemá. Organizace ho zapíná vědomě, jako samostatné rozšíření oprávnění se
-  souhlasem správce.
+- **Odesílání pošty je ve výchozím stavu vypnuté.** `Mail.Send` aplikace
+  nemá, dokud ho Organizace vědomě nezapne (`send_mail` v nastavení) a
+  správce tenantu k němu nedá souhlas. Pak agent odešle jen koncept, který
+  uživatel viděl a schválil k Publikaci („publikuj“), a jen z vlastní
+  schránky přihlášeného účtu (rozhodnutí 0162, dodatek z 2026-11-17).
 - **Teams přijde ve druhé fázi**, pro čtení a koncepty.
 
 **Dnes versus cíl.** Použití nastavení v Environmentech a „Přidat účet“ pro
@@ -83,7 +85,7 @@ nepřidávají.
 | Aplikace | Oprávnění | Co tím agent smí | Volitelně později |
 | --- | --- | --- | --- |
 | přihlášení | `openid`, `profile`, `email`, `offline_access`, `User.Read` | přečíst vlastní profil, obnovovat přihlášení | — |
-| Outlook pošta | `Mail.ReadWrite` | číst, třídit, přesouvat a **mazat** poštu, vytvářet koncepty; odeslat ne | `Mail.Send` |
+| Outlook pošta | `Mail.ReadWrite`; `Mail.Send`, kde Organizace zapnula `send_mail` | číst, třídit, přesouvat a **mazat** poštu, vytvářet koncepty; s `Mail.Send` **odeslat koncept**, který uživatel schválil | `Mail.Send.Shared` (sdílené schránky) |
 | Outlook kalendář | `Calendars.ReadWrite` | číst, zakládat, měnit a **rušit schůzky**; to odešle pozvánky a zrušení účastníkům | — |
 | OneDrive a knihovny SharePointu | `Files.ReadWrite.All` | číst, nahrávat, měnit a **mazat** soubory, vytvářet **odkazy ke sdílení** a zvát lidi | — |
 | SharePoint weby | `Sites.Read.All` | najít weby, jejich knihovny a seznamy | `Sites.ReadWrite.All`; delegované `Sites.Selected` |
@@ -128,7 +130,8 @@ V `https://entra.microsoft.com` ve vlastním prohlížeči:
 3. **API permissions → Add a permission → Microsoft Graph → Delegated
    permissions:** `openid`, `profile`, `email`, `offline_access`,
    `User.Read`, `Mail.ReadWrite`, `Calendars.ReadWrite`,
-   `Files.ReadWrite.All`, `Sites.Read.All`. Pak **Grant admin consent for
+   `Files.ReadWrite.All`, `Sites.Read.All`, a kde Organizace zapíná
+   odesílání schválené pošty, i `Mail.Send`. Pak **Grant admin consent for
    <tenant>**.
 4. **Certificates & secrets:** nic nepřidávat.
 5. **Overview:** zkopírovat *Application (client) ID* a *Directory (tenant)
@@ -147,6 +150,7 @@ APP=$(az ad app create \
   --public-client-redirect-uris 'http://localhost/api/oauth/callback' '<adresa Launchpadu 1>/api/integrations/oauth/callback' \
   --query appId -o tsv)
 GRAPH=00000003-0000-0000-c000-000000000000
+# S odesíláním schválené pošty (send_mail) přidat do seznamu i Mail.Send.
 for SCOPE in openid profile email offline_access User.Read Mail.ReadWrite Calendars.ReadWrite Files.ReadWrite.All Sites.Read.All; do
   ID=$(az ad sp show --id "$GRAPH" --query "oauth2PermissionScopes[?value=='$SCOPE'].id | [0]" -o tsv)
   az ad app permission add --id "$APP" --api "$GRAPH" --api-permissions "$ID=Scope"
@@ -177,7 +181,7 @@ Agent zkontroluje, že id jsou GUID, a od správce si vyžádá výstup kontroly
 (admin center *Authentication*, *API permissions* se stavem *Granted*, nebo
 výstup posledních příkazů Cloud Shellu): `AzureADMyOrg`, přesně zadané adresy,
 žádná platforma *Web*, nula tajných klíčů a certifikátů, souhlas pro všech
-devět oprávnění. Skutečný důkaz je až první připojení (V1 až V3).
+devět oprávnění (s odesíláním deset, včetně `Mail.Send`). Skutečný důkaz je až první připojení (V1 až V3).
 
 ### 5. Poslední možnost: `az` v Environmentu
 
@@ -202,7 +206,8 @@ příkazy jako v kroku 2 v Environmentu po
 
 Po vydání čtenářů agent navrhne PR do kořenového repozitáře Organizace
 s `settings.integrations.microsoft365` (`tenant_id`, `client_id`, `apps`,
-`callbacks`) a PR mergne uživatel, který na to má práva na GitHubu.
+`callbacks`, a `send_mail: true` jen tam, kde Organizace odesílání chce a
+správce k `Mail.Send` dal souhlas) a PR mergne uživatel, který na to má práva na GitHubu.
 Schválení v Dashboardu přijde s jeho editorem. `callbacks` obsahuje přesně
 zaregistrované adresy Launchpadů, bez `localhost`.
 
@@ -262,7 +267,7 @@ Přihlášení znamená `openid profile email offline_access User.Read`. Soubory
 mají shodné jen identické části (jedna cesta `/me` a sdílená schémata), takže
 se dají sloučit beze ztráty. Skript níže je stáhne, ověří otisky, sloučí je,
 nastaví jediné přihlášení s přesně odsouhlasenými oprávněními (bez
-`Mail.Send` a `MailboxSettings.ReadWrite`) a zapíše tělo požadavku pro
+`Mail.Send` a `MailboxSettings.ReadWrite`; tato přechodná cesta neodesílá) a zapíše tělo požadavku pro
 Executor. Při neshodě otisku nebo rozdílné sdílené části skončí a nic
 nezapíše. Výsledek má 2 825 cest a otisk sloučené specifikace
 `0078e0c2d1d32987bb61b43b92309643c7f1ab54d177f3985fdd435d4099cd42`.

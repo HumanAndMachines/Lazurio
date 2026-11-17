@@ -19,6 +19,7 @@ const microsoftKeys = [
   "integrations.microsoft365.client_id",
   "integrations.microsoft365.apps",
   "integrations.microsoft365.callbacks",
+  "integrations.microsoft365.send_mail",
 ];
 const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
 const ungovernedTabs = { key: "workspace.tabs", governed: false, value: null };
@@ -240,6 +241,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.microsoft365.send_mail", governed: false, value: null },
         { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],
@@ -248,6 +250,20 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     // through Executor's always registered localhost callback in the Environment browser.
     const minimal = { integrations: { microsoft365: { ...microsoft365, apps: ["share_point"], callbacks: [] } } };
     expect(settingsOf(manifest(minimal))).toMatchObject({ status: "valid", values: minimal });
+    // Sending approved mail is an optional switch (decision 0162, amended
+    // 2026-11-17): on is one more governed leaf, text is refused.
+    const sending = { integrations: { microsoft365: { ...microsoft365, send_mail: true } } };
+    const verdict = settingsOf(manifest(sending));
+    expect(verdict.status).toBe("valid");
+    expect(verdict.effective.find((entry) => entry.key === "integrations.microsoft365.send_mail")).toEqual({
+      key: "integrations.microsoft365.send_mail",
+      governed: true,
+      value: true,
+    });
+    expect(settingsOf(manifest({ integrations: { microsoft365: { ...microsoft365, send_mail: "yes" } } }))).toMatchObject({
+      status: "invalid",
+      issues: [{ code: "settings_type_invalid", path: "/settings/integrations/microsoft365/send_mail" }],
+    });
     const full = { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(255) } } };
     expect(settingsOf(manifest(full))).toMatchObject({ status: "valid", values: full });
   });
@@ -340,6 +356,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.microsoft365.send_mail", governed: false, value: null },
         { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],

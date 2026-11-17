@@ -247,7 +247,8 @@
                     "type": "string",
                     "pattern": "^https:\\/\\/launchpad\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.lazurio\\.io\\/api\\/integrations\\/oauth\\/callback$"
                   }
-                }
+                },
+                "send_mail": { "description": "Whether agents may send mail the person approved: Outlook's mail part then asks for Mail.Send, which the tenant's admin consents to. Absent and false are off.", "type": "boolean" }
               }
             }
           }

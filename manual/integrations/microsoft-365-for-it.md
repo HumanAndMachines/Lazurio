@@ -26,6 +26,7 @@ smí ten uživatel sám. Správcovské role uživatele k tomu nic nepřidávají
 | Oprávnění | Co dovoluje |
 | --- | --- |
 | `Mail.ReadWrite` | číst, třídit, přesouvat a mazat poštu, připravovat koncepty |
+| `Mail.Send` (volitelně) | odeslat koncept, který uživatel schválil, z jeho vlastní schránky; jen kde Organizace odesílání zapne |
 | `Calendars.ReadWrite` | číst, zakládat, měnit a rušit schůzky; účastníkům tím odcházejí pozvánky a zrušení |
 | `Files.ReadWrite.All` | číst, nahrávat, měnit a mazat soubory v OneDrivu a knihovnách SharePointu, vytvářet odkazy ke sdílení a zvát lidi |
 | `Sites.Read.All` | najít weby SharePointu, jejich knihovny a seznamy |
@@ -33,13 +34,43 @@ smí ten uživatel sám. Správcovské role uživatele k tomu nic nepřidávají
 
 Co aplikace nemá:
 
-- `Mail.Send`: agenti nemohou odeslat e-mail, jen připravit koncept;
+- `Mail.Send`, dokud Organizace odesílání nezapne: agenti pak jen připravují
+  koncepty;
+- `Mail.Send.Shared` ani odesílání za jiného („send as“, „send on behalf“):
+  odesílá se jen z vlastní schránky přihlášeného uživatele;
 - žádná aplikační oprávnění ani přístup k adresáři, uživatelům, skupinám
   nebo nastavení tenantu;
 - Teams zatím ne.
 
 Zápisy a mazání nebrání oprávnění, ale pravidla práce agentů: navenek
 viditelnou změnu dělají jen na pokyn uživatele.
+
+## Odesílání pošty
+
+Odesílání je volitelné. Organizace ho zapne v Lazuriu a vy k aplikaci
+přidáte delegované oprávnění `Mail.Send` se souhlasem jménem organizace.
+Když ho nepovolíte, pošta, kalendář a soubory fungují dál a agenti jen
+připravují koncepty.
+
+Kde je zapnuté, platí:
+
+- **Pravidlo:** agent e-mail nejdřív uloží jako koncept ve schránce
+  uživatele a pošle mu odkaz na něj. Odešle ho, až když uživatel schválí jeho
+  znění („publikuj“). To je pravidlo práce agentů, ne technická zábrana.
+- **Pojistka v Lazuriu:** agentům je k dispozici jen operace „odeslat
+  existující koncept“. Okamžité odeslání (`sendMail`) ani odpověď nebo
+  přeposlání bez konceptu přes Lazurio dostupné nejsou. Odchází tedy zpráva,
+  kterou uživatel viděl ve svých Konceptech.
+- **Co pojistka nezaručí:** přihlašovací tokeny leží v Environmentu (viz
+  níže). Agent, který by pravidlo porušil, by mohl zavolat Microsoft Graph
+  napřímo. Skutečnou hranici drží váš souhlas s `Mail.Send` a vypínače
+  v Entra.
+- **Kde to uvidíte:** odeslané zprávy jsou ve složce Odeslané uživatele a
+  v jednotném protokolu auditu Microsoft Purview pod jeho účtem.
+
+Pokud `Mail.Send` přidáte k aplikaci, která už je v provozu, dejte znovu
+souhlas jménem organizace. Uživatelé, kteří už jsou připojení, dostanou
+nové oprávnění až dalším přihlášením.
 
 ## Kudy tečou data
 
