@@ -56,11 +56,15 @@ Kde je zapnuté, platí:
 
 - **Pravidlo:** agent e-mail nejdřív uloží jako koncept ve schránce
   uživatele a pošle mu odkaz na něj. Odešle ho, až když uživatel schválí jeho
-  znění („publikuj“). To je pravidlo práce agentů, ne technická zábrana.
+  přesné znění („publikuj“). Když se koncept po schválení změní, agent ho
+  ukáže znovu a odešle až po novém souhlasu. To je pravidlo práce agentů, ne
+  technická zábrana.
 - **Pojistka v Lazuriu:** agentům je k dispozici jen operace „odeslat
   existující koncept“. Okamžité odeslání (`sendMail`) ani odpověď nebo
-  přeposlání bez konceptu přes Lazurio dostupné nejsou. Odchází tedy zpráva,
-  kterou uživatel viděl ve svých Konceptech.
+  přeposlání bez konceptu přes Lazurio dostupné nejsou. Odeslat tedy jde jen
+  zprávu, která leží v Konceptech uživatele. Pojistka hlídá jen druh
+  operace: nekontroluje obsah konceptu ani to, jestli se po schválení
+  nezměnil. Že odchází právě schválené znění, drží pravidlo výše.
 - **Co pojistka nezaručí:** přihlašovací tokeny leží v Environmentu (viz
   níže). Agent, který by pravidlo porušil, by mohl zavolat Microsoft Graph
   napřímo. Skutečnou hranici drží váš souhlas s `Mail.Send` a vypínače

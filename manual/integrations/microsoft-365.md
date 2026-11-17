@@ -61,10 +61,13 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
   Environmentu; na týmovém Environmentu připojený účet používají všichni jeho
   agenti.
 - **Odesílání pošty je ve výchozím stavu vypnuté.** `Mail.Send` aplikace
-  nemá, dokud ho Organizace vědomě nezapne (`send_mail` v nastavení) a
-  správce tenantu k němu nedá souhlas. Pak agent odešle jen koncept, který
-  uživatel viděl a schválil k Publikaci („publikuj“), a jen z vlastní
-  schránky přihlášeného účtu (rozhodnutí 0162, dodatek z 2026-11-17).
+  nemá, dokud k němu správce tenantu nedá souhlas, a agenti odesílají jen
+  tam, kde ho Organizace vědomě zapne (`send_mail` v nastavení). Pak agent
+  podle pravidla Publikace odešle jen existující koncept v přesném znění,
+  které uživatel schválil („publikuj“); po změně konceptu potřebuje nový
+  souhlas. Odesílá jen z vlastní schránky přihlášeného účtu (rozhodnutí 0162,
+  dodatek z 2026-11-17). Lazurio agentům nabízí jen odeslání existujícího
+  konceptu; obsah ani změnu konceptu tato pojistka nekontroluje.
 - **Teams přijde ve druhé fázi**, pro čtení a koncepty.
 
 **Dnes versus cíl.** Použití nastavení v Environmentech a „Přidat účet“ pro
