@@ -392,6 +392,10 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
     });
   }
 
+  const retainedGuestPaths = await retainedGuestMigrationPaths({
+    organizationRoot, manifestSlots, ambiguousSlots, unsafeBoundarySlots, slotIssues, githubOrg, label, warnings,
+  });
+
   const structuredSlotIssues = [...slotIssues.values()];
   return {
     fatalIssues,
@@ -405,10 +409,57 @@ async function organizationMountContract({ organizationRoot, mountRoot, organiza
     ),
     // Hostující checkouty hostitel nikdy nespouští: jejich package.json nejsou
     // Apps hostitele, i když je domovská Organizace jako Apps deklaruje.
-    guestPaths: manifestSlots
-      .filter((slot) => !unsafeBoundarySlots.has(slot) && isOrganizationGuestSlot(slot))
-      .map((slot) => join(organizationRoot, normalizeOrganizationSlotPath(slot.path))),
+    guestPaths: [
+      ...manifestSlots
+        .filter((slot) => !unsafeBoundarySlots.has(slot) && isOrganizationGuestSlot(slot))
+        .map((slot) => join(organizationRoot, normalizeOrganizationSlotPath(slot.path))),
+      ...retainedGuestPaths,
+    ],
   };
+}
+
+// A host-to-guest migration may deliberately retain the old checkout when
+// the user cannot read the new home repository. The manifest is a scan-only
+// exclusion authority, never permission to run, move, delete or clone it.
+// Only an exact former flat mount of the same repository is supported; broad,
+// conflicting, malformed or escaping hints cannot hide another runtime App.
+async function retainedGuestMigrationPaths({
+  organizationRoot, manifestSlots, ambiguousSlots, unsafeBoundarySlots, slotIssues, githubOrg, label, warnings,
+}) {
+  const candidates = [];
+  for (const slot of manifestSlots) {
+    if (!isOrganizationGuestSlot(slot)
+      || ambiguousSlots.has(slot) || unsafeBoundarySlots.has(slot)
+      || organizationGuestSlotDeclarationIssues(slot, { githubOrg }).length > 0
+      || [...slotIssues.values()].some((issue) => issue.path === slot.path)
+    ) continue;
+    const paths = slot.migration?.previous_paths;
+    if (!Array.isArray(paths)) continue;
+    for (const path of new Set(paths)) {
+      if (typeof path !== "string"
+        || !/^workspace\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path)
+        || basename(path) !== basename(slot.path)
+        || !isCanonicalOrganizationRepositorySlotPath(path)
+        || organizationRelativePathIssue({ organizationRoot, path }) !== null
+        || manifestSlots.some((other) => {
+          const claim = normalizeOrganizationSlotPath(other?.path);
+          return claim && (path === claim || path.startsWith(`${claim}/`) || claim.startsWith(`${path}/`));
+        })
+      ) continue;
+      candidates.push({ slot, path });
+    }
+  }
+  const retained = [];
+  for (const { slot, path } of candidates) {
+    if (candidates.filter((candidate) => candidate.path.toLowerCase() === path.toLowerCase()).length !== 1) continue;
+    const target = join(organizationRoot, path);
+    if (!existsSync(target)) continue;
+    const boundary = await inspectCanonicalPathBoundary({ rootPath: organizationRoot, targetPath: target });
+    if (!boundary.ok || !boundary.targetRealPath || lstatSync(target).isSymbolicLink()) continue;
+    retained.push(target);
+    warnings.push(`${label}: ${path}: zachovaný checkout z migration.previous_paths hostujícího Modulu ${slot.path}; nespouští se, přesuňte jej pouze podle migračního postupu Organizace`);
+  }
+  return retained;
 }
 
 // Slot, který deklaruje home_organization nebo leží v hostující složce

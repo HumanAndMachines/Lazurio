@@ -72,6 +72,18 @@ Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby uživatele jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
 
+## Zachovaný checkout po přesunu Modulu k jiné Organizaci
+
+Hostující Modul se u hostitele nespouští. Pokud jeho deklarace obsahuje
+`migration.previous_paths`, Discovery může ponechat starý flat checkout
+`workspace/<repository-name>` mimo seznam Apps: musí jít o přesný, bezpečně
+obsažený mount stejného repository basename, bez jiné živé deklarace nebo
+konkurenčního migračního nároku. Doctor vypíše zachovanou cestu jako varování.
+To dovolí ostatním Apps normálně fungovat, i když uživatel nemá přístup k nové
+domovské Organizaci. Údaj neopravňuje checkout přesunout, smazat, spustit ani
+naklonovat další kopii; další krok určuje migrační runbook owning Organizace.
+Neplatné nebo široké cesty nejsou výjimkou z kontroly neregistrovaných Apps.
+
 ## Toolchain musí přežít instalační relaci
 
 Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
