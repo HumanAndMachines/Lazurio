@@ -365,14 +365,24 @@ const BLOCKING_APP_STATES = new Set([
   "runtime_failed",
 ]);
 
+// Display names may omit version suffixes. Declared Module package paths,
+// unlike labels, are authoritative for plain app/vN variants; named sub-Apps
+// must keep their own failures and are never inferred to be rollback versions.
+function moduleAppVersion(app) {
+  if (app.module_apps?.state !== "declared") return appTitleVersion(app);
+  if (app.module_app?.declared !== true) return null;
+  const match = String(app.module_app.package ?? "").match(/^app\/v([0-9]+)\/package\.json$/);
+  return match ? Number(match[1]) : null;
+}
+
 function expectedInactiveVersionLeaseMismatches(apps) {
   const expected = new Set();
   for (const family of groupAppFamilies(apps)) {
     const primary = family.primary;
-    const primaryVersion = appTitleVersion(primary);
+    const primaryVersion = moduleAppVersion(primary);
     if (primaryVersion === null || primary.runtime_status !== "healthy") continue;
     for (const member of family.members.slice(1)) {
-      const memberVersion = appTitleVersion(member);
+      const memberVersion = moduleAppVersion(member);
       if (
         memberVersion !== null
         && memberVersion < primaryVersion

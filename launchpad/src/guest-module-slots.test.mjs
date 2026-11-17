@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
+import { mkdir, mkdtemp, rm, rename, symlink, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -12,6 +12,7 @@ import { buildMissionControlPlanIndex } from "../../lazurio/runtime/mission-cont
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { buildLazurioContext } from "../../lazurio/lib.mjs";
 import { collectAgentsInstanceTargets } from "../../scripts/check-organization-agents-instance.mjs";
+import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import { createPackageApp, initGitRepo, writeJson } from "./git-fixture-helpers.test.mjs";
 
@@ -19,6 +20,8 @@ import { createPackageApp, initGitRepo, writeJson } from "./git-fixture-helpers.
 // hostuje Knowledgebase a Mission Control Organizace HomeOrg ve
 // workspace/HomeOrg_GEN3/ vedle vlastní Knowledgebase a Mission Controlu.
 const tempRoots = [];
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+const symlinkTest = await supportsFileSymlinks() ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -530,4 +533,104 @@ test("the host's own KB and MC stay the entrypoints; guests are no worktree or p
   const agentsTargets = collectAgentsInstanceTargets(resolution.resource).map((target) => target.relativePath);
   expect(agentsTargets).toContain("workspace/knowledgebase/AGENTS.md");
   expect(agentsTargets.some((path) => path.includes("HomeOrg_GEN3"))).toBe(false);
+});
+
+async function retainedGuestFixture(previousPaths = ["workspace/studio"]) {
+  const { root, organizationRoot } = await createGuestFixture({ extraSlots: [{
+    ...guestSlots()[0],
+    path: "workspace/HomeOrg_GEN3/studio",
+    slug: "studio",
+    git: { url: "git@github.com:HomeOrg/studio.git", branch: "main" },
+    migration: { previous_paths: previousPaths },
+  }] });
+  const companyPath = join(organizationRoot, "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.module_port_pool = { start: 5294, end: 5295 };
+  await writeJson(companyPath, company);
+  const retained = join(organizationRoot, "workspace", "studio");
+  for (const [module, port] of [["studio", 5294], ["knowledgebase", 5295]]) {
+    const moduleRoot = join(organizationRoot, "workspace", module);
+    await initGitRepo(moduleRoot);
+    await writeJson(join(moduleRoot, "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1", id: module, company: "HostOrg",
+      tcp_port_policy: { mode: "single" },
+      port_leases: [{ id: "main", host: "127.0.0.1", port }],
+      apps: ["app/v1/package.json"], default_app: "app/v1/package.json",
+    });
+    await writeJson(join(moduleRoot, "app/v1/package.json"), {
+      name: `hostorg-${module}`, private: true, type: "module", scripts: { dev: "bun server.mjs" },
+      lazurio: { runtime: { schema_version: "lazurio.runtime.v1", id: `hostorg-${module}`,
+        title: module, company: "HostOrg", module, surface: "internal", dev_script: "dev", tags: [],
+        listeners: [{ id: "web", role: "entrypoint", lease: "main", protocol: "http",
+          health: { kind: "http", path: "/health" } }],
+      } },
+    });
+  }
+  return { root, organizationRoot, retained };
+}
+
+async function retainedGuestResponse(root) {
+  return discoverLaunchpadApps(root);
+}
+
+test("a preserved checkout of a migrated guest cannot block or become a host App", async () => {
+  const { root } = await retainedGuestFixture();
+  const response = await retainedGuestResponse(root);
+  expect(response.failures).toEqual([]);
+  expect(response.invalid_apps).toEqual([]);
+  expect(response.apps.map((app) => app.id)).toEqual(["hostorg-knowledgebase"]);
+  expect(response.warnings.join("\n")).toContain("workspace/studio");
+  expect(response.warnings.join("\n")).toContain("migration.previous_paths");
+});
+
+test.each([
+  [["workspace/../workspace/studio"]], [["/workspace/studio"]], [["workspace"]], [[]],
+])("invalid or absent migration hints do not hide undeclared runtime packages: %j", async (previousPaths) => {
+  const { root } = await retainedGuestFixture(previousPaths);
+  const response = await retainedGuestResponse(root);
+  expect(response.invalid_apps.some((app) => app.package_path.includes("workspace/studio/"))).toBe(true);
+});
+
+test("a migration hint cannot hide another declared host module", async () => {
+  const { root } = await retainedGuestFixture(["workspace/knowledgebase"]);
+  const response = await retainedGuestResponse(root);
+  expect(response.apps.map((app) => app.id)).toContain("hostorg-knowledgebase");
+  expect(response.invalid_apps.some((app) => app.package_path.includes("workspace/studio/"))).toBe(true);
+});
+
+
+test("a former mount claimed by a live host slot remains executable only as that host slot", async () => {
+  const { root, organizationRoot } = await retainedGuestFixture();
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({ ...hostSlots()[0], path: "workspace/studio",
+    git: { url: "git@github.com:HostOrg/studio.git", branch: "main" } });
+  await writeJson(manifestPath, manifest);
+  const response = await retainedGuestResponse(root);
+  expect(response.apps.map((app) => app.id)).toContain("hostorg-studio");
+  expect(response.warnings.join("\n")).not.toContain("migration.previous_paths");
+});
+
+test("competing migration hints cannot hide an undeclared checkout", async () => {
+  const { root, organizationRoot } = await retainedGuestFixture();
+  const path = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(path).json();
+  const studio = manifest.module_slots.at(-1);
+  manifest.module_slots.push({ ...studio, home_organization: "OtherOrg",
+    path: "workspace/OtherOrg_GEN3/studio",
+    git: { url: "git@github.com:OtherOrg/studio.git", branch: "main" } });
+  await writeJson(path, manifest);
+  const response = await retainedGuestResponse(root);
+  expect(response.invalid_apps.some((app) => app.package_path.includes("workspace/studio/"))).toBe(true);
+  expect(response.warnings.join("\n")).not.toContain("migration.previous_paths");
+});
+
+symlinkTest("a symlink is never accepted as a retained migration checkout", async () => {
+  const { root, retained } = await retainedGuestFixture();
+  const moved = `${retained}-preserved`;
+  await rename(retained, moved);
+  await symlink(moved, retained, "dir");
+  const response = await retainedGuestResponse(root);
+  expect(response.warnings.join("\n")).not.toContain("migration.previous_paths");
+  expect(response.apps.some((app) => app.module === "studio")).toBe(false);
 });
