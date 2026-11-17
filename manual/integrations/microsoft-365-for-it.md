@@ -69,8 +69,7 @@ Kde je zapnuté, platí:
   v jednotném protokolu auditu Microsoft Purview pod jeho účtem.
 
 Pokud `Mail.Send` přidáte k aplikaci, která už je v provozu, dejte znovu
-souhlas jménem organizace. Uživatelé, kteří už jsou připojení, dostanou
-nové oprávnění až dalším přihlášením.
+souhlas jménem organizace.
 
 ## Kudy tečou data
 
