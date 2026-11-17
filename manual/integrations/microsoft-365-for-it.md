@@ -62,9 +62,10 @@ Kde je zapnuté, platí:
 - **Pojistka v Lazuriu:** agentům je k dispozici jen operace „odeslat
   existující koncept“. Okamžité odeslání (`sendMail`) ani odpověď nebo
   přeposlání bez konceptu přes Lazurio dostupné nejsou. Odeslat tedy jde jen
-  zprávu, která leží v Konceptech uživatele. Pojistka hlídá jen druh
-  operace: nekontroluje obsah konceptu ani to, jestli se po schválení
-  nezměnil. Že odchází právě schválené znění, drží pravidlo výše.
+  existující koncept ve schránce uživatele (v kterékoli složce). Pojistka
+  hlídá jen druh operace: nekontroluje, o který koncept jde, jeho obsah ani
+  to, jestli se po schválení nezměnil. Že odchází právě schválené znění,
+  drží pravidlo výše.
 - **Co pojistka nezaručí:** přihlašovací tokeny leží v Environmentu (viz
   níže). Agent, který by pravidlo porušil, by mohl zavolat Microsoft Graph
   napřímo. Skutečnou hranici drží váš souhlas s `Mail.Send` a vypínače
