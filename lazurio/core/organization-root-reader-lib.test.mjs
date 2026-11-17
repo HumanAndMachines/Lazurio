@@ -223,7 +223,7 @@ function writeTransitionRoot(root, canonical) {
 // The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
 // declared by these fixtures, so its keys stay ungoverned.
 function ungovernedMicrosoft365() {
-  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
+  return ["tenant_id", "client_id", "apps", "callbacks", "send_mail"].map((field) => ({
     key: `integrations.microsoft365.${field}`,
     governed: false,
     value: null,
