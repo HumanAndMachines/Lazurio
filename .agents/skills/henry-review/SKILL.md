@@ -73,8 +73,15 @@ dokončení Vlastníkovi Organizace.
 **Změna přístupu** (členství, role, Teamy, zařízení lidí) má vlastní pravidlo
 (0250). Zakládá ji jako pull request v `infra` jen Vlastník Organizace. Henry
 Organizace ji jako druhé oči posoudí podle principů Lazuria, a když sedí, smí
-ji schválit a po sloučení nasadit. Kde Organizace vlastního Henryho nemá,
-dělá to Henry integrátora. Jiný agent změnu přístupu jen navrhuje a sám ji
+ji schválit a po sloučení nasadit, v mezích bran, které pro nasazení stanoví
+rozhodnutí 0205 a 0245 a kontrakt Lazurio Machines, včetně schválení člověkem,
+kde ho vyžadují. Kdo takový pull request slučuje a jak se jeho nasazení
+potká s pravidlem 0205, že Henry apply neschvaluje, a s kontraktem Machines,
+0250 nerozhoduje; do té doby platí pro sloučení i apply 0205 a 0245. Oprávnění
+plyne z pravidla, ne z přiřazení: samotné přiřazení pull requestu Henryho ke
+schválení změny přístupu nikdy neopravňuje (0222) a změnu přístupu sám nikdy
+nezakládá. Kde Organizace vlastního Henryho nemá, dělá to, dokud ho nemá,
+Henry integrátora. Jiný agent změnu přístupu jen navrhuje a sám ji
 neschvaluje. Ve Free Organizaci to drží dohoda, v placené pravidla repozitáře
 `infra`; jejich vynucení se v placených Organizacích teprve zavádí, do té doby
 platí dohoda i tam.
