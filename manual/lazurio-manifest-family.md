@@ -240,15 +240,17 @@ not secrets; the runbook is
       "apps": ["outlook", "one_drive", "share_point"],
       "callbacks": [
         "https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback"
-      ]
+      ],
+      "send_mail": true
     }
   }
 }
 ```
 
-- `microsoft365` is a closed object; all four fields are required once it is
-  present. Any other field is refused, so a secret, a password or a certificate
-  can never be declared here.
+- `microsoft365` is a closed object of five fields: `tenant_id`, `client_id`,
+  `apps` and `callbacks` are required once it is present, `send_mail` is
+  optional. Any other field is refused, so a secret, a password or a
+  certificate can never be declared here.
 - `tenant_id` and `client_id` are lowercase GUIDs, as the Azure CLI prints them.
 - `apps` is a non-empty set of the parts the company app offers: `outlook`
   (mail and calendar), `one_drive`, `share_point`. Teams joins in phase 2. A
@@ -264,16 +266,24 @@ not secrets; the runbook is
   localhost fallback takes one. It may be empty. Executor's
   `http://localhost/api/oauth/callback`, the Environment browser fallback, is
   always registered and never listed.
-- Core reports each of the four fields as its own key in `effective[]`
+- `send_mail` (boolean, optional; absent and `false` are off; decision 0162,
+  amended 2026-11-17) lets agents send mail the person approved: Outlook's mail
+  part then asks for `Mail.Send`, which the tenant's admin consents to, and
+  agents send only an existing draft after the person's approval of its exact
+  text, from their own mailbox. A non-boolean is `settings_type_invalid`.
+- Core reports each of the five fields as its own key in `effective[]`
   (`integrations.microsoft365.tenant_id` and so on); consumers apply them
-  together. A well-typed value of the wrong form (pattern, unknown app, empty
+  together; `send_mail` is governed only when present. A well-typed value of the wrong form (pattern, unknown app, empty
   `apps`, duplicate) is `settings_value_invalid`.
 - **Readers first, again.** A reader that knows `settings` but not
   `microsoft365` judges the whole section `invalid` and applies none of it, so
   its Composio switch would also stop at the last applied version. No
   Organization adds `microsoft365` until Lazurio Core, the Dashboard and the
   LazurioPlatform release that apply it are out, in the order of
-  [Readers first](#readers-first).
+  [Readers first](#readers-first). The same holds for `send_mail`: a reader
+  that knows `microsoft365` but not `send_mail` refuses the whole section, so
+  no Organization writes it before the LazurioPlatform release that carries it
+  (Lazurio/LazurioPlatform#1028) runs on its Environments.
 
 ### Access requests (`settings.access_requests`)
 
