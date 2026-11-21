@@ -1005,7 +1005,7 @@ export function organizationTargetIdentityIssue({ repo, sourceUrl, state, resour
   if (ABSENT_ROOT_BINDING_NAME_RULE_FORMATS.includes(state) && resource.root_repository === null) {
     const owner = remote.owner.toLowerCase();
     const repository = remote.repository.toLowerCase();
-    if (repository === owner || repository === `${owner}_gen3`) return null;
+    if (repository === owner || repository === `${owner}_gen3` || repository === `${owner}_gen4`) return null;
     const format = state === "legacy" ? "Legacy" : "Transition";
     return `${format} Organization target bez explicitního root repository bindingu neodpovídá kanonickému GitHub root repository názvu.`;
   }

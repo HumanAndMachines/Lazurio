@@ -16,6 +16,7 @@ import {
   validateHostedWorkspaceBindings,
 } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
+import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../../lazurio/core/organization-activation-lib.mjs";
 
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
 export const externalAssertions = Object.freeze([
@@ -91,7 +92,7 @@ export async function runWorkspaceParity(options) {
     : null;
   add(
     "manifest.organization",
-    ["legacy", "transition"].includes(organizationResolution?.state)
+    ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(organizationResolution?.state)
       && organizationResolution.resource_count === 1
       && organizationResolution.resource?.organization?.slug === options.organization,
     {

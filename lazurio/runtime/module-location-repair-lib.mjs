@@ -38,6 +38,7 @@ import {
   MODULE_MOUNT_CONTAINERS,
   organizationModuleDeclarationClaims,
 } from "./module-location-candidates-lib.mjs";
+import { stripOrganizationRootGeneration } from "../core/organization-root-repository-lib.mjs";
 
 const REPAIR_SCHEMA = "lazurio.module_location_repair.v1";
 const allowedMountContainers = new Set(MODULE_MOUNT_CONTAINERS);
@@ -1249,7 +1250,7 @@ async function findOrganization({ rootPath, organizationSlug }) {
     if (resolution.state === "missing") continue;
     const matchesRequestedMount = resolution.resource?.organization?.slug === organizationSlug
       || entry.name === organizationSlug
-      || entry.name === `${organizationSlug}_GEN3`;
+      || stripOrganizationRootGeneration(entry.name) === organizationSlug;
     if (!matchesRequestedMount) continue;
     if (
       !["legacy", "transition"].includes(resolution.state)

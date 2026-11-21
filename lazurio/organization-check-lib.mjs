@@ -25,13 +25,28 @@ export function checkOrganizationRoot({ organizationRoot }) {
   const root = resolve(organizationRoot);
   const documents = readOrganizationRootDocuments({ organizationRoot: root });
   const resolution = resolveOrganizationRootDocuments(documents);
-  // Accepted exactly when activation, install and update accept the root today.
+  // Accepted exactly when activation, install and update accept the root: since
+  // LZD-0041 B also `current`, a root with only lazurio.organization.json and
+  // modules.manifest.json, with or without a `compatibility` block.
   const accepted = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
     && resolution.resource_count === 1;
   const schemaIssues = canonicalSchemaIssues(documents);
   const failures = [];
   if (!accepted) {
     failures.push({ code: "manifest_state_not_accepted", message: stateMessage(resolution) });
+  }
+  // The resolver no longer decides by the projection digest (LZD-0041 B), but
+  // a root that still declares one serves readers that do (Lazurio up to
+  // 0.1.23, older Core pins). This check is the CI of such roots, so a stale
+  // declared digest still fails here exactly as before; a clean GEN4 root
+  // without a `compatibility` block has none to keep.
+  if (accepted && resolution.issues.includes("canonical_projection_hash_invalid")) {
+    failures.push({
+      code: "projection_digest_stale",
+      message: `compatibility.legacy_projection.sha256 v ${ORGANIZATION_DOCUMENT_PATHS.canonical} neodpovídá jeho projekci; `
+        + "starší čtenáři by kořen odmítli. V task worktree spusťte `lazurio organization check --write` (Lazurio) "
+        + `nebo \`${MIGRATE_COMMAND}\` a commitněte výsledek.`,
+    });
   }
   if (schemaIssues.length > 0) {
     failures.push({
@@ -103,10 +118,6 @@ function stateMessage(resolution) {
   if (resolution.state === "projection_drift") {
     return `${ORGANIZATION_DOCUMENT_PATHS.legacy_projection} není aktuální projekcí ${ORGANIZATION_DOCUMENT_PATHS.canonical}; `
       + `v task worktree spusťte \`${MIGRATE_COMMAND}\` a commitněte oba soubory.`;
-  }
-  if (resolution.state === "current") {
-    return `Root drží jen ${ORGANIZATION_DOCUMENT_PATHS.canonical} bez legacy projekce; aktivace ani update ho zatím `
-      + "nepřijmou (decision 0145, manual/lazurio-manifest-family.md).";
   }
   if (resolution.state === "missing") {
     return `V kořeni není ${ORGANIZATION_DOCUMENT_PATHS.canonical} ani ${ORGANIZATION_DOCUMENT_PATHS.legacy_projection}; není to Lazurio Organization.`;

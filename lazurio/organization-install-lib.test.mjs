@@ -1656,21 +1656,23 @@ function sourceObservation({ documents = scaffoldDocuments() } = {}) {
   };
 }
 
-// A clean GEN4 root as G2 will found it: canonical manifest and modules only,
-// no company.gen3.json and no compatibility block (LZD-0041 B and G1).
+// A clean GEN4 root: canonical manifest and modules only, no company.gen3.json
+// and no compatibility block (LZD-0041 B and G1). The scaffold still founds
+// GEN3 roots, so the fixture re-binds a scaffolded manifest to the GEN4
+// repository instead of founding one.
 function cleanGen4Documents({ repositoryId = gen4RepositoryId } = {}) {
   const scaffold = createOrganizationScaffold({
-    generation: "GEN4",
     organization: {
       id: ids.organization,
       login,
       slug: "lazurio-example-organization",
       displayName: "Lazurio Example Organization",
     },
-    repository: { id: repositoryId, name: `${login}_GEN4`, fullName: `${login}/${login}_GEN4`, defaultBranch: "main" },
+    repository: { id: ids.repository, name: `${login}_GEN3`, fullName, defaultBranch: "main" },
   });
   const files = new Map(scaffold.files.map((file) => [file.path, file.content]));
   const canonical = JSON.parse(files.get("lazurio.organization.json"));
+  canonical.root_repository = { ...canonical.root_repository, locator: `${login}/${login}_GEN4`, repository_id: repositoryId };
   delete canonical.compatibility;
   return { company: null, modules: JSON.parse(files.get("modules.manifest.json")), canonical };
 }

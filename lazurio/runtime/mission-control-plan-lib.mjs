@@ -6,6 +6,7 @@ import {
   inspectCanonicalPathBoundary,
   isPathDescendant,
 } from "../core/path-boundary-lib.mjs";
+import { stripOrganizationRootGeneration } from "../core/organization-root-repository-lib.mjs";
 
 // Mission Control v3 keeps its canonical filesystem database in a nested
 // organization-local data checkout. The legacy root remains readable during
@@ -99,7 +100,7 @@ export async function readMissionControlPlanAt({ companiesRoot, organizationPath
   const text = await readFile(absolutePath, "utf8");
   return parsePlanFile({
     companiesRoot,
-    organization: { slug: basename(organizationPath).replace(/_GEN3$/, ""), path: organizationPath },
+    organization: { slug: stripOrganizationRootGeneration(basename(organizationPath)), path: organizationPath },
     file: absolutePath,
     text,
     module: null,

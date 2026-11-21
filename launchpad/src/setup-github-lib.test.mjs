@@ -649,21 +649,10 @@ test("organization install runs the existing CLI with the Module Contributor rol
   expect(machine.state.calls.at(-1)).toEqual(["bun", "/opt/lazurio/lazurio/cli.mjs", "organization", "install", "ExampleOrg", "--role", "module-contributor", "--json"]);
   await expect(controller.organizationInstall({ organization: "../evil" })).rejects.toMatchObject({ code: "organization_login_invalid" });
 
-  // A hosted Organization Machine installs only the Organization whose root declares its slug.
+  // A hosted Organization Machine installs only the Organization whose
+  // verified root declares its slug.
   for (const [slug, expected] of [["example", "updated"], ["other", null]]) {
-    const scoped = fakeMachine({ signedIn: true, keysOnGitHub: [publicKey] });
-    const base = scoped.run;
-    scoped.run = async (program, args) => args[0] === "api" && args[3]?.endsWith("/contents/company.gen3.json")
-      ? { code: 0, stdout: JSON.stringify({ company: { slug: "example" } }), stderr: "" }
-      : base(program, args);
-    const { controller: scopedController } = await controllerFor(scoped, { organizationScope: slug, cliCommand: ["/usr/bin/bun", "cli.mjs"] });
-    if (expected) {
-      expect((await scopedController.organizationInstall({ organization: "ExampleOrg" })).report.state).toBe(expected);
-    } else {
-      await expect(scopedController.organizationInstall({ organization: "ExampleOrg" }))
-        .rejects.toMatchObject({ code: "organization_outside_machine_scope" });
-      expect(scoped.state.calls.some(([name]) => name === "bun")).toBe(false);
-    }
+    expect(await scopedInstall({ scope: slug, gen3: legacyRoot("ExampleOrg_GEN3", "example") })).toBe(expected);
   }
 
   const personal = await controllerFor(fakeMachine(), { personalScope: true, cliCommand: ["/usr/bin/bun", "cli.mjs"] });
@@ -690,4 +679,132 @@ test("the page never puts the one-time code on the clipboard", async () => {
   expect(page).toContain('id="setupGitHubCode"');
   expect(script).not.toMatch(/navigator\.clipboard|execCommand\(\s*["']copy/);
   expect(page).not.toMatch(/copy/i);
+});
+
+
+// --- LZD-0041 B and G1: the scope gate reads the verified root, never
+// company.gen3.json by the GEN3 name. ---------------------------------------
+
+const scopeOwner = { id: 314957563, login: "ExampleOrg" };
+
+function modulesFor(slug) {
+  return { organization_generation: "gen3", company: slug, github_org: "ExampleOrg", module_slots: [] };
+}
+
+function legacyRoot(name, slug, { id = 42424242 } = {}) {
+  return {
+    repository: { id, name, full_name: `ExampleOrg/${name}`, owner: scopeOwner },
+    documents: {
+      "company.gen3.json": {
+        organization_generation: "gen3",
+        organization_kind: "organization",
+        company: { slug, github_org: "ExampleOrg", root_repository: `ExampleOrg/${name}` },
+      },
+      "modules.manifest.json": modulesFor(slug),
+    },
+  };
+}
+
+// The clean GEN4 shape: canonical manifest and modules only, verified IDs.
+function canonicalRoot(name, slug, { id = 52525252, locator = `ExampleOrg/${name}`, repositoryId = String(id) } = {}) {
+  return {
+    repository: { id, name, full_name: `ExampleOrg/${name}`, owner: scopeOwner },
+    documents: {
+      "lazurio.organization.json": {
+        schema_version: "lazurio.organization.v1",
+        kind: "organization",
+        organization: {
+          slug,
+          display_name: "Example",
+          forge_binding: { forge: "github", locator: "ExampleOrg", binding_state: "verified", organization_id: String(scopeOwner.id) },
+          metadata: {},
+        },
+        root_repository: { forge: "github", locator, default_branch: "main", binding_state: "verified", repository_id: repositoryId },
+        manifests: { modules: "modules.manifest.json" },
+        extensions: { legacy: {} },
+      },
+      "modules.manifest.json": modulesFor(slug),
+    },
+  };
+}
+
+async function scopedInstall({ scope, gen3 = null, gen4 = null, failRepository = null }) {
+  const machine = fakeMachine({ signedIn: true, keysOnGitHub: [publicKey] });
+  const base = machine.run;
+  const roots = { ExampleOrg_GEN3: gen3, ExampleOrg_GEN4: gen4 };
+  const notFound = { code: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
+  machine.run = async (program, args) => {
+    const endpoint = args.find((arg) => arg.startsWith("repos/ExampleOrg/"));
+    if (program.endsWith("/gh") && args[0] === "api" && endpoint) {
+      machine.state.calls.push(["gh", ...args]);
+      const [, , name, , ...path] = endpoint.split("/");
+      if (name === failRepository) return { code: 1, stdout: "", stderr: "HTTP 502" };
+      const root = roots[name];
+      if (!root) return notFound;
+      if (path.length === 0) return { code: 0, stdout: JSON.stringify(root.repository), stderr: "" };
+      const document = root.documents[path.join("/")];
+      return document === undefined ? notFound : { code: 0, stdout: JSON.stringify(document), stderr: "" };
+    }
+    return base(program, args);
+  };
+  const { controller } = await controllerFor(machine, { organizationScope: scope, cliCommand: ["/usr/bin/bun", "cli.mjs"] });
+  try {
+    return (await controller.organizationInstall({ organization: "ExampleOrg" })).report.state;
+  } catch (error) {
+    expect(error).toMatchObject({ code: "organization_outside_machine_scope" });
+    expect(machine.state.calls.some(([name]) => name === "bun")).toBe(false);
+    return null;
+  }
+}
+
+test("scope gate: a clean GEN4 root without company.gen3.json or compatibility is in scope by its canonical slug", async () => {
+  expect(await scopedInstall({ scope: "example", gen4: canonicalRoot("ExampleOrg_GEN4", "example") })).toBe("updated");
+  expect(await scopedInstall({ scope: "other", gen4: canonicalRoot("ExampleOrg_GEN4", "example") })).toBeNull();
+});
+
+test("scope gate: when both roots declare themselves, the GEN4 slug decides", async () => {
+  const gen3 = legacyRoot("ExampleOrg_GEN3", "old-slug");
+  const gen4 = canonicalRoot("ExampleOrg_GEN4", "example");
+  expect(await scopedInstall({ scope: "example", gen3, gen4 })).toBe("updated");
+  expect(await scopedInstall({ scope: "old-slug", gen3, gen4 })).toBeNull();
+});
+
+test("scope gate: a GEN4 copy still declaring GEN3 leaves the GEN3 root in charge", async () => {
+  const gen3 = canonicalRoot("ExampleOrg_GEN3", "example", { id: 42424242 });
+  const copy = canonicalRoot("ExampleOrg_GEN4", "example", { locator: "ExampleOrg/ExampleOrg_GEN3", repositoryId: "42424242" });
+  expect(await scopedInstall({ scope: "example", gen3, gen4: copy })).toBe("updated");
+});
+
+test("scope gate fails closed on an unverifiable or contradicting root", async () => {
+  // company.gen3.json claims the scope, but the canonical manifest is the authority.
+  const contradicting = canonicalRoot("ExampleOrg_GEN4", "other");
+  contradicting.documents["company.gen3.json"] = { organization_generation: "gen3", company: { slug: "example", github_org: "ExampleOrg" } };
+  expect(await scopedInstall({ scope: "example", gen4: contradicting })).toBeNull();
+  // The declared repository ID is not the live one.
+  expect(await scopedInstall({ scope: "example", gen4: canonicalRoot("ExampleOrg_GEN4", "example", { repositoryId: "99" }) })).toBeNull();
+  // A transport failure on either candidate is not absence.
+  expect(await scopedInstall({ scope: "example", gen3: legacyRoot("ExampleOrg_GEN3", "example"), failRepository: "ExampleOrg_GEN4" })).toBeNull();
+  // Neither repository exists.
+  expect(await scopedInstall({ scope: "example" })).toBeNull();
+});
+
+test("Začínáme probes the root its declaration picks and shows its name", async () => {
+  const machine = fakeMachine({ signedIn: true, keysOnGitHub: [publicKey] });
+  const base = machine.run;
+  const gen4 = canonicalRoot("ExampleOrg_GEN4", "example");
+  machine.run = async (program, args) => {
+    const endpoint = args.find((arg) => arg.startsWith("repos/ExampleOrg/"));
+    if (program.endsWith("/gh") && args[0] === "api" && endpoint) {
+      if (endpoint === "repos/ExampleOrg/ExampleOrg_GEN4") return { code: 0, stdout: JSON.stringify(gen4.repository), stderr: "" };
+      const document = endpoint.startsWith("repos/ExampleOrg/ExampleOrg_GEN4/contents/")
+        ? gen4.documents[endpoint.split("/contents/")[1]]
+        : undefined;
+      return document ? { code: 0, stdout: JSON.stringify(document), stderr: "" } : { code: 1, stdout: "", stderr: "HTTP 404" };
+    }
+    return base(program, args);
+  };
+  const { controller } = await controllerFor(machine);
+  const status = await controller.status({ organization: "ExampleOrg" });
+  expect(status.organization).toEqual({ login: "ExampleOrg", root_repository: "ExampleOrg/ExampleOrg_GEN4", ls_remote: "ok" });
+  expect(machine.state.calls).toContainEqual(["git", "ls-remote", "--exit-code", "--heads", "--", "git@github.com:ExampleOrg/ExampleOrg_GEN4.git", "refs/heads/main"]);
 });

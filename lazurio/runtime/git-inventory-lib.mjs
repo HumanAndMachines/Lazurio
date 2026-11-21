@@ -46,6 +46,7 @@ import {
   inspectOrganizationModuleCheckoutCandidates,
   organizationModuleDeclarationClaims,
 } from "./module-location-candidates-lib.mjs";
+import { stripOrganizationRootGeneration } from "../core/organization-root-repository-lib.mjs";
 
 export async function buildGitInventory({ companiesRoot, organizations = null } = {}) {
   if (!companiesRoot) throw new Error("buildGitInventory requires companiesRoot");
@@ -729,7 +730,7 @@ export async function discoverMountedOrganizations(companiesRoot, warnings = nul
     ) {
       const recoveryIdentity = resolution.recovery_identity;
       if (recoveryIdentity?.kind === "template") continue;
-      const fallbackSlug = recoveryIdentity?.slug ?? entry.name.replace(/_GEN3$/, "");
+      const fallbackSlug = recoveryIdentity?.slug ?? stripOrganizationRootGeneration(entry.name);
       if (!isPlaceholderSlug(fallbackSlug)) {
         blockedOrganizations.push(normalizeOrganization({
           slug: fallbackSlug,
@@ -786,7 +787,7 @@ export async function discoverMountedOrganizations(companiesRoot, warnings = nul
 
 function mountedOrganizationFromResource({ resource, resolution, path, directoryName }) {
   const organizationIdentity = resource.organization ?? {};
-  const directorySlug = directoryName.replace(/_GEN3$/, "");
+  const directorySlug = stripOrganizationRootGeneration(directoryName);
   const declaredSlug = typeof organizationIdentity.slug === "string" ? organizationIdentity.slug : null;
   // Zrcadlí placeholder guard discovery-lib (autoOrganizationFromCompanyJson):
   // placeholder slug = nedokončený scaffold, nesmí se stát akční Organizací na

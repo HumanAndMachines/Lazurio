@@ -148,6 +148,42 @@ test("a legacy root passes and says settings need the canonical manifest", () =>
   expect(run(["organization", "check", root]).stdout).toContain("lazurio migrate organization-manifest");
 });
 
+// LZD-0041 B and G1: the clean GEN4 shape passes the check.
+test("a clean GEN4 root without company.gen3.json and without compatibility passes as current", () => {
+  const root = fixtureRoot();
+  const modules = modulesManifest();
+  const canonical = canonicalManifest(modules);
+  canonical.root_repository = { ...canonical.root_repository, locator: canonical.root_repository.locator.replace(/_GEN3$/u, "_GEN4") };
+  delete canonical.compatibility;
+  writeJson(root, "lazurio.organization.json", canonical);
+  writeJson(root, "modules.manifest.json", modules);
+
+  const result = run(["organization", "check", root, "--json"]);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    ok: true,
+    manifest: { state: "current", declaration_source: "lazurio.organization.json", accepted: true, issues: [], schema_issues: [] },
+    failures: [],
+  });
+});
+
+test("a transition root with a stale declared digest is accepted but still fails for the readers that need it", () => {
+  const root = transitionRoot(undefined);
+  const canonicalPath = join(root, "lazurio.organization.json");
+  const canonical = JSON.parse(readFileSync(canonicalPath, "utf8"));
+  canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  writeFileSync(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+
+  const result = run(["organization", "check", root, "--json"]);
+  expect(result.status).toBe(1);
+  const report = JSON.parse(result.stdout);
+  expect(report).toMatchObject({
+    ok: false,
+    manifest: { state: "transition", accepted: true, issues: ["canonical_projection_hash_invalid"] },
+  });
+  expect(report.failures.map((failure) => failure.code)).toEqual(["projection_digest_stale"]);
+});
+
 test("a directory that is no Organization root fails", () => {
   const result = run(["organization", "check", join(fixtureRoot(), "missing"), "--json"]);
   expect(result.status).toBe(1);

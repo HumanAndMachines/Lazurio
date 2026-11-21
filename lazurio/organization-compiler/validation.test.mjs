@@ -640,7 +640,7 @@ describe("organization config validation", () => {
     });
     expect(posixCaseMismatch.valid).toBe(false);
     expect(posixCaseMismatch.failures).toContain(
-      "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository",
+      basenameFailure,
     );
 
     const windowsCaseVariant = await validateOrganizationDocuments({
@@ -656,6 +656,27 @@ describe("organization config validation", () => {
     });
     expect(windowsCaseVariant.valid).toBe(true);
     expect(windowsCaseVariant.failures).toEqual([]);
+  });
+
+  // LZD-0041 G1 and decision N2: an `X_GEN4` root may still live in the
+  // folder `X_GEN3` until the folder is renamed, and in `X_GEN4` after.
+  test("binds a GEN4 root_repository to its folder with either generation suffix", async () => {
+    const documents = createValidDocuments();
+    documents.companyConfig.company.root_repository = "FixtureOrg/FixtureCompany_GEN4";
+    documents.companyConfig.company.repository = "git@github.com:FixtureOrg/FixtureCompany_GEN4.git";
+    const validate = (checkoutRoot, checkoutPlatform = "linux") => validateOrganizationDocuments({
+      ...documents,
+      repositoryObservation: consumerRepositoryObservation("fixtureorg/FixtureCompany_GEN4", { checkoutRoot, checkoutPlatform }),
+    });
+    for (const folder of ["/organizations/FixtureCompany_GEN4", "/organizations/FixtureCompany_GEN3"]) {
+      const result = await validate(folder);
+      expect(result.failures).toEqual([]);
+      expect(result.valid).toBe(true);
+    }
+    expect((await validate("C:\\organizations\\FIXTURECOMPANY_GEN3", "win32")).valid).toBe(true);
+    for (const folder of ["/organizations/fixturecompany_gen3", "/organizations/OtherCompany_GEN3", "/organizations/FixtureCompany"]) {
+      expect((await validate(folder)).failures).toContain(basenameFailure);
+    }
   });
 
   test("rejects repository coordinates with trailing line terminators", async () => {
@@ -1442,6 +1463,8 @@ function sourceRepositoryObservation(
     },
   };
 }
+
+const basenameFailure = "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository (nebo stejnému loginu s druhou příponou _GEN3/_GEN4)";
 
 function consumerRepositoryObservation(
   identity,

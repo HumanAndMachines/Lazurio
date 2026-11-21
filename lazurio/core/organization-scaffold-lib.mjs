@@ -14,7 +14,6 @@ import {
   ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
 } from "./organization-forge-binding-lib.mjs";
 import {
-  ORGANIZATION_ROOT_REPOSITORY_GENERATIONS,
   ORGANIZATION_ROOT_SCAFFOLD_GENERATION,
   organizationRootRepositoryName,
 } from "./organization-root-repository-lib.mjs";
@@ -161,16 +160,8 @@ const scaffoldFilePaths = Object.freeze([
   "DONE.tasks.json",
 ].sort(compareGitNames));
 
-// `generation` names the root repository `<login>_GEN3` or `<login>_GEN4`.
-// The default stays ORGANIZATION_ROOT_SCAFFOLD_GENERATION (GEN3) until the
-// founding gate of plan LZD-0041 (decision N4) switches it; every reader of
-// this Core already accepts both names.
-export function createOrganizationScaffold({
-  organization,
-  repository,
-  generation = ORGANIZATION_ROOT_SCAFFOLD_GENERATION,
-}) {
-  const normalized = normalizeInput({ organization, repository, generation });
+export function createOrganizationScaffold({ organization, repository }) {
+  const normalized = normalizeInput({ organization, repository });
   const scope = {
     id: normalized.organization.slug,
     name: normalized.organization.displayName,
@@ -247,7 +238,7 @@ export function isValidOrganizationScaffold(value) {
   }
 }
 
-function normalizeInput({ organization, repository, generation }) {
+function normalizeInput({ organization, repository }) {
   if (!isRecord(organization) || !isRecord(repository)) {
     throw new TypeError("Organization scaffold requires Organization and repository facts.");
   }
@@ -268,10 +259,10 @@ function normalizeInput({ organization, repository, generation }) {
   const repositoryId = positiveId(repository.id, "GitHub repository");
   const repositoryName = requiredText(repository.name, "GitHub repository name");
   const repositoryFullName = requiredText(repository.fullName, "GitHub repository full name");
-  if (!ORGANIZATION_ROOT_REPOSITORY_GENERATIONS.includes(generation)) {
-    throw new TypeError(`Organization scaffold generation must be one of ${ORGANIZATION_ROOT_REPOSITORY_GENERATIONS.join(", ")}.`);
-  }
-  const expectedName = organizationRootRepositoryName(organizationLogin, generation);
+  // The scaffold names new roots by ORGANIZATION_ROOT_SCAFFOLD_GENERATION
+  // (GEN3); it switches to GEN4 only after the founding gate of plan LZD-0041
+  // (decision N4). Readers of this Core already accept both names.
+  const expectedName = organizationRootRepositoryName(organizationLogin, ORGANIZATION_ROOT_SCAFFOLD_GENERATION);
   const expectedFullName = `${organizationLogin}/${expectedName}`;
   if (repositoryName.toLowerCase() !== expectedName.toLowerCase()) {
     throw new TypeError(`Organization scaffold repository must use the current '${expectedName}' naming contract.`);

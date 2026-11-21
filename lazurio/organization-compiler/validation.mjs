@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import { dirname, posix, win32 } from "path";
 import { fileURLToPath } from "url";
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
+import { organizationRootFolderMatchesRepository } from "../core/organization-root-repository-lib.mjs";
 import { isCanonicalOrganizationRepositorySlot, isOrganizationRepositoryDbSlot, organizationGuestSlotDeclarationIssues, organizationSlotHasRepositoryDbPath, organizationSlotHomeOrganization, organizationSlotRepositoryMountIssue, organizationSlotRepositoryAliasIssues, organizationSlotRepositoryRemote, organizationSlotRepositoryBranch } from "../core/organization-slot-scope-lib.mjs";
 import {
   githubRepositoryCoordinateIdentity,
@@ -590,14 +591,15 @@ function validateOrganizationRootRepositoryContract({
         "company.gen3.json/company: důvěryhodné pozorování checkoutu neobsahuje kanonický fyzický checkout root",
       );
     } else if (
-      !sameCheckoutBasename(
-        checkoutBasename,
-        declaredRootRepositoryBasename,
-        repositoryObservation.checkoutPlatform,
-      )
+      // The folder may still carry the other generation suffix of the same
+      // login (`X_GEN3` for an `X_GEN4` root) until it is renamed (LZD-0041,
+      // decision N2); any other name is still refused.
+      !organizationRootFolderMatchesRepository(checkoutBasename, declaredRootRepositoryBasename, {
+        sameName: (left, right) => sameCheckoutBasename(left, right, repositoryObservation.checkoutPlatform),
+      })
     ) {
       failures.push(
-        "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository",
+        "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository (nebo stejnému loginu s druhou příponou _GEN3/_GEN4)",
       );
     }
   }
