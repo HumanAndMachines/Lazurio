@@ -1112,6 +1112,20 @@ function observeProviderRootRepository({ provider, organization }) {
     // may be the declared root, so the choice cannot be verified and the
     // install stops instead of falling back to the other candidate.
     if (!documents.ok && documents.missing !== true) return documents;
+    // A candidate with some root documents missing is empty only when the
+    // documents it has do not declare it the root; an incomplete declared
+    // root may be the one to install, so the choice cannot be verified.
+    if (!documents.ok && organizationRootDeclaresItself({
+      fullName,
+      login: organization.login,
+      canonicalManifest: documents.partial.canonical,
+      companyManifest: documents.partial.company,
+    })) {
+      return providerFailure(
+        "root_repository_incomplete",
+        `${repositoryName} se deklaruje jako kořen, ale chybí mu kořenové dokumenty; instalace nepokračuje.`,
+      );
+    }
     candidates.push({
       generation,
       presence: documents.ok ? "present" : "empty",
@@ -1357,7 +1371,13 @@ function readProviderRootDocuments({ provider, repository }) {
     { optional: true },
   );
   if (!company.ok) return company;
-  const modules = readProviderJson(provider, repository.full_name, "modules.manifest.json", repository.default_branch);
+  const modules = readProviderJson(
+    provider,
+    repository.full_name,
+    "modules.manifest.json",
+    repository.default_branch,
+    { optional: true },
+  );
   if (!modules.ok) return modules;
   const canonical = readProviderJson(
     provider,
@@ -1367,8 +1387,15 @@ function readProviderRootDocuments({ provider, repository }) {
     { optional: true },
   );
   if (!canonical.ok) return canonical;
+  // Every document was read or reported missing (HTTP 404); the ones present
+  // stay on the failure so the caller can tell an empty candidate from an
+  // incomplete declared root.
+  const partial = { company: company.value, modules: modules.value, canonical: canonical.value };
   if (company.value === null && canonical.value === null) {
-    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá lazurio.organization.json ani company.gen3.json."), missing: true };
+    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá lazurio.organization.json ani company.gen3.json."), missing: true, partial };
+  }
+  if (modules.value === null) {
+    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá modules.manifest.json."), missing: true, partial };
   }
   return { ok: true, company: company.value, modules: modules.value, canonical: canonical.value };
 }
@@ -1385,7 +1412,7 @@ function readProviderJson(provider, fullName, path, ref, { optional = false } = 
   if (!document.ok) return responseFailure(document, "root_manifest_unavailable");
   if (!document.present) {
     if (optional) return { ok: true, value: null };
-    return { ...responseFailure(document, "root_manifest_unavailable"), missing: true };
+    return responseFailure(document, "root_manifest_unavailable");
   }
   if (!document.valid) {
     return providerFailure("root_manifest_invalid", `${path} nemá podporovaný GitHub content formát.`);

@@ -2132,6 +2132,32 @@ test("G1: a GEN4 candidate without root documents (HTTP 404) stays empty beside 
   expect(source).toMatchObject({ ok: true, repository: { id: ids.repository, full_name: fullName } });
 });
 
+test("G1: a GEN4 root declared by its own manifest but missing modules.manifest.json stops the install instead of falling back to GEN3 (Pablo's review of #734)", () => {
+  const incomplete = { documents: { ...cleanGen4Documents(), modules: null } };
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: scaffoldDocuments(), gen4: incomplete }),
+  });
+  expect(source).toMatchObject({ ok: false, code: "root_repository_incomplete" });
+
+  const alone = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: scaffoldDocuments(), gen3: null, gen4: incomplete }),
+  });
+  expect(alone.ok).toBe(false);
+});
+
+test("G1: a GEN4 copy with only modules.manifest.json, declaring nothing, stays empty beside a working GEN3", () => {
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: scaffoldDocuments(), gen4: { documents: { modules: cleanGen4Documents().modules } } }),
+  });
+  expect(source).toMatchObject({ ok: true, repository: { id: ids.repository, full_name: fullName } });
+});
+
 test("B: a failed read of an optional root document stops verification; only HTTP 404 means absent (Pablo's review of #734)", () => {
   for (const path of ["company.gen3.json", "lazurio.organization.json"]) {
     for (const status of [500, 403]) {
