@@ -348,6 +348,8 @@ function fixtureRunner({
   selectedAccess = "included",
   malformedCanonical = false,
   rootDocuments = null,
+  gen4 = null,
+  otherRepositories = [],
 }) {
   return (call) => {
     calls.push(call);
@@ -376,8 +378,41 @@ function fixtureRunner({
         organization: { id: 314957563, login: "Example" },
       });
     }
+    // The GEN4 candidate (LZD-0041 G1): absent unless a test declares it.
+    if (endpoint === "repos/Example/Example_GEN4") {
+      if (gen4 === null) return httpError(404);
+      return ok({
+        id: gen4.id ?? 52525252,
+        name: gen4.name ?? "Example_GEN4",
+        full_name: `Example/${gen4.name ?? "Example_GEN4"}`,
+        default_branch: "main",
+        permissions: { admin: true, push: true },
+      });
+    }
+    if (endpoint === "repos/Example/Example_GEN4/commits?per_page=1") {
+      return gen4?.empty ? httpError(409) : ok([{ sha: "b".repeat(40) }]);
+    }
+    if (endpoint?.startsWith("repos/Example/Example_GEN4/contents/")) {
+      const path = ["company.gen3.json", "modules.manifest.json", "lazurio.organization.json"]
+        .find((candidate) => endpoint.includes(`contents/${candidate}`));
+      const document = {
+        "company.gen3.json": gen4.documents.company,
+        "modules.manifest.json": gen4.documents.modules,
+        "lazurio.organization.json": gen4.documents.canonical,
+      }[path];
+      return document === null || document === undefined ? httpError(404) : content(document);
+    }
     if (endpoint === "repos/Example/Example_GEN3") {
       if (root === "absent") return httpError(404);
+      if (root === "redirect_gen4") {
+        return ok({
+          id: 52525252,
+          name: "Example_GEN4",
+          full_name: "Example/Example_GEN4",
+          default_branch: "main",
+          permissions: { admin: true, push: true },
+        });
+      }
       return ok({
         id: 42424242,
         name: "Example_GEN3",
@@ -386,7 +421,9 @@ function fixtureRunner({
         permissions: { admin: true, push: true },
       });
     }
-    if (endpoint === "orgs/Example/repos?type=all&per_page=100&page=1") return ok([]);
+    if (endpoint === "orgs/Example/repos?type=all&per_page=100&page=1") {
+      return ok(otherRepositories.map((name) => ({ name })));
+    }
     if (endpoint === "repos/Example/Example_GEN3/commits?per_page=1") {
       return root === "empty" ? httpError(409) : ok([{ sha: "a".repeat(40) }]);
     }
@@ -453,7 +490,7 @@ function fixtureRunner({
     }
     if (endpoint === "user/installations/155781771/repositories?per_page=100&page=1") {
       if (selectedAccess === "unobservable") return httpError(403);
-      return ok({ repositories: selectedAccess === "included" ? [{ id: 42424242 }] : [] });
+      return ok({ repositories: selectedAccess === "included" ? [{ id: 42424242 }, { id: 52525252 }] : [] });
     }
     throw new Error(`Unexpected fixture call: ${call.args.join(" ")}`);
   };
@@ -477,3 +514,144 @@ function content(value) {
     content: Buffer.from(`${JSON.stringify(value)}\n`, "utf8").toString("base64"),
   });
 }
+
+// LZD-0041 G1: the root is `<login>_GEN4` or `<login>_GEN3`, chosen by its own
+// declaration, never by the suffix; with both declared, GEN4 wins.
+function exampleModules() {
+  return { organization_generation: "gen3", company: "Example", github_org: "Example", module_slots: [] };
+}
+
+// A clean GEN4 root: canonical manifest and modules only, no compatibility
+// block, no company.gen3.json.
+function cleanCanonical(locator) {
+  return {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: "Example",
+      display_name: "Example",
+      forge_binding: { forge: "github", locator: "Example", binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: { forge: "github", locator, default_branch: "main", binding_state: "unverified" },
+    manifests: { modules: "modules.manifest.json" },
+    extensions: { legacy: {} },
+  };
+}
+
+function legacyDeclaring(locator) {
+  return {
+    organization_generation: "gen3",
+    organization_kind: "organization",
+    company: { slug: "Example", github_org: "Example", root_repository: locator },
+  };
+}
+
+function activationWith(options) {
+  return checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({ appSelection: "all", ...options }),
+  });
+}
+
+test("G1: an Organization with only a clean GEN4 root activates it as current", () => {
+  const report = activationWith({
+    root: "absent",
+    gen4: { documents: { company: null, modules: exampleModules(), canonical: cleanCanonical("Example/Example_GEN4") } },
+  });
+  expect(report).toMatchObject({
+    outcome: "active",
+    reasons: ["root_supported_current"],
+    observations: {
+      root_repository: {
+        presence: "present",
+        name: "Example_GEN4",
+        full_name: "Example/Example_GEN4",
+        id: "52525252",
+        resolver: { status: "supported", format: "current", reason: "current_identity_pair_supported" },
+      },
+    },
+  });
+});
+
+test("G1: only GEN3 behaves exactly as before and never probes past the two candidates", () => {
+  const calls = [];
+  const report = activationWith({ calls, root: "legacy" });
+  expect(report).toMatchObject({
+    outcome: "active",
+    reasons: ["root_supported_legacy"],
+    observations: { root_repository: { name: "Example_GEN3", full_name: "Example/Example_GEN3", id: "42424242" } },
+  });
+  const repositoryProbes = calls.map((call) => call.args[1]).filter((endpoint) => /^repos\/Example\/[^/]+$/u.test(endpoint ?? ""));
+  expect(repositoryProbes).toEqual(["repos/Example/Example_GEN4", "repos/Example/Example_GEN3"]);
+});
+
+test("G1: a GEN4 copy whose data still declare GEN3 leaves GEN3 the root", () => {
+  const report = activationWith({
+    root: "legacy",
+    gen4: { documents: { company: legacyDeclaring("Example/Example_GEN3"), modules: exampleModules(), canonical: null } },
+  });
+  expect(report.observations.root_repository).toMatchObject({ full_name: "Example/Example_GEN3", id: "42424242" });
+  expect(report.outcome).toBe("active");
+});
+
+test("G1: when both repositories declare themselves the root, GEN4 wins", () => {
+  const report = activationWith({
+    root: "legacy",
+    rootDocuments: { company: legacyDeclaring("Example/Example_GEN3"), modules: exampleModules(), canonical: null },
+    gen4: { documents: { company: null, modules: exampleModules(), canonical: cleanCanonical("Example/Example_GEN4") } },
+  });
+  expect(report).toMatchObject({
+    outcome: "active",
+    reasons: ["root_supported_current"],
+    observations: { root_repository: { full_name: "Example/Example_GEN4", id: "52525252", candidate_count: 0 } },
+  });
+});
+
+test("G1: a freshly created empty GEN4 never displaces a working GEN3", () => {
+  const report = activationWith({ root: "legacy", gen4: { empty: true } });
+  expect(report).toMatchObject({
+    outcome: "active",
+    observations: { root_repository: { full_name: "Example/Example_GEN3" } },
+  });
+});
+
+test("G1: both repositories present and neither declaring itself fails closed as a root conflict", () => {
+  const undeclared = { organization_generation: "gen3", organization_kind: "organization", company: { slug: "Example", github_org: "Example" } };
+  const report = activationWith({
+    root: "legacy",
+    rootDocuments: { company: undeclared, modules: exampleModules(), canonical: null },
+    gen4: { documents: { company: undeclared, modules: exampleModules(), canonical: null } },
+  });
+  expect(report).toMatchObject({
+    outcome: "action_required",
+    reasons: ["root_repository_conflict"],
+    next_action: { kind: "inspect_existing_repository" },
+    observations: { root_repository: { candidate_count: 1, resolver: { reason: "canonical_root_candidate_conflict" } } },
+  });
+});
+
+test("G1: GitHub's rename redirect from GEN3 to GEN4 is the GEN4 candidate, not a conflict", () => {
+  const report = activationWith({
+    root: "redirect_gen4",
+    gen4: { documents: { company: null, modules: exampleModules(), canonical: cleanCanonical("Example/Example_GEN4") } },
+  });
+  expect(report).toMatchObject({
+    outcome: "active",
+    observations: { root_repository: { full_name: "Example/Example_GEN4", candidate_count: 0 } },
+  });
+});
+
+test("G1: without either own candidate, a foreign _GEN4 or _GEN3 repository stays a root conflict", () => {
+  for (const name of ["Other_GEN4", "Other_GEN3"]) {
+    expect(activationWith({ root: "absent", otherRepositories: [name] })).toMatchObject({
+      outcome: "action_required",
+      reasons: ["root_repository_conflict"],
+    });
+  }
+  expect(activationWith({ root: "absent", otherRepositories: ["Example_GEN4", "Example_GEN3", "website"] })).toMatchObject({
+    outcome: "needs_activation",
+    reasons: ["root_repository_absent"],
+  });
+});

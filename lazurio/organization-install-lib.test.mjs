@@ -26,6 +26,7 @@ import {
 
 const roots = [];
 const ids = Object.freeze({ organization: "314957563", repository: "42424242" });
+const gen4RepositoryId = "52525252";
 const login = "ExampleOrganization";
 const fullName = `${login}/${login}_GEN3`;
 const fakeHttpsRemote = `https://github.com/${fullName}.git`;
@@ -60,7 +61,12 @@ test("provider resolves a human login to immutable root identity using read-only
       read_url: fakeHttpsRemote,
     },
   });
-  expect(calls.length).toBe(6);
+  // auth, orgs, the GEN4 probe (404), the GEN3 repository and its three documents.
+  expect(calls.length).toBe(7);
+  expect(calls.map((call) => call.args[1]).filter((endpoint) => /^repos\/[^/]+\/[^/]+$/u.test(endpoint ?? ""))).toEqual([
+    `repos/${login}/${login}_GEN4`,
+    `repos/${fullName}`,
+  ]);
   for (const call of calls) {
     expect(["api", "auth"]).toContain(call.args[0]);
     expect(call.args).not.toContain("--method");
@@ -1650,6 +1656,25 @@ function sourceObservation({ documents = scaffoldDocuments() } = {}) {
   };
 }
 
+// A clean GEN4 root as G2 will found it: canonical manifest and modules only,
+// no company.gen3.json and no compatibility block (LZD-0041 B and G1).
+function cleanGen4Documents({ repositoryId = gen4RepositoryId } = {}) {
+  const scaffold = createOrganizationScaffold({
+    generation: "GEN4",
+    organization: {
+      id: ids.organization,
+      login,
+      slug: "lazurio-example-organization",
+      displayName: "Lazurio Example Organization",
+    },
+    repository: { id: repositoryId, name: `${login}_GEN4`, fullName: `${login}/${login}_GEN4`, defaultBranch: "main" },
+  });
+  const files = new Map(scaffold.files.map((file) => [file.path, file.content]));
+  const canonical = JSON.parse(files.get("lazurio.organization.json"));
+  delete canonical.compatibility;
+  return { company: null, modules: JSON.parse(files.get("modules.manifest.json")), canonical };
+}
+
 function scaffoldDocuments() {
   const scaffold = createOrganizationScaffold({
     organization: {
@@ -1893,13 +1918,47 @@ function updateReport(state) {
   };
 }
 
-function providerFixture({ calls, documents, privateRepository = false }) {
+// `gen3: null` makes the GEN3 candidate absent; `gen4` (absent by default)
+// adds `<login>_GEN4` with its own documents (LZD-0041 G1).
+function providerFixture({ calls, documents, privateRepository = false, gen3 = true, gen4 = null }) {
   const encoded = (value) => Buffer.from(`${JSON.stringify(value)}\n`).toString("base64");
+  const notFound = { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
+  const gen4FullName = `${login}/${login}_GEN4`;
   return (call) => {
     calls.push(call);
     if (call.args[0] === "auth") return { status: 0, stdout: "", stderr: "" };
     const endpoint = call.args[1];
     if (endpoint === `orgs/${login}`) return ok({ id: Number(ids.organization), login });
+    if (endpoint === `repos/${gen4FullName}`) {
+      if (gen4 === null) return notFound;
+      return ok({
+        id: Number(gen4.id ?? gen4RepositoryId),
+        name: `${login}_GEN4`,
+        full_name: gen4FullName,
+        default_branch: "main",
+        private: privateRepository,
+        clone_url: `https://github.com/${gen4FullName}.git`,
+        ssh_url: `git@github.com:${gen4FullName}.git`,
+        owner: { id: Number(ids.organization), login },
+      });
+    }
+    if (endpoint?.startsWith(`repos/${gen4FullName}/contents/`)) {
+      const document = {
+        "company.gen3.json": gen4.documents.company,
+        "modules.manifest.json": gen4.documents.modules,
+        "lazurio.organization.json": gen4.documents.canonical,
+      }[endpoint.slice(`repos/${gen4FullName}/contents/`.length).replace(/\?ref=main$/u, "")];
+      return document === null || document === undefined ? notFound : ok({ encoding: "base64", content: encoded(document) });
+    }
+    if (endpoint?.startsWith(`repos/${fullName}`) && gen3 === null) return notFound;
+    if (gen3 !== true && endpoint?.startsWith(`repos/${fullName}/contents/`)) {
+      const document = {
+        "company.gen3.json": gen3.company,
+        "modules.manifest.json": gen3.modules,
+        "lazurio.organization.json": gen3.canonical,
+      }[endpoint.slice(`repos/${fullName}/contents/`.length).replace(/\?ref=main$/u, "")];
+      return document === null || document === undefined ? notFound : ok({ encoding: "base64", content: encoded(document) });
+    }
     if (endpoint === `repos/${fullName}`) {
       return ok({
         id: Number(ids.repository),
@@ -2000,4 +2059,180 @@ for (const fault of ["dirty", "foreign", "branch", "unknown", "symlink", "tracke
   expect(existsSync(join(fixture.parent, "app"))).toBe(false);
   expect((await lstat(fixture.db)).ino).toBe(before.ino);
   expect((await runGit(["rev-parse", "HEAD"], { cwd: fixture.db })).stdout).toBe(head);
+});
+
+
+// LZD-0041 G1: install probes `<login>_GEN4` and `<login>_GEN3` and takes the
+// root its own documents declare; GEN4 wins when both declare themselves.
+test("G1: install observes a clean GEN4 root without company.gen3.json or compatibility", () => {
+  const calls = [];
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls, documents: scaffoldDocuments(), gen3: null, gen4: { documents: cleanGen4Documents() } }),
+  });
+  expect(source).toMatchObject({
+    ok: true,
+    repository: { id: gen4RepositoryId, name: `${login}_GEN4`, full_name: `${login}/${login}_GEN4` },
+    documents: { company: null },
+    resource: { organization: { slug: "lazurio-example-organization" }, root_repository: { locator: `${login}/${login}_GEN4` } },
+  });
+});
+
+test("G1: install keeps GEN3 while the GEN4 copy still declares GEN3, and takes GEN4 once both declare themselves", () => {
+  const gen3Documents = scaffoldDocuments();
+  const copyDeclaringGen3 = { documents: { ...gen3Documents } };
+  const keep = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: gen3Documents, gen4: copyDeclaringGen3 }),
+  });
+  expect(keep).toMatchObject({ ok: true, repository: { id: ids.repository, full_name: fullName } });
+
+  const both = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: gen3Documents, gen4: { documents: cleanGen4Documents() } }),
+  });
+  expect(both).toMatchObject({ ok: true, repository: { id: gen4RepositoryId, full_name: `${login}/${login}_GEN4` } });
+});
+
+test("G1: two root candidates without a safe choice stop the install", () => {
+  const undeclared = scaffoldDocuments();
+  const foreign = structuredClone(undeclared);
+  delete foreign.company.forge_binding;
+  delete foreign.company.company.root_repository;
+  delete foreign.company.company.repository;
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: foreign, gen4: { documents: foreign } }),
+  });
+  expect(source).toMatchObject({ ok: false, code: "root_repository_ambiguous" });
+});
+
+// Decision N2 (LZD-0041): a GEN4 root installs into `organizations/X_GEN4`;
+// an Environment that still has `organizations/X_GEN3` keeps that folder
+// while its origin points at X_GEN4 until the folder is renamed.
+const gen4FullName = `${login}/${login}_GEN4`;
+const gen4HttpsRemote = `https://github.com/${gen4FullName}.git`;
+
+function gen4SourceObservation() {
+  const documents = cleanGen4Documents();
+  return {
+    ok: true,
+    organization: { id: ids.organization, login, label: "GitHub Organization" },
+    repository: {
+      id: gen4RepositoryId,
+      name: `${login}_GEN4`,
+      full_name: gen4FullName,
+      default_branch: "main",
+      private: false,
+      clone_url: gen4HttpsRemote,
+      ssh_url: `git@github.com:${gen4FullName}.git`,
+      read_url: gen4HttpsRemote,
+    },
+    documents,
+    resource: resolveOrganizationRootDocuments({
+      companyManifest: null,
+      modulesManifest: documents.modules,
+      canonicalManifest: documents.canonical,
+    }).resource,
+  };
+}
+
+async function gen4RemoteFixture() {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-organization-install-gen4-"));
+  roots.push(root);
+  await mkdir(join(root, "organizations"), { recursive: true });
+  const source = join(root, "source");
+  const remote = join(root, "remote.git");
+  await initGitRepo(source, { remotePath: remote });
+  const { canonical, modules } = cleanGen4Documents();
+  await writeFile(join(source, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+  await writeFile(join(source, "modules.manifest.json"), `${JSON.stringify(modules, null, 2)}\n`);
+  await runGit(["add", "--all"], { cwd: source });
+  await runGit(["commit", "-m", "Clean GEN4 root"], { cwd: source });
+  await runGit(["push", "origin", "main"], { cwd: source });
+  const remotes = new Map([[gen4HttpsRemote, remote]]);
+  const updates = [];
+  const deps = {
+    observe: async () => gen4SourceObservation(),
+    reobserve: async () => ({ ok: true }),
+    runGit: translatedGitRunner(remote, remotes),
+    runPinnedChild: translatedPinnedGitRunner(remote, remotes),
+    runUpdate: async ({ organizations }) => {
+      updates.push(organizations);
+      return updateReport("current");
+    },
+  };
+  return { root, remote, deps, updates };
+}
+
+async function cloneInto(fixture, folder, origin) {
+  const path = join(fixture.root, "organizations", folder);
+  expect((await runGit(["clone", "--branch", "main", fixture.remote, path], { cwd: fixture.root })).ok).toBe(true);
+  await runGit(["remote", "set-url", "origin", origin], { cwd: path });
+  return path;
+}
+
+test("N2: a new install of a clean GEN4 root materializes organizations/X_GEN4", async () => {
+  const fixture = await gen4RemoteFixture();
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({
+    state: "updated",
+    ok: true,
+    organization: { repository: gen4FullName, repository_id: gen4RepositoryId },
+    target: { state: "updated", reason: "root_materialized", path: `organizations/${login}_GEN4` },
+  });
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN4`, "lazurio.organization.json"))).toBe(true);
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN4`, "company.gen3.json"))).toBe(false);
+  expect(fixture.updates[0]).toEqual([{
+    slug: "lazurio-example-organization",
+    display_name: "Lazurio Example Organization",
+    path: `organizations/${login}_GEN4`,
+    status: "active",
+    default_branch: "main",
+    repository: gen4HttpsRemote,
+  }]);
+});
+
+test("N2: an existing organizations/X_GEN3 folder whose origin moved to X_GEN4 stays the root folder", async () => {
+  const fixture = await gen4RemoteFixture();
+  await cloneInto(fixture, `${login}_GEN3`, gen4HttpsRemote);
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({
+    state: "current",
+    ok: true,
+    target: { state: "current", reason: "root_current", path: `organizations/${login}_GEN3` },
+  });
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN4`))).toBe(false);
+  expect(fixture.updates[0][0].path).toBe(`organizations/${login}_GEN3`);
+});
+
+test("N2: a renamed organizations/X_GEN4 folder is the root folder", async () => {
+  const fixture = await gen4RemoteFixture();
+  await cloneInto(fixture, `${login}_GEN4`, gen4HttpsRemote);
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({ state: "current", target: { reason: "root_current", path: `organizations/${login}_GEN4` } });
+});
+
+test("N2: an X_GEN3 folder still on the GEN3 origin is not silently switched to the GEN4 root", async () => {
+  const fixture = await gen4RemoteFixture();
+  await cloneInto(fixture, `${login}_GEN3`, fakeHttpsRemote);
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({
+    state: "blocked",
+    target: { reason: "root_git_identity_mismatch", path: `organizations/${login}_GEN3` },
+  });
+  expect(fixture.updates).toHaveLength(0);
+});
+
+test("N2: two folders for one Organization are never guessed between", async () => {
+  const fixture = await gen4RemoteFixture();
+  await cloneInto(fixture, `${login}_GEN3`, gen4HttpsRemote);
+  await cloneInto(fixture, `${login}_GEN4`, gen4HttpsRemote);
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({ state: "blocked", target: { reason: "organization_mount_ambiguous" } });
+  expect(fixture.updates).toHaveLength(0);
 });
