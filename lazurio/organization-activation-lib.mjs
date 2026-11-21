@@ -11,6 +11,13 @@ import {
   readGitHubRepositoryJsonDocument,
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
+import {
+  ORGANIZATION_ROOT_REPOSITORY_GENERATIONS,
+  isOrganizationRootRepositoryName,
+  organizationRootDeclaresItself,
+  organizationRootRepositoryName,
+  selectOrganizationRootRepository,
+} from "./core/organization-root-repository-lib.mjs";
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 
 export const LAZURIO_GITHUB_APP_SLUG = "lazurio-for-github";
@@ -193,17 +200,37 @@ function collectObservations({ request, appSlug, provider }) {
   };
 }
 
+// The root is `<login>_GEN4` or `<login>_GEN3` (LZD-0041 G1). Both candidates
+// are probed; when both exist, the one whose own documents declare it the
+// root wins, GEN4 when both do (selectOrganizationRootRepository). An
+// Organization with only one of them behaves exactly as before.
 function inspectRootRepository({ invoke, organization }) {
-  const name = `${organization.login}_GEN3`;
-  const fullName = `${organization.login}/${name}`;
-  const repositoryResponse = invoke(["api", `repos/${fullName}`]);
-  if (repositoryResponse.httpStatus === 404) {
-    const candidateFound = hasAlternativeRootCandidate({ invoke, organization, expectedName: name });
+  const probes = ORGANIZATION_ROOT_REPOSITORY_GENERATIONS.map((generation) => (
+    probeRootCandidate({ invoke, organization, generation })
+  ));
+  const conflicting = probes.find((probe) => probe.kind === "conflict");
+  if (conflicting) return conflictRoot(conflicting.name, organization);
+  const selection = selectOrganizationRootRepository(probes.map((probe) => ({
+    generation: probe.generation,
+    presence: probe.kind === "absent" ? "absent" : probe.kind === "empty" ? "empty" : "present",
+    declares: probe.declares === true,
+    probe,
+  })));
+  if (selection.status === "conflict") {
+    return conflictRoot(probes[0].name, organization);
+  }
+  if (selection.status === "absent") {
+    const preferred = probes.find((probe) => probe.generation === "GEN3") ?? probes[0];
+    const candidateFound = hasAlternativeRootCandidate({
+      invoke,
+      organization,
+      expectedNames: probes.map((probe) => probe.name),
+    });
     return {
       presence: "absent",
       id: null,
-      name,
-      full_name: fullName,
+      name: preferred.name,
+      full_name: preferred.full_name,
       default_branch: null,
       viewer_can_push: null,
       candidate_count: candidateFound ? 1 : 0,
@@ -212,6 +239,14 @@ function inspectRootRepository({ invoke, organization }) {
         : { status: "not_applicable", format: null, reason: "root_repository_absent" },
     };
   }
+  return selection.candidate.probe.observation;
+}
+
+function probeRootCandidate({ invoke, organization, generation }) {
+  const name = organizationRootRepositoryName(organization.login, generation);
+  const fullName = `${organization.login}/${name}`;
+  const repositoryResponse = invoke(["api", `repos/${fullName}`]);
+  if (repositoryResponse.httpStatus === 404) return { kind: "absent", generation, name, full_name: fullName };
   requireSuccess(repositoryResponse, {
     missingCode: "github_repository_inspection_failed",
     missingNextAction: "retry",
@@ -222,16 +257,14 @@ function inspectRootRepository({ invoke, organization }) {
   const repositoryName = normalized(repository?.name);
   const repositoryFullName = normalized(repository?.full_name);
   if (repositoryName.toLowerCase() !== name.toLowerCase() || repositoryFullName.toLowerCase() !== fullName.toLowerCase()) {
-    return {
-      presence: "absent",
-      id: null,
-      name,
-      full_name: fullName,
-      default_branch: null,
-      viewer_can_push: null,
-      candidate_count: 1,
-      resolver: { status: "unsupported", format: null, reason: "canonical_root_candidate_conflict" },
-    };
+    // GitHub redirects a renamed repository. A redirect onto the other root
+    // candidate is that candidate, probed on its own; anything else is a
+    // root this Organization does not name, so activation stops.
+    if (isOrganizationRootRepositoryName(repositoryName, organization.login)
+      && repositoryFullName.toLowerCase() === `${organization.login}/${repositoryName}`.toLowerCase()) {
+      return { kind: "absent", generation, name, full_name: fullName };
+    }
+    return { kind: "conflict", generation, name, full_name: fullName };
   }
   const viewerCanPush = repository?.permissions?.push === true || repository?.permissions?.admin === true;
   const defaultBranch = normalized(repository?.default_branch) || null;
@@ -239,14 +272,21 @@ function inspectRootRepository({ invoke, organization }) {
   const commits = invoke(["api", `repos/${fullName}/commits?per_page=1`]);
   if (commits.httpStatus === 409) {
     return {
-      presence: "empty",
-      id: repositoryId,
+      kind: "empty",
+      generation,
       name,
       full_name: fullName,
-      default_branch: defaultBranch,
-      viewer_can_push: viewerCanPush,
-      candidate_count: 0,
-      resolver: { status: "not_applicable", format: null, reason: "root_repository_empty" },
+      declares: false,
+      observation: {
+        presence: "empty",
+        id: repositoryId,
+        name,
+        full_name: fullName,
+        default_branch: defaultBranch,
+        viewer_can_push: viewerCanPush,
+        candidate_count: 0,
+        resolver: { status: "not_applicable", format: null, reason: "root_repository_empty" },
+      },
     };
   }
   requireSuccess(commits, {
@@ -260,10 +300,11 @@ function inspectRootRepository({ invoke, organization }) {
   const companyDocument = readRepositoryJson({ invoke, fullName, path: "company.gen3.json", ref: defaultBranch });
   const modulesDocument = readRepositoryJson({ invoke, fullName, path: "modules.manifest.json", ref: defaultBranch });
   const canonicalDocument = readRepositoryJson({ invoke, fullName, path: "lazurio.organization.json", ref: defaultBranch });
+  const canonicalManifest = canonicalDocument.present ? canonicalDocument.value : null;
   const resolution = resolveOrganizationRootDocuments({
     companyManifest: companyDocument.value,
     modulesManifest: modulesDocument.value,
-    canonicalManifest: canonicalDocument.present ? canonicalDocument.value : null,
+    canonicalManifest,
     expectedOrganizationId: organization.id,
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repositoryId,
@@ -271,14 +312,39 @@ function inspectRootRepository({ invoke, organization }) {
     activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
   return {
-    presence: "present",
-    id: repositoryId,
+    kind: "present",
+    generation,
     name,
     full_name: fullName,
-    default_branch: defaultBranch,
-    viewer_can_push: viewerCanPush,
-    candidate_count: 0,
-    resolver: resolution.activation,
+    declares: organizationRootDeclaresItself({
+      fullName,
+      login: organization.login,
+      canonicalManifest,
+      companyManifest: companyDocument.value,
+    }),
+    observation: {
+      presence: "present",
+      id: repositoryId,
+      name,
+      full_name: fullName,
+      default_branch: defaultBranch,
+      viewer_can_push: viewerCanPush,
+      candidate_count: 0,
+      resolver: resolution.activation,
+    },
+  };
+}
+
+function conflictRoot(name, organization) {
+  return {
+    presence: "absent",
+    id: null,
+    name,
+    full_name: `${organization.login}/${name}`,
+    default_branch: null,
+    viewer_can_push: null,
+    candidate_count: 1,
+    resolver: { status: "unsupported", format: null, reason: "canonical_root_candidate_conflict" },
   };
 }
 
@@ -355,7 +421,10 @@ function inspectGitHubApp({ invoke, organization, appSlug, rootRepository }) {
   };
 }
 
-function hasAlternativeRootCandidate({ invoke, organization, expectedName }) {
+// Any `_GEN3`/`_GEN4` repository other than this Organization's own root
+// names means a root the activation cannot attribute safely.
+function hasAlternativeRootCandidate({ invoke, organization, expectedNames }) {
+  const expected = new Set(expectedNames.map((name) => name.toLowerCase()));
   for (let page = 1; ; page += 1) {
     const response = invoke([
       "api",
@@ -370,8 +439,8 @@ function hasAlternativeRootCandidate({ invoke, organization, expectedName }) {
     }
     if (response.value.some((entry) => (
       typeof entry?.name === "string"
-      && /_GEN3$/iu.test(entry.name)
-      && entry.name.toLowerCase() !== expectedName.toLowerCase()
+      && /_GEN[34]$/iu.test(entry.name)
+      && !expected.has(entry.name.toLowerCase())
     ))) return true;
     if (response.value.length < 100) return false;
   }
@@ -460,7 +529,7 @@ function unavailableApp() {
 }
 
 function unavailableRoot(organization) {
-  const name = `${organization.login}_GEN3`;
+  const name = organizationRootRepositoryName(organization.login, "GEN3");
   return {
     presence: "unobservable",
     id: null,

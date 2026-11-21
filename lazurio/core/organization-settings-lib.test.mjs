@@ -19,6 +19,7 @@ const microsoftKeys = [
   "integrations.microsoft365.client_id",
   "integrations.microsoft365.apps",
   "integrations.microsoft365.callbacks",
+  "integrations.microsoft365.send_mail",
 ];
 const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
 const ungovernedTabs = { key: "workspace.tabs", governed: false, value: null };
@@ -240,6 +241,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.microsoft365.send_mail", governed: false, value: null },
         { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],
@@ -340,6 +342,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "integrations.microsoft365.send_mail", governed: false, value: null },
         { key: "integrations.chatgpt_apps.allowed", governed: false, value: null }, ungovernedTabs, ungovernedTools,
       ],
       issues: [],

@@ -8,6 +8,17 @@ import { BROKERED_GITHUB_ACTOR, brokeredGitHubIdentity } from "../../lazurio/cor
 import { sanitizedGitHubEnvironment } from "../../lazurio/core/github-provider-lib.mjs";
 import { resolveExecutableOnPath } from "../../lazurio/core/toolchain-lib.mjs";
 import { readMachineAssignment } from "../../lazurio/core/machine-identity-lib.mjs";
+import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  resolveOrganizationRootDocuments,
+} from "../../lazurio/core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_ROOT_REPOSITORY_GENERATIONS,
+  organizationRootDeclaresItself,
+  organizationRootRepositoryName,
+  parseOrganizationRootRepositoryName,
+  selectOrganizationRootRepository,
+} from "../../lazurio/core/organization-root-repository-lib.mjs";
 
 // The Machine identity reader lives in Core so the CLI Doctor and this
 // server share one signal; re-exported for existing Launchpad consumers.
@@ -198,9 +209,21 @@ export function normalizeOrganizationLogin(value) {
   return login;
 }
 
-export function organizationRootRemote(login) {
-  return `git@github.com:${login}/${login}_GEN3.git`;
+// SSH remote of an Organization root repository. Without a resolved root the
+// GEN3 name is the fallback the Začínáme readiness probe used before G1.
+export function organizationRootRemote(login, fullName = `${login}/${organizationRootRepositoryName(login, "GEN3")}`) {
+  return `git@github.com:${fullName}.git`;
 }
+
+function isNotFound(result) {
+  return /HTTP 404/u.test(`${result?.stderr ?? ""}\n${result?.stdout ?? ""}`);
+}
+
+const ROOT_DOCUMENT_PATHS = Object.freeze({
+  canonical: "lazurio.organization.json",
+  company: "company.gen3.json",
+  modules: "modules.manifest.json",
+});
 
 // ---------------------------------------------------------------------------
 // Local effects.
@@ -405,11 +428,79 @@ export function createGitHubLoginController({
     return classifySshProbe({ code: result.code, output: `${result.stdout}\n${result.stderr}` });
   }
 
-  async function probeRoot(organization) {
+  async function probeRoot(organization, fullName) {
     const result = await tool("git", [
-      "ls-remote", "--exit-code", "--heads", "--", organizationRootRemote(organization), "refs/heads/main",
+      "ls-remote", "--exit-code", "--heads", "--", organizationRootRemote(organization, fullName), "refs/heads/main",
     ], { timeoutMs: 45_000 });
     return result.code === 0 && result.stdout.trim() !== "" ? "ok" : "failed";
+  }
+
+  // The Organization's root as GitHub shows it to the signed-in account:
+  // `<login>_GEN4` and `<login>_GEN3` are probed and the one whose own
+  // documents declare it the root is chosen, GEN4 when both do (LZD-0041 G1).
+  // Anything unreadable is `unavailable`, never a guess; callers that gate on
+  // it fail closed.
+  async function resolveOrganizationRoot(organizationLogin) {
+    const candidates = [];
+    for (const generation of ORGANIZATION_ROOT_REPOSITORY_GENERATIONS) {
+      const name = organizationRootRepositoryName(organizationLogin, generation);
+      const fullName = `${organizationLogin}/${name}`;
+      const response = await gh(["api", `repos/${fullName}`]);
+      if (response.code !== 0) {
+        if (isNotFound(response)) {
+          candidates.push({ generation, presence: "absent", declares: false });
+          continue;
+        }
+        return { status: "unavailable" };
+      }
+      let repository;
+      try {
+        repository = JSON.parse(response.stdout);
+      } catch {
+        return { status: "unavailable" };
+      }
+      if (String(repository?.name ?? "").toLowerCase() !== name.toLowerCase()) {
+        // GitHub's rename redirect onto the other candidate is that candidate.
+        const redirected = parseOrganizationRootRepositoryName(repository?.name);
+        if (redirected && redirected.login.toLowerCase() === organizationLogin.toLowerCase()) {
+          candidates.push({ generation, presence: "absent", declares: false });
+          continue;
+        }
+        return { status: "unavailable" };
+      }
+      const documents = {};
+      for (const [key, path] of Object.entries(ROOT_DOCUMENT_PATHS)) {
+        const content = await gh(["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${fullName}/contents/${path}`]);
+        if (content.code !== 0) {
+          if (!isNotFound(content)) return { status: "unavailable" };
+          documents[key] = null;
+          continue;
+        }
+        try {
+          const value = JSON.parse(content.stdout);
+          documents[key] = value && typeof value === "object" && !Array.isArray(value) ? value : { invalid: true };
+        } catch {
+          documents[key] = { invalid: true };
+        }
+      }
+      const hasRoot = documents.canonical !== null || documents.company !== null;
+      candidates.push({
+        generation,
+        presence: hasRoot ? "present" : "empty",
+        declares: hasRoot && organizationRootDeclaresItself({
+          fullName,
+          login: organizationLogin,
+          canonicalManifest: documents.canonical,
+          companyManifest: documents.company,
+        }),
+        fullName,
+        repository,
+        documents,
+      });
+    }
+    const selection = selectOrganizationRootRepository(candidates);
+    if (selection.status !== "selected") return { status: selection.status };
+    return { status: "selected", ...selection.candidate };
   }
 
   function machineContext() {
@@ -458,8 +549,12 @@ export function createGitHubLoginController({
     const sshMatches = ssh.state === "ok" && userIdentity
       ? ssh.login.toLowerCase() === userIdentity.login.toLowerCase()
       : null;
+    const root = organizationLogin && ssh.state === "ok" ? await resolveOrganizationRoot(organizationLogin) : null;
+    const rootFullName = root?.status === "selected"
+      ? root.fullName
+      : organizationLogin ? `${organizationLogin}/${organizationRootRepositoryName(organizationLogin, "GEN3")}` : null;
     const rootProbe = organizationLogin && ssh.state === "ok"
-      ? await probeRoot(organizationLogin)
+      ? await probeRoot(organizationLogin, rootFullName)
       : organizationLogin ? "skipped" : null;
     const ready = auth.state === "logged_in"
       && account.git_protocol === "ssh"
@@ -475,7 +570,7 @@ export function createGitHubLoginController({
       account,
       ssh: { state: ssh.state, login: ssh.login, matches_account: sshMatches },
       organization: organizationLogin
-        ? { login: organizationLogin, root_repository: `${organizationLogin}/${organizationLogin}_GEN3`, ls_remote: rootProbe }
+        ? { login: organizationLogin, root_repository: rootFullName, ls_remote: rootProbe }
         : null,
       actions: {
         login: accountBlocker === null && !ready,
@@ -766,25 +861,43 @@ export function createGitHubLoginController({
     assertActive(current);
 
     step(current, "verify", "running");
-    if (organizationLogin && await probeRoot(organizationLogin) !== "ok") {
+    const root = organizationLogin ? await resolveOrganizationRoot(organizationLogin) : null;
+    if (organizationLogin && await probeRoot(
+      organizationLogin,
+      root?.status === "selected" ? root.fullName : undefined,
+    ) !== "ok") {
       throw new GitHubLoginError("organization_root_unreachable");
     }
     step(current, "verify", "done");
   }
 
   // A hosted Organization Launchpad installs only its own Organization. The
-  // GitHub login differs from the company slug, so the root manifest decides.
+  // GitHub login differs from the Organization slug, so the root decides: the
+  // root chosen by its own declaration (`<login>_GEN4` or `<login>_GEN3`),
+  // resolved by Core from the canonical manifest and modules.manifest.json
+  // (company.gen3.json only where a legacy root has nothing else) and bound
+  // to the live Organization and repository. Anything else fails closed
+  // (LZD-0041 B and G1).
   async function organizationInScope(organizationLogin) {
     if (!organizationScope) return true;
-    const result = await gh([
-      "api", "-H", "Accept: application/vnd.github.raw+json",
-      `repos/${organizationLogin}/${organizationLogin}_GEN3/contents/company.gen3.json`,
-    ]);
-    try {
-      return result.code === 0 && JSON.parse(result.stdout)?.company?.slug === organizationScope;
-    } catch {
-      return false;
-    }
+    const root = await resolveOrganizationRoot(organizationLogin);
+    if (root.status !== "selected") return false;
+    const ownerId = String(root.repository?.owner?.id ?? "");
+    const repositoryId = String(root.repository?.id ?? "");
+    if (!/^[1-9][0-9]*$/u.test(ownerId) || !/^[1-9][0-9]*$/u.test(repositoryId)) return false;
+    if (String(root.repository?.owner?.login ?? "").toLowerCase() !== organizationLogin.toLowerCase()) return false;
+    const resolution = resolveOrganizationRootDocuments({
+      canonicalManifest: root.documents.canonical,
+      companyManifest: root.documents.company,
+      modulesManifest: root.documents.modules,
+      expectedOrganizationId: ownerId,
+      expectedOrganizationLogin: organizationLogin,
+      expectedRepositoryId: repositoryId,
+      expectedRepositoryFullName: root.fullName,
+      activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+    });
+    return resolution.activation.status === "supported"
+      && resolution.resource?.organization?.slug === organizationScope;
   }
 
   async function organizationInstall({ organization }) {

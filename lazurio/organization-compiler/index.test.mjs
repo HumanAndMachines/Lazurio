@@ -178,7 +178,7 @@ describe("organization compiler", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(OrganizationCompilerError);
       expect(error.details.failures).toContain(
-        "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository",
+        "company.gen3.json/company: basename fyzického checkout rootu musí odpovídat repository komponentě root_repository (nebo stejnému loginu s druhou příponou _GEN3/_GEN4)",
       );
     } finally {
       await rm(workspace, { recursive: true, force: true });

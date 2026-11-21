@@ -312,7 +312,7 @@ test("Organization root resolver returns the six compatibility states through on
   }
 });
 
-test("canonical-only state rejects a stale legacy compatibility projection receipt", () => {
+test("canonical-only state reports a stale projection digest but never decides by it (LZD-0041 B)", () => {
   const modulesManifest = organizationModules();
   const canonicalManifest = canonicalOrganization(modulesManifest);
   canonicalManifest.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
@@ -322,14 +322,13 @@ test("canonical-only state rejects a stale legacy compatibility projection recei
     canonicalManifest,
     modulesManifest,
   })).toMatchObject({
-    state: "conflict",
-    resource: null,
-    resource_count: 0,
+    state: "current",
+    resource_count: 1,
     projection: {
       declared_hash: canonicalManifest.compatibility.legacy_projection.sha256,
       actual_hash: null,
     },
-    issues: expect.arrayContaining(["canonical_projection_hash_invalid"]),
+    issues: ["canonical_projection_hash_invalid"],
   });
 });
 
@@ -1053,7 +1052,7 @@ function fixture({ owner = true, canCreate = true, app = {}, root = {} } = {}) {
 // The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
 // declared by these fixtures, so its keys stay ungoverned.
 function ungovernedMicrosoft365() {
-  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
+  return ["tenant_id", "client_id", "apps", "callbacks", "send_mail"].map((field) => ({
     key: `integrations.microsoft365.${field}`,
     governed: false,
     value: null,

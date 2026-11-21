@@ -51,6 +51,7 @@ import {
   inspectCanonicalPathBoundary,
   readJsonWithinCanonicalBoundary,
 } from "../core/path-boundary-lib.mjs";
+import { stripOrganizationRootGeneration } from "../core/organization-root-repository-lib.mjs";
 
 // Internal filesystem provenance for the runtime manager. Symbols survive
 // in-process object spreads but are omitted from JSON, so the public App
@@ -1876,7 +1877,7 @@ export function organizationAppIdPrefix(companySlug) {
 function autoOrganizationFromResource({ resource, resolution, path, directoryName, modulePortPool }) {
   const organization = resource.organization ?? {};
   const kind = resource.kind;
-  const directorySlug = directoryName.replace(/_GEN3$/, "");
+  const directorySlug = stripOrganizationRootGeneration(directoryName);
   const declaredSlug = typeof organization.slug === "string" ? organization.slug : null;
   // Běžná firma s prázdným / example / <placeholder> slugem = nedokončený mount →
   // přeskoč. Template mount je placeholder ze své podstaty (vyplní se až při forku
@@ -1897,7 +1898,7 @@ function autoOrganizationFromResource({ resource, resolution, path, directoryNam
     github_org: organization.forge_binding?.locator ?? null,
     default_branch: resource.root_repository?.default_branch ?? "main",
     generation: "gen3",
-    migration_marker: directoryName.endsWith("_GEN3") ? "_GEN3" : null,
+    migration_marker: /_GEN[34]$/u.exec(directoryName)?.[0] ?? null,
     materialization: "local-auto",
     organization_kind: kind,
     organization_type: kind === "template" ? "organization-template" : "organization-gen3",
@@ -2066,7 +2067,7 @@ async function discoverOrganizations({
 }
 
 function organizationResolverIssue({ directoryName, path, code, message }) {
-  const organization = directoryName.replace(/_GEN3$/u, "");
+  const organization = stripOrganizationRootGeneration(directoryName);
   return {
     schema_version: "lazurio.organization_issue.v1",
     severity: "blocking",

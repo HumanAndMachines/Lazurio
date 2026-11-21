@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 
+import { organizationRootRepositoryNames } from "./organization-root-repository-lib.mjs";
 import { githubRepositoryCoordinate } from "./organization-slot-scope-lib.mjs";
 
 // Shared Organization Team VM (root decisions 0147–0149). Its only GitHub
@@ -108,11 +109,23 @@ export function brokeredGitConfigEnvironment(identity) {
  * repository metadata) therefore run from a neutral directory with the
  * Organization root repository as the selected repository.
  */
+// The selected repository only carries Organization-level reads; which of
+// `<login>_GEN4` and `<login>_GEN3` is the root is still decided by its
+// declaration. GEN4 is preferred when the policy allows both (LZD-0041 G1).
 export function brokeredGitHubProviderContext(identity, organizationLogin) {
   if (!identity?.valid || typeof organizationLogin !== "string" || organizationLogin === "") return null;
-  const root = `${organizationLogin}/${organizationLogin}_GEN3`;
-  const selected = identity.repositories.find((repository) => repository.fullName.toLowerCase() === root.toLowerCase());
-  return selected ? { cwd: "/", repository: selected.fullName } : null;
+  let names;
+  try {
+    names = organizationRootRepositoryNames(organizationLogin);
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    const root = `${organizationLogin}/${name}`.toLowerCase();
+    const selected = identity.repositories.find((repository) => repository.fullName.toLowerCase() === root);
+    if (selected) return { cwd: "/", repository: selected.fullName };
+  }
+  return null;
 }
 
 // The exact envelope the released `brokered-gh` adapter (Lazurio/github-app

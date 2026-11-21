@@ -13,6 +13,10 @@ import {
   ORGANIZATION_GITHUB_LOGIN_PATTERN,
   ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
 } from "./organization-forge-binding-lib.mjs";
+import {
+  ORGANIZATION_ROOT_SCAFFOLD_GENERATION,
+  organizationRootRepositoryName,
+} from "./organization-root-repository-lib.mjs";
 import { newOrganizationSettings } from "./organization-settings-lib.mjs";
 
 export {
@@ -255,7 +259,10 @@ function normalizeInput({ organization, repository }) {
   const repositoryId = positiveId(repository.id, "GitHub repository");
   const repositoryName = requiredText(repository.name, "GitHub repository name");
   const repositoryFullName = requiredText(repository.fullName, "GitHub repository full name");
-  const expectedName = `${organizationLogin}_GEN3`;
+  // The scaffold names new roots by ORGANIZATION_ROOT_SCAFFOLD_GENERATION
+  // (GEN3); it switches to GEN4 only after the founding gate of plan LZD-0041
+  // (decision N4). Readers of this Core already accept both names.
+  const expectedName = organizationRootRepositoryName(organizationLogin, ORGANIZATION_ROOT_SCAFFOLD_GENERATION);
   const expectedFullName = `${organizationLogin}/${expectedName}`;
   if (repositoryName.toLowerCase() !== expectedName.toLowerCase()) {
     throw new TypeError(`Organization scaffold repository must use the current '${expectedName}' naming contract.`);

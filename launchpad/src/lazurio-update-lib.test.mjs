@@ -546,25 +546,29 @@ test("Organization update repairs local projection drift from a verified transit
   expect(status(fixture.working)).toBe("");
 });
 
-test("Organization update leaves an incompatible canonical-only target inactive", async () => {
+// LZD-0041 B: a canonical-only target (no company.gen3.json, no
+// compatibility block, the clean GEN4 shape) is `current` and fast-forwards.
+test("Organization update fast-forwards a canonical-only current target without compatibility", async () => {
   const fixture = await organizationActivationFixture("canonical-only-target");
   const transition = transitionOrganizationDocuments();
-  await writeFile(join(fixture.contributor, "lazurio.organization.json"), transition["lazurio.organization.json"]);
+  const canonical = JSON.parse(transition["lazurio.organization.json"]);
+  delete canonical.compatibility;
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
   await rm(join(fixture.contributor, "company.gen3.json"));
   runGit(fixture.contributor, ["add", "-A"]);
-  runGit(fixture.contributor, ["commit", "-m", "publish incompatible canonical-only target"]);
+  runGit(fixture.contributor, ["commit", "-m", "publish canonical-only target"]);
   runGit(fixture.contributor, ["push", "origin", "main"]);
-  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+  const target = runGit(fixture.contributor, ["rev-parse", "HEAD"]);
 
   const result = await updateManagedRepo(descriptor(fixture), { runId: "canonical-only-target" });
 
-  expect(result).toMatchObject({
-    state: "blocked",
-    reason: "organization_target_incompatible",
-    next_action: { kind: "codex" },
+  expect(result).toMatchObject({ state: "updated" });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(target);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working })).toMatchObject({
+    state: "current",
+    resource_count: 1,
+    document_presence: { canonical: true, legacy_projection: false },
   });
-  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
-  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
 });
 
 test("Organization update treats a present null target document as invalid, not absent", async () => {
@@ -743,15 +747,40 @@ test("absent root binding name rule covers legacy and transition but never curre
   for (const state of ["legacy", "transition"]) {
     expect(issue(state, "git@github.com:test/test.git")).toBeNull();
     expect(issue(state, "git@github.com:Test/TEST_gen3.git")).toBeNull();
+    expect(issue(state, "git@github.com:test/test_GEN4.git")).toBeNull();
     expect(issue(state, "git@github.com:test/shadow.git")).toContain("bez explicitního root repository bindingu");
     expect(issue(state, "git@github.com:foreign/foreign.git")).toContain("forge binding");
   }
   expect(issue("legacy", "git@github.com:test/shadow.git")).toStartWith("Legacy Organization target");
   expect(issue("transition", "git@github.com:test/shadow.git")).toStartWith("Transition Organization target");
-  for (const sourceUrl of ["git@github.com:test/test.git", "git@github.com:test/test_GEN3.git"]) {
+  for (const sourceUrl of ["git@github.com:test/test.git", "git@github.com:test/test_GEN3.git", "git@github.com:test/test_GEN4.git"]) {
     expect(issue("current", sourceUrl)).toBe(
       "Exact target postrádá Organization root repository binding k ověřenému GitHub originu.",
     );
+  }
+});
+
+// LZD-0041 G1: a root repository binding to `<login>_GEN4` is checked
+// against the origin exactly like one to `<login>_GEN3`; a `current` target
+// (no company.gen3.json, no compatibility) fast-forwards like `transition`.
+test("G1: exact target binding follows the declared GEN4 locator, never the suffix", () => {
+  const resource = {
+    kind: "organization",
+    organization: { slug: "test", forge_binding: { forge: "github", locator: "test", binding_state: "unverified" } },
+    root_repository: { forge: "github", locator: "test/test_GEN4", default_branch: "main", binding_state: "unverified" },
+  };
+  const issue = (state, sourceUrl) => organizationTargetIdentityIssue({
+    repo: { organization: "test", repo: sourceUrl },
+    sourceUrl,
+    state,
+    resource,
+  });
+  for (const state of ["transition", "current"]) {
+    expect(issue(state, "git@github.com:test/test_GEN4.git")).toBeNull();
+    expect(issue(state, "https://github.com/test/test_GEN4.git")).toBeNull();
+    // An X_GEN3 folder whose origin still points at GEN3 never follows data
+    // that already declare GEN4: origin and locator switch together.
+    expect(issue(state, "git@github.com:test/test_GEN3.git")).toContain("root repository binding");
   }
 });
 
@@ -891,10 +920,11 @@ test("current canonical-only target without a root binding stays refused on a ca
     deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
   });
 
+  // `current` is updatable since LZD-0041 B, but without a root binding it
+  // stays bound to nothing, so the identity gate refuses it.
   expect(result).toMatchObject({
     state: "blocked",
-    reason: "organization_target_incompatible",
-    next_action: { kind: "codex" },
+    reason: "organization_target_identity_mismatch",
   });
   expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
   expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");

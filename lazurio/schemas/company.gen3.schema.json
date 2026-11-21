@@ -64,12 +64,12 @@
         },
         "root_repository": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN3(?![\\s\\S])",
+          "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN[34](?![\\s\\S])",
           "description": "Potvrzená GitHub owner/repo identita remote-active Organization rootu. V local-first stavu se pole úplně vynechává."
         },
         "repository": {
           "type": "string",
-          "pattern": "^(?:git@github\\.com:|https://github\\.com/|ssh://git@github\\.com/)[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN3(?:\\.git)?/?(?![\\s\\S])",
+          "pattern": "^(?:git@github\\.com:|https://github\\.com/|ssh://git@github\\.com/)[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN[34](?:\\.git)?/?(?![\\s\\S])",
           "description": "Přesná credential-free GitHub fetch URL remote-active Organization rootu. V local-first stavu se pole úplně vynechává; lokální Doctor/Repair ji váže na raw a efektivní origin."
         }
       },

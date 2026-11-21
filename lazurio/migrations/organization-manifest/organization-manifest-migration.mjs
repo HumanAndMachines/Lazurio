@@ -111,23 +111,29 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     }
     return plan;
   }
-  if (before.state === "transition") {
+  // Since LZD-0041 B a stale declared digest no longer makes the root a
+  // conflict; it is an issue next to the state. It is still regenerated here
+  // exactly as before, for the readers that decide by it. A root without a
+  // `compatibility` block has no digest to keep.
+  const staleDigest = before.issues.includes("canonical_projection_hash_invalid");
+  if (before.state === "transition" && !staleDigest) {
     plan.operation = "none";
     plan.outcome = "noop";
     plan.after = plan.before;
     plan.parity = { semantic: true, projection: true };
     return plan;
   }
-  if (before.state === "current") {
+  if (before.state === "current" && !staleDigest) {
     plan.operation = "none";
     plan.outcome = "noop";
     plan.after = plan.before;
     plan.parity = { semantic: true, projection: true };
     return plan;
   }
-  // projection_drift, or conflict with a canonical document present: the
-  // canonical manifest is the only authority, so regeneration recomputes its
-  // declared hash and rewrites the legacy projection from it.
+  // projection_drift, a stale declared digest, or conflict with a canonical
+  // document present: the canonical manifest is the only authority, so
+  // regeneration recomputes its declared hash and rewrites the legacy
+  // projection from it.
   plan.operation = "regenerate";
   const canonicalManifest = structuredClone(documents.canonicalManifest);
   if (!isRecord(canonicalManifest) || !isRecord(canonicalManifest.compatibility?.legacy_projection)) {

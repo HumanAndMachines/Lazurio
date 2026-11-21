@@ -147,6 +147,36 @@ test("editing the canonical manifest makes the legacy projection stale until reg
     .toBe(readOrganizationRoot({ organizationRoot: worktree }).projection.declared_hash);
 });
 
+// LZD-0041 B: a stale declared digest is reported next to `transition`, not
+// a conflict, and this command still rewrites it for the readers that need
+// it; a clean root without a `compatibility` block stays untouched.
+test("a stale declared digest is still regenerated; a root without compatibility is a no-op", async () => {
+  const { worktree } = organizationRepository();
+  await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  const canonicalPath = join(worktree, "lazurio.organization.json");
+  const canonical = JSON.parse(readFileSync(canonicalPath, "utf8"));
+  const expected = canonical.compatibility.legacy_projection.sha256;
+  canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  writeFileSync(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+  expect(readOrganizationRoot({ organizationRoot: worktree })).toMatchObject({
+    state: "transition",
+    issues: ["canonical_projection_hash_invalid"],
+  });
+
+  const regenerated = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  expect(regenerated).toMatchObject({ operation: "regenerate", outcome: "written", readback: { state: "transition" } });
+  expect(JSON.parse(readFileSync(canonicalPath, "utf8")).compatibility.legacy_projection.sha256).toBe(expected);
+
+  const clean = JSON.parse(readFileSync(canonicalPath, "utf8"));
+  delete clean.compatibility;
+  writeFileSync(canonicalPath, `${JSON.stringify(clean, null, 2)}\n`);
+  rmSync(join(worktree, "company.gen3.json"));
+  expect(readOrganizationRoot({ organizationRoot: worktree })).toMatchObject({ state: "current", issues: [] });
+  const noop = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  expect(noop).toMatchObject({ operation: "none", outcome: "noop", ok: true });
+  expect(() => readFileSync(join(worktree, "company.gen3.json"))).toThrow();
+});
+
 test("migrating an existing Organization never adds Organization settings", async () => {
   // Absent settings mean the Organization governs nothing (decision 0194):
   // existing Organizations stay as they are; only a new Organization starts

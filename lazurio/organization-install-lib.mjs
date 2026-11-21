@@ -32,6 +32,13 @@ import {
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
+import {
+  ORGANIZATION_ROOT_REPOSITORY_GENERATIONS,
+  organizationRootDeclaresItself,
+  organizationRootRepositoryName,
+  parseOrganizationRootRepositoryName,
+  selectOrganizationRootRepository,
+} from "./core/organization-root-repository-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import {
   classifyOrganizationSlotAccess,
@@ -97,7 +104,7 @@ export async function installOrganization({
       locator,
       role: requestedRole,
       scope,
-      root: rootOutcome("blocked", localRoot.code, `organizations/${locator}_GEN3`, localRoot.message),
+      root: rootOutcome("blocked", localRoot.code, provisionalOrganizationPath(locator), localRoot.message),
     });
   }
 
@@ -135,18 +142,43 @@ export async function installOrganization({
       root: rootOutcome(
         "blocked",
         "organization_identity_mismatch",
-        `organizations/${source.organization.login}_GEN3`,
+        provisionalOrganizationPath(source.organization.login, source.repository?.name),
         "GitHub Organization login už neodpovídá očekávané immutable identitě.",
       ),
     });
   }
 
-  const organizationPath = `organizations/${source.organization.login}_GEN3`;
+  // The folder is not derived from the repository name alone (LZD-0041 G1,
+  // decision N2): an Environment keeps `organizations/X_GEN3` while its origin
+  // already points at `X_GEN4` until the folder is renamed, and a new install
+  // of a GEN4 root gets `organizations/X_GEN4`.
+  const mount = await resolveOrganizationMount({
+    organizationsPath: join(absoluteRoot, "organizations"),
+    login: source.organization.login,
+    repositoryName: source.repository.name,
+    stat: deps.lstat ?? lstatOrNull,
+  });
+  if (!mount.ok) {
+    return blockedReport({
+      rootPath: absoluteRoot,
+      locator,
+      role: requestedRole,
+      scope,
+      source,
+      root: rootOutcome("blocked", mount.code, provisionalOrganizationPath(source.organization.login, source.repository.name), mount.message),
+    });
+  }
+  const targetName = mount.folderName;
+  const organizationPath = `organizations/${targetName}`;
   const targetPath = join(absoluteRoot, organizationPath);
-  const targetName = `${source.organization.login}_GEN3`;
   const caseCollision = await caseFoldedOrganizationTarget({
     organizationsPath: join(absoluteRoot, "organizations"),
     targetName,
+    // Both generation names count (LZD-0041 G1): `exampleorganization_GEN3`
+    // collides with a target `ExampleOrganization_GEN4` as much as with
+    // `ExampleOrganization_GEN3`, so a second root is never materialized.
+    otherNames: ORGANIZATION_ROOT_REPOSITORY_GENERATIONS
+      .map((generation) => organizationRootRepositoryName(source.organization.login, generation)),
     readDirectory: deps.readDirectory ?? readdir,
   });
   if (caseCollision) {
@@ -1006,15 +1038,9 @@ export function observeOrganizationInstallSource({
     );
   }
 
-  const repositoryName = `${organization.login}_GEN3`;
-  const fullName = `${organization.login}/${repositoryName}`;
-  const repositoryResponse = provider.json(["api", `repos/${fullName}`]);
-  if (!repositoryResponse.ok) return responseFailure(repositoryResponse, "root_repository_unavailable");
-  const repository = providerRepository(repositoryResponse.value, { organization, repositoryName, fullName });
-  if (!repository) return providerFailure("root_repository_identity_mismatch", "Root repo neodpovídá kanonické Organization identitě.");
-
-  const documents = readProviderRootDocuments({ provider, repository });
-  if (!documents.ok) return documents;
+  const root = observeProviderRootRepository({ provider, organization });
+  if (!root.ok) return root;
+  const { repository, documents } = root;
   const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
   const hosted = installHostedWorkspace(environment, rootVerification.resource);
@@ -1040,7 +1066,116 @@ export function observeOrganizationInstallSource({
       access,
     });
   }
-  return freeze({ ok: true, organization, repository, documents, access });
+  return freeze({ ok: true, organization, repository, documents, access, resource: rootVerification.resource });
+}
+
+// Probes `<login>_GEN4` and `<login>_GEN3` and picks the root by its own
+// declaration (selectOrganizationRootRepository, LZD-0041 G1). An
+// Organization with only one of them behaves exactly as before; two existing
+// candidates without a safe choice stop the install.
+function observeProviderRootRepository({ provider, organization }) {
+  const candidates = [];
+  for (const generation of ORGANIZATION_ROOT_REPOSITORY_GENERATIONS) {
+    const repositoryName = organizationRootRepositoryName(organization.login, generation);
+    const fullName = `${organization.login}/${repositoryName}`;
+    const response = provider.json(["api", `repos/${fullName}`]);
+    if (!response.ok && response.httpStatus === 404) {
+      candidates.push({ generation, presence: "absent", declares: false, failure: responseFailure(response, "root_repository_unavailable") });
+      continue;
+    }
+    if (!response.ok) return responseFailure(response, "root_repository_unavailable");
+    const redirected = parseOrganizationRootRepositoryName(response.value?.name);
+    if (
+      response.value?.name !== repositoryName
+      && redirected
+      && redirected.login.toLowerCase() === organization.login.toLowerCase()
+      && redirected.generation !== generation
+    ) {
+      // GitHub's rename redirect onto the other candidate, probed on its own.
+      candidates.push({ generation, presence: "absent", declares: false, failure: responseFailure({ httpStatus: 404 }, "root_repository_unavailable") });
+      continue;
+    }
+    const repository = providerRepository(response.value, { organization, repositoryName, fullName });
+    if (!repository) {
+      // Never selected beside a working candidate; alone it stops the install.
+      candidates.push({
+        generation,
+        presence: "empty",
+        declares: false,
+        documents: providerFailure("root_repository_identity_mismatch", "Root repo neodpovídá kanonické Organization identitě."),
+      });
+      continue;
+    }
+    const documents = readProviderRootDocuments({ provider, repository });
+    // Only documents GitHub reported missing (HTTP 404) make a candidate
+    // empty. A candidate that could not be read (403, 5xx, invalid content)
+    // may be the declared root, so the choice cannot be verified and the
+    // install stops instead of falling back to the other candidate.
+    if (!documents.ok && documents.missing !== true) return documents;
+    // A candidate with some root documents missing is empty only when the
+    // documents it has do not declare it the root; an incomplete declared
+    // root may be the one to install, so the choice cannot be verified.
+    if (!documents.ok && organizationRootDeclaresItself({
+      fullName,
+      login: organization.login,
+      canonicalManifest: documents.partial.canonical,
+      companyManifest: documents.partial.company,
+    })) {
+      return providerFailure(
+        "root_repository_incomplete",
+        `${repositoryName} se deklaruje jako kořen, ale chybí mu kořenové dokumenty; instalace nepokračuje.`,
+      );
+    }
+    candidates.push({
+      generation,
+      presence: documents.ok ? "present" : "empty",
+      declares: documents.ok && organizationRootDeclaresItself({
+        fullName,
+        login: organization.login,
+        canonicalManifest: documents.canonical,
+        companyManifest: documents.company,
+      }),
+      repository,
+      documents,
+    });
+  }
+  const selection = selectOrganizationRootRepository(candidates);
+  if (selection.status === "absent") return candidates.at(-1).failure;
+  if (selection.status === "conflict") {
+    return providerFailure(
+      "root_repository_ambiguous",
+      `Organizace má ${candidates.map((candidate) => organizationRootRepositoryName(organization.login, candidate.generation)).join(" i ")} a ani jeden se bezpečně nedeklaruje jako kořen; instalace nepokračuje.`,
+    );
+  }
+  const { repository, documents } = selection.candidate;
+  if (!documents.ok) return documents;
+  return { ok: true, repository, documents };
+}
+
+// Folder of the Organization root inside `organizations/`. An existing folder
+// named after the repository wins; otherwise an existing folder of the same
+// login with the other generation suffix carries the root (the folder is
+// renamed separately from the origin switch, decision N2); a new install
+// uses the repository name. Two existing folders are never guessed between.
+async function resolveOrganizationMount({ organizationsPath, login, repositoryName, stat }) {
+  const names = [repositoryName, ...ORGANIZATION_ROOT_REPOSITORY_GENERATIONS
+    .map((generation) => organizationRootRepositoryName(login, generation))
+    .filter((name) => name !== repositoryName)];
+  const existing = [];
+  for (const name of names) {
+    if (await stat(join(organizationsPath, name))) existing.push(name);
+  }
+  if (existing.length > 1) {
+    return providerFailure(
+      "organization_mount_ambiguous",
+      `V organizations/ jsou složky ${existing.join(" i ")} pro jednu Organizaci; instalace mezi nimi nevybírá.`,
+    );
+  }
+  return { ok: true, folderName: existing[0] ?? repositoryName };
+}
+
+function provisionalOrganizationPath(login, repositoryName = null) {
+  return `organizations/${repositoryName ?? organizationRootRepositoryName(login, "GEN3")}`;
 }
 
 export function observeOrganizationInstallIdentity({
@@ -1217,18 +1352,32 @@ async function verifyInstallRootBoundary(rootPath) {
   }
 }
 
-async function caseFoldedOrganizationTarget({ organizationsPath, targetName, readDirectory }) {
-  const foldedTarget = targetName.toLocaleLowerCase("en-US");
+async function caseFoldedOrganizationTarget({ organizationsPath, targetName, otherNames = [], readDirectory }) {
+  const folded = new Set([targetName, ...otherNames].map((name) => name.toLocaleLowerCase("en-US")));
   const entries = await readDirectory(organizationsPath);
   return entries.find((entry) => (
-    entry !== targetName && entry.toLocaleLowerCase("en-US") === foldedTarget
+    entry !== targetName && folded.has(entry.toLocaleLowerCase("en-US"))
   )) ?? null;
 }
 
+// A clean GEN4 root has no company.gen3.json (LZD-0041 B); a GEN3 root still
+// carries it for the parity gate and a legacy root has nothing else.
 function readProviderRootDocuments({ provider, repository }) {
-  const company = readProviderJson(provider, repository.full_name, "company.gen3.json", repository.default_branch);
+  const company = readProviderJson(
+    provider,
+    repository.full_name,
+    "company.gen3.json",
+    repository.default_branch,
+    { optional: true },
+  );
   if (!company.ok) return company;
-  const modules = readProviderJson(provider, repository.full_name, "modules.manifest.json", repository.default_branch);
+  const modules = readProviderJson(
+    provider,
+    repository.full_name,
+    "modules.manifest.json",
+    repository.default_branch,
+    { optional: true },
+  );
   if (!modules.ok) return modules;
   const canonical = readProviderJson(
     provider,
@@ -1238,6 +1387,16 @@ function readProviderRootDocuments({ provider, repository }) {
     { optional: true },
   );
   if (!canonical.ok) return canonical;
+  // Every document was read or reported missing (HTTP 404); the ones present
+  // stay on the failure so the caller can tell an empty candidate from an
+  // incomplete declared root.
+  const partial = { company: company.value, modules: modules.value, canonical: canonical.value };
+  if (company.value === null && canonical.value === null) {
+    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá lazurio.organization.json ani company.gen3.json."), missing: true, partial };
+  }
+  if (modules.value === null) {
+    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá modules.manifest.json."), missing: true, partial };
+  }
   return { ok: true, company: company.value, modules: modules.value, canonical: canonical.value };
 }
 
@@ -1248,8 +1407,13 @@ function readProviderJson(provider, fullName, path, ref, { optional = false } = 
     path,
     ref,
   });
-  if (optional && !document.present) return { ok: true, value: null };
-  if (!document.ok || !document.present) return responseFailure(document, "root_manifest_unavailable");
+  // Absent means a documented 404 only; any other failed read stops the
+  // verification, also for optional documents (Pablo's review of #734).
+  if (!document.ok) return responseFailure(document, "root_manifest_unavailable");
+  if (!document.present) {
+    if (optional) return { ok: true, value: null };
+    return responseFailure(document, "root_manifest_unavailable");
+  }
   if (!document.valid) {
     return providerFailure("root_manifest_invalid", `${path} nemá podporovaný GitHub content formát.`);
   }
@@ -1296,7 +1460,7 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
       repositoryId: repository.id,
       repositoryFullName: repository.full_name,
     });
-  const compatibleState = ["legacy", "transition"].includes(resolution.state);
+  const compatibleState = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state);
   const resolverSupported = documents.resolution
     ? compatibleState
     : resolution.activation.status === "supported";
@@ -1309,10 +1473,18 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
   return { ok: true, company: documents.company, modules: documents.modules, resource: resolution.resource };
 }
 
+// Identity comes from the verified normalized resource (canonical manifest
+// whenever present), never from company.gen3.json (LZD-0041 B).
 function organizationInventoryDescriptor({ source, organizationPath }) {
+  const organization = source.resource?.organization
+    ?? resolveOrganizationRootDocuments({
+      companyManifest: source.documents.company ?? null,
+      modulesManifest: source.documents.modules,
+      canonicalManifest: source.documents.canonical ?? null,
+    }).resource?.organization;
   return {
-    slug: source.documents.company.company.slug,
-    display_name: source.documents.company.company.display_name,
+    slug: organization?.slug,
+    display_name: organization?.display_name,
     path: organizationPath,
     status: "active",
     default_branch: source.repository.default_branch,
@@ -1334,7 +1506,7 @@ function blockedReport({ rootPath, locator, role = null, scope = null, source = 
   const target = root ?? rootOutcome(
     "blocked",
     source?.code ?? "provider_observation_failed",
-    `organizations/${source?.organization?.login ?? locator}_GEN3`,
+    provisionalOrganizationPath(source?.organization?.login ?? locator, source?.repository?.name ?? null),
     source?.message,
   );
   return freeze({

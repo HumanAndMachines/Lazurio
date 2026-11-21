@@ -198,8 +198,11 @@ GitHub App sama nenahrazuje source Organizace. Použitelná Lazurio Organization
 má současně:
 
 1. instalovanou `Lazurio for GitHub` App s ověřeným repository scope;
-2. canonical root repo `<login>/<login>_GEN3` na `main` s validním Organization
-   manifestem a immutable Forge bindingem;
+2. canonical root repo `<login>/<login>_GEN4` nebo `<login>/<login>_GEN3` na
+   `main` s validním Organization manifestem a immutable Forge bindingem. Když
+   existují oba, kořen je ten, který se ve svých dokumentech deklaruje
+   (`root_repository.locator` a `organization.forge_binding.locator`), při
+   obou GEN4; přípona jména sama nerozhoduje (LZD-0041 G1);
 3. lokální mount vytvořený až konvergentním příkazem
    `lazurio organization install`.
 
@@ -236,8 +239,9 @@ ke každému repozitáři instalačního scope své role.
   i další restricted repozitáře;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
-- Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
-  validní Forge binding a uživatel jej může číst.
+- Organization root repo `<login>/<login>_GEN4` nebo `<login>/<login>_GEN3`
+  existuje na `main`, obsahuje validní Forge binding a uživatel jej může číst.
+  `company.gen3.json` ani blok `compatibility` nejsou potřeba.
 
 Příkaz je local-only. Nikdy nevytváří nebo nemění GitHub repo, GitHub App grant,
 Team membership, branch rules, visibility, port ani commit. K založení remote
@@ -728,8 +732,12 @@ vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na
 Windows. Tím mají uživatelé i Agenti jednu předvídatelnou cestu a absolutní cesta
 současně nese OS účet Mašiny. `--root` proto tato operace nepřijímá.
 
-První běh materializuje exact Organization root do
-`organizations/<CanonicalLogin>_GEN3` a přes běžný update reconciler doplní
+První běh materializuje exact Organization root do složky pojmenované podle
+root repa, `organizations/<CanonicalLogin>_GEN4` nebo
+`organizations/<CanonicalLogin>_GEN3`. Existující složka stejného loginu
+s druhou příponou zůstává: Prostředí může mít `organizations/X_GEN3`
+s originem už na `X_GEN4`, než se složka přejmenuje (rozhodnutí N2). Dvě
+složky jedné Organizace instalaci zastaví. Pak přes běžný update reconciler doplní
 dostupné deklarované Moduly. Potom může tentýž explicitní installer atomicky
 doplnit aktivní `repository_db_mount` pouze na root-space `mission-control/db`
 nebo kanonickém `workspace/<module>/db`, vždy jen pod právě jedním deklarovaným

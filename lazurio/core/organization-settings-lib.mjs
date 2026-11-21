@@ -100,6 +100,9 @@ const SETTINGS_CONTRACT = objectNode({
         client_id: stringLeaf(GUID_PATTERN),
         apps: arrayLeaf(enumItem(MICROSOFT365_APPS), { minItems: 1 }),
         callbacks: arrayLeaf(stringLeaf(LAUNCHPAD_CALLBACK_PATTERN), { maxItems: MICROSOFT365_MAX_CALLBACKS }),
+        // Optional switch for agents sending mail the person approved
+        // (LazurioPlatform, F42 addendum); absent and false are off.
+        send_mail: booleanLeaf(),
       },
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),

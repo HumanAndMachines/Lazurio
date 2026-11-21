@@ -142,3 +142,15 @@ test("Doctor accepts only the brokered bot as the GitHub identity of a Team VM",
   expect(check(botStatus(), { valid: false }).status).toBe("fail");
   expect(calls.length).toBe(callsBefore);
 });
+
+test("G1: broker context accepts a GEN4 root and prefers it when the policy allows both", () => {
+  const withPolicy = (policy) => parseBrokeredGitHubEnvironment(
+    environmentFile.replace(/'\{.*\}'/u, `'${JSON.stringify(policy)}'`),
+  );
+  expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN4": 7 }), "Example"))
+    .toEqual({ cwd: "/", repository: "Example/Example_GEN4" });
+  expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN3": 6, "Example/Example_GEN4": 7 }), "Example"))
+    .toEqual({ cwd: "/", repository: "Example/Example_GEN4" });
+  expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN5": 8 }), "Example")).toBeNull();
+  expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN4": 7 }), "bad login!")).toBeNull();
+});
