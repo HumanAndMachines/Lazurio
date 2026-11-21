@@ -361,12 +361,22 @@ runtime/process state, consistent with DEV-6439.
 | Files present | State | Behavior |
 | --- | --- | --- |
 | only legacy | `legacy` | supported; Doctor offers migration |
-| both, normalized semantics and canonical projection hash match | `transition` | supported; Lazurio file is canonical and legacy is a generated projection |
-| semantics match but canonical projection hash drifts | `projection_drift` | canonical Lazurio read remains available; mutations block until projection regeneration |
+| both, normalized semantics match and the projection file is the generator's output | `transition` | supported; Lazurio file is canonical and legacy is a generated projection |
+| semantics match but the projection file differs from the generator's output | `projection_drift` | canonical Lazurio read remains available; mutations block until projection regeneration |
 | normalized semantics differ | `conflict` | fail closed for mutation; never choose silently |
-| only Lazurio | `current` | readable for diagnosis; mutations remain blocked until the finalization gate |
+| only Lazurio (with or without a `compatibility` block) | `current` | supported since LZD-0041 phase B: activation, install and update accept it exactly like `transition`; Core mutation tools that still write the projection keep refusing it |
 | neither | `missing` | not a Lazurio resource; fail only when the mount is expected |
 | any present document is invalid or unreadable | `conflict` | fail closed; `issues[]` identifies the malformed or unreadable document even when no second file exists |
+
+Since LZD-0041 phase B (LazurioPlatform since phase A, #1114) the
+`compatibility` block is optional and the declared digest never decides a
+state: a stale `compatibility.legacy_projection.sha256` is reported as the
+issue `canonical_projection_hash_invalid` next to `transition` or `current`.
+`lazurio organization check` still fails on it while the root declares the
+block, because readers up to Lazurio 0.1.23 and older Core pins still decide
+by it, and `lazurio migrate organization-manifest --write` still rewrites it.
+A clean GEN4 root has only `lazurio.organization.json` and
+`modules.manifest.json`.
 
 One mount always produces at most one resource and at most one child Doctor.
 Two filenames never create two Organizations or two Personalspaces. An invalid
@@ -487,16 +497,17 @@ a manifest-specific activation lifecycle:
 2. Read the exact target documents through Git object inspection and resolve
    them with the same Core resolver as the live filesystem. Bind the normalized
    Organization and root-repository identity to the already verified checkout
-   and remote. During the compatibility window only `legacy` and parity-valid
-   `transition` targets may advance; `projection_drift`, `conflict`, `current`,
+   and remote. Only `legacy`, parity-valid `transition` and (since LZD-0041
+   phase B) `current` targets may advance; `projection_drift`, `conflict`,
    `missing`, malformed, unreadable or mismatched targets block before stash,
    branch switch or pull. A target without an explicit root repository
    binding — a `legacy` root or its parity-valid `transition` migration, which
    cannot invent a binding the legacy root never declared — is bound to a
-   GitHub origin by the canonical root repository name (`<owner>` or
-   `<owner>_GEN3`, case-insensitive); activation applies the same
-   legacy-equivalent rule to an unverified transition pair. Any later format
-   requires the explicit binding.
+   GitHub origin by the canonical root repository name (`<owner>`,
+   `<owner>_GEN3` or `<owner>_GEN4`, case-insensitive); activation applies the
+   same legacy-equivalent rule to an unverified transition pair. A `current`
+   target always requires the explicit binding, so origin and
+   `root_repository.locator` switch from GEN3 to GEN4 together.
 3. Apply the existing local-work gates, verified recovery stash and exact
    pinned fast-forward update. Verify final HEAD and source identity against the
    pinned OID, then rediscover the Organization inventory and invalidate stale
