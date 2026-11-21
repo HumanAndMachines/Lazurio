@@ -1922,7 +1922,9 @@ function updateReport(state) {
 
 // `gen3: null` makes the GEN3 candidate absent; `gen4` (absent by default)
 // adds `<login>_GEN4` with its own documents (LZD-0041 G1).
-function providerFixture({ calls, documents, privateRepository = false, gen3 = true, gen4 = null }) {
+// `failures` maps a contents endpoint (`<owner>/<repo>/<path>`) to an HTTP
+// status the read fails with.
+function providerFixture({ calls, documents, privateRepository = false, gen3 = true, gen4 = null, failures = {} }) {
   const encoded = (value) => Buffer.from(`${JSON.stringify(value)}\n`).toString("base64");
   const notFound = { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
   const gen4FullName = `${login}/${login}_GEN4`;
@@ -1930,6 +1932,11 @@ function providerFixture({ calls, documents, privateRepository = false, gen3 = t
     calls.push(call);
     if (call.args[0] === "auth") return { status: 0, stdout: "", stderr: "" };
     const endpoint = call.args[1];
+    const failing = Object.entries(failures).find(([key]) => {
+      const [owner, repo, ...path] = key.split("/");
+      return endpoint === `repos/${owner}/${repo}/contents/${path.join("/")}?ref=main`;
+    });
+    if (failing) return { status: 1, stdout: "", stderr: `gh: Request failed (HTTP ${failing[1]})` };
     if (endpoint === `orgs/${login}`) return ok({ id: Number(ids.organization), login });
     if (endpoint === `repos/${gen4FullName}`) {
       if (gen4 === null) return notFound;
@@ -2097,6 +2104,46 @@ test("G1: install keeps GEN3 while the GEN4 copy still declares GEN3, and takes 
     runGitHubCli: providerFixture({ calls: [], documents: gen3Documents, gen4: { documents: cleanGen4Documents() } }),
   });
   expect(both).toMatchObject({ ok: true, repository: { id: gen4RepositoryId, full_name: `${login}/${login}_GEN4` } });
+});
+
+test("G1: an unreadable GEN4 candidate stops the install instead of falling back to GEN3 (Pablo's review of #734)", () => {
+  for (const status of [500, 403]) {
+    const source = observeOrganizationInstallSource({
+      githubLogin: login,
+      resolveGitHubCli: () => "/usr/bin/gh",
+      runGitHubCli: providerFixture({
+        calls: [],
+        documents: scaffoldDocuments(),
+        gen4: { documents: cleanGen4Documents() },
+        failures: { [`${login}/${login}_GEN4/modules.manifest.json`]: status },
+      }),
+    });
+    expect(source.ok, `HTTP ${status}`).toBe(false);
+    expect(source.code).toBe(status === 403 ? "github_access_denied" : "github_transport_failed");
+  }
+});
+
+test("G1: a GEN4 candidate without root documents (HTTP 404) stays empty beside a working GEN3", () => {
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents: scaffoldDocuments(), gen4: { documents: {} } }),
+  });
+  expect(source).toMatchObject({ ok: true, repository: { id: ids.repository, full_name: fullName } });
+});
+
+test("B: a failed read of an optional root document stops verification; only HTTP 404 means absent (Pablo's review of #734)", () => {
+  for (const path of ["company.gen3.json", "lazurio.organization.json"]) {
+    for (const status of [500, 403]) {
+      const source = observeOrganizationInstallSource({
+        githubLogin: login,
+        resolveGitHubCli: () => "/usr/bin/gh",
+        runGitHubCli: providerFixture({ calls: [], documents: scaffoldDocuments(), failures: { [`${fullName}/${path}`]: status } }),
+      });
+      expect(source.ok, `${path} HTTP ${status}`).toBe(false);
+      expect(source.code).toBe(status === 403 ? "github_access_denied" : "github_transport_failed");
+    }
+  }
 });
 
 test("G1: two root candidates without a safe choice stop the install", () => {

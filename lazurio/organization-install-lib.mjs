@@ -1107,6 +1107,11 @@ function observeProviderRootRepository({ provider, organization }) {
       continue;
     }
     const documents = readProviderRootDocuments({ provider, repository });
+    // Only documents GitHub reported missing (HTTP 404) make a candidate
+    // empty. A candidate that could not be read (403, 5xx, invalid content)
+    // may be the declared root, so the choice cannot be verified and the
+    // install stops instead of falling back to the other candidate.
+    if (!documents.ok && documents.missing !== true) return documents;
     candidates.push({
       generation,
       presence: documents.ok ? "present" : "empty",
@@ -1363,7 +1368,7 @@ function readProviderRootDocuments({ provider, repository }) {
   );
   if (!canonical.ok) return canonical;
   if (company.value === null && canonical.value === null) {
-    return providerFailure("root_manifest_unavailable", "Root repo nemá lazurio.organization.json ani company.gen3.json.");
+    return { ...providerFailure("root_manifest_unavailable", "Root repo nemá lazurio.organization.json ani company.gen3.json."), missing: true };
   }
   return { ok: true, company: company.value, modules: modules.value, canonical: canonical.value };
 }
@@ -1375,8 +1380,13 @@ function readProviderJson(provider, fullName, path, ref, { optional = false } = 
     path,
     ref,
   });
-  if (optional && !document.present) return { ok: true, value: null };
-  if (!document.ok || !document.present) return responseFailure(document, "root_manifest_unavailable");
+  // Absent means a documented 404 only; any other failed read stops the
+  // verification, also for optional documents (Pablo's review of #734).
+  if (!document.ok) return responseFailure(document, "root_manifest_unavailable");
+  if (!document.present) {
+    if (optional) return { ok: true, value: null };
+    return { ...responseFailure(document, "root_manifest_unavailable"), missing: true };
+  }
   if (!document.valid) {
     return providerFailure("root_manifest_invalid", `${path} nemá podporovaný GitHub content formát.`);
   }
