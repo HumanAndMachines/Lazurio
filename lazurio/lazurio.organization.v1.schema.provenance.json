@@ -1,9 +1,9 @@
 {
   "source_repository": "Lazurio/LazurioPlatform",
-  "source_pull_request": "https://github.com/Lazurio/LazurioPlatform/pull/992",
-  "source_commit": "dee9fee8ed5ca6e99db11be8d78e7b41f26d8384",
+  "source_pull_request": "https://github.com/Lazurio/LazurioPlatform/pull/1114",
+  "source_commit": "ebbf0f470a2123ac0731688f1af4f972234091da",
   "source_path": "src/organizations/lazurio.organization.v1.schema.json",
   "source_license": "Elastic-2.0",
-  "source_sha256": "656619cc45242000d4d520fa49b4bdde9a129cb31d78d3776c26da7a80285a79",
-  "sha256": "656619cc45242000d4d520fa49b4bdde9a129cb31d78d3776c26da7a80285a79"
+  "source_sha256": "04dd9a1813a1485b639be3a2609b14a046f44f65dca2837688b1ec31c58d6ba1",
+  "sha256": "04dd9a1813a1485b639be3a2609b14a046f44f65dca2837688b1ec31c58d6ba1"
 }

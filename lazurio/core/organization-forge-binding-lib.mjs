@@ -1,3 +1,5 @@
+import { organizationRootRepositoryNames } from "./organization-root-repository-lib.mjs";
+
 export const ORGANIZATION_FORGE_BINDING_VERSION = "lazurio.forge-binding.github.v0";
 
 export const ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN = /^[1-9][0-9]{0,19}$/u;
@@ -5,8 +7,11 @@ export const ORGANIZATION_GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,
 
 /**
  * Immutable GitHub Organization/repository binding recorded in an Organization
- * root. This leaf module has no Core dependencies so the scaffold generator and
- * the manifest resolver can both consume it without an import cycle.
+ * root. This module depends only on the leaf root-name module, so the
+ * scaffold generator and the manifest resolver can both consume it without an
+ * import cycle. The repository is `<login>/<login>_GEN3` or
+ * `<login>/<login>_GEN4` (LZD-0041 G1); which one is the root is the binding's
+ * own declaration, matched against the live repository by its callers.
  */
 export function isValidOrganizationForgeBinding(value, {
   organizationId,
@@ -35,7 +40,8 @@ export function isValidForgeBindingShape(value) {
     && typeof value.repository.id === "string"
     && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.repository.id ?? "")
     && typeof value.repository.asserted_full_name === "string"
-    && value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${value.organization.asserted_login}_GEN3`.toLowerCase()
+    && organizationRootRepositoryNames(value.organization.asserted_login)
+      .some((name) => value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${name}`.toLowerCase())
     && value.repository.default_branch === "main";
 }
 

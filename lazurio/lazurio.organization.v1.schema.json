@@ -5,7 +5,7 @@
   "description": "The authored Organization manifest of docs/organization-contract.md, written in LazurioPlatform from that contract and its readers in src/organizations/ (decision 0225). The readers also enforce what a schema cannot state; the contract lists those rules.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "organization", "manifests", "extensions", "compatibility"],
+  "required": ["schema_version", "kind", "organization", "manifests", "extensions"],
   "properties": {
     "schema_version": { "const": "lazurio.organization.v1" },
     "kind": { "description": "A template is a valid declaration for inspection and conversion preview and never runs.", "enum": ["organization", "template"] },
@@ -52,7 +52,7 @@
       "required": ["legacy_projection"],
       "properties": {
         "legacy_projection": {
-          "description": "The generated compatibility projection and the digest of its expected content; root resolution recomputes the digest.",
+          "description": "Optional since LZD-0041 phase A (after Platform 0.1.23). The generated compatibility projection for readers up to Platform 0.1.23 (Core, older Platforms) and the digest of its expected content; root resolution recomputes the digest and reports a stale one, but never decides by it.",
           "type": "object",
           "additionalProperties": false,
           "required": ["path", "algorithm", "sha256"],
@@ -247,7 +247,8 @@
                     "type": "string",
                     "pattern": "^https:\\/\\/launchpad\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.lazurio\\.io\\/api\\/integrations\\/oauth\\/callback$"
                   }
-                }
+                },
+                "send_mail": { "description": "Whether agents may send mail the person approved: Outlook's mail part then asks for Mail.Send, which the tenant's admin consents to. Absent and false are off.", "type": "boolean" }
               }
             }
           }

@@ -23,12 +23,13 @@ export const ORGANIZATION_MANIFEST_SCHEMA_VERSION = "lazurio.organization.v1";
 export const ORGANIZATION_RESOURCE_SCHEMA_VERSION = "lazurio.organization.resource.v1";
 export const ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM = "sha256-canonical-json-v1";
 // Manifest formats the supported Machine cohort may activate, install and
-// fast-forward to during the compatibility window: one list instead of three
-// literals in activation, install and update. It is not a finalization switch.
-// A canonical-only `current` root is outside this contract until a separately
-// accepted reader-readiness mechanism proves trusted identity continuity live
-// (decision 0145, manual/lazurio-manifest-family.md).
-export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition"]);
+// fast-forward to: one list instead of three literals in activation, install
+// and update. Since LZD-0041 phase B a canonical-only `current` root (no
+// company.gen3.json, no `compatibility` block, the clean GEN4 shape) is
+// activatable too: its identity is bound exactly like a `transition` root's,
+// by the declared locators and, when verified, by the live immutable IDs, so
+// the projection file adds no identity evidence Core still needs.
+export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition", "current"]);
 export const ORGANIZATION_MANIFEST_STATES = Object.freeze([
   "legacy",
   "transition",
@@ -240,26 +241,25 @@ export function resolveOrganizationRootDocuments({
     state = legacy.valid && modules.valid ? "legacy" : "conflict";
     resource = state === "legacy" ? legacy.resource : null;
   } else if (!legacyPresent && canonicalPresent) {
+    // The clean GEN4 shape: the canonical manifest and modules.manifest.json
+    // are the whole authority. A declared digest, when still present, is
+    // reported (stale or not) and never decides (LZD-0041 phase B, the same
+    // rule LazurioPlatform applies since phase A).
     if (canonical.valid && modules.valid) {
-      const expectedHash = organizationLegacyProjectionHash(canonicalManifest, modulesManifest);
-      const declaredHash = canonicalManifest.compatibility?.legacy_projection?.sha256 ?? null;
-      projection = {
-        algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
-        expected_hash: expectedHash,
-        declared_hash: declaredHash,
-        actual_hash: null,
-      };
-      if (declaredHash !== expectedHash) {
-        state = "conflict";
+      projection = declaredProjection(canonicalManifest, modulesManifest, null);
+      if (projection.declared_hash !== null && projection.declared_hash !== projection.expected_hash) {
         issues.push("canonical_projection_hash_invalid");
-      } else {
-        state = "current";
-        resource = canonical.resource;
       }
+      state = "current";
+      resource = canonical.resource;
     } else {
       state = "conflict";
     }
   } else if (legacyPresent && canonicalPresent) {
+    // A GEN3 root still carries the generated projection for older readers.
+    // The resource always comes from the canonical manifest; the projection
+    // only takes part in the parity gate that decides transition, drift or
+    // conflict, and a stale declared digest is reported, never decisive.
     if (!legacy.valid || !canonical.valid || !modules.valid) {
       state = "conflict";
     } else {
@@ -269,22 +269,17 @@ export function resolveOrganizationRootDocuments({
         state = "conflict";
         issues.push("normalized_semantics_conflict");
       } else {
-        const expectedHash = organizationLegacyProjectionHash(canonicalManifest, modulesManifest);
-        const declaredHash = canonicalManifest.compatibility?.legacy_projection?.sha256 ?? null;
-        const actualHash = hashCanonicalJson(companyManifest);
-        projection = {
-          algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
-          expected_hash: expectedHash,
-          declared_hash: declaredHash,
-          actual_hash: actualHash,
-        };
-        if (declaredHash !== expectedHash) {
-          state = "conflict";
+        projection = declaredProjection(canonicalManifest, modulesManifest, hashCanonicalJson(companyManifest));
+        if (projection.declared_hash !== null && projection.declared_hash !== projection.expected_hash) {
           issues.push("canonical_projection_hash_invalid");
-        } else {
-          state = actualHash === expectedHash ? "transition" : "projection_drift";
-          resource = canonical.resource;
         }
+        if (projection.actual_hash === projection.expected_hash) {
+          state = "transition";
+        } else {
+          state = "projection_drift";
+          issues.push("legacy_projection_drift");
+        }
+        resource = canonical.resource;
       }
     }
   }
@@ -348,6 +343,15 @@ export function resolveOrganizationRootDocuments({
     }),
     activation,
   });
+}
+
+function declaredProjection(canonicalManifest, modulesManifest, actualHash) {
+  return {
+    algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+    expected_hash: organizationLegacyProjectionHash(canonicalManifest, modulesManifest),
+    declared_hash: canonicalManifest.compatibility?.legacy_projection?.sha256 ?? null,
+    actual_hash: actualHash,
+  };
 }
 
 export function projectLegacyOrganizationManifest(canonicalManifest, modulesManifest) {
@@ -514,12 +518,18 @@ function normalizeCanonicalOrganization(value, modulesManifest) {
   );
   if (compatibilityBindingIssue) issues.push(compatibilityBindingIssue);
   if (value.manifests?.modules !== "modules.manifest.json") issues.push("canonical_modules_pointer_invalid");
+  // `compatibility` is optional since LZD-0041 phase B (LazurioPlatform since
+  // phase A): a clean GEN4 root has none. When declared, its contract still
+  // has to be exact, so a malformed block stays a conflict.
   const projection = value.compatibility?.legacy_projection;
   if (
-    !isRecord(projection)
-    || projection.path !== "company.gen3.json"
-    || projection.algorithm !== ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM
-    || !/^sha256:[0-9a-f]{64}$/u.test(projection.sha256 ?? "")
+    value.compatibility !== undefined
+    && (
+      !isRecord(projection)
+      || projection.path !== "company.gen3.json"
+      || projection.algorithm !== ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM
+      || !/^sha256:[0-9a-f]{64}$/u.test(projection.sha256 ?? "")
+    )
   ) issues.push("canonical_projection_contract_invalid");
   if (!isRecord(value.extensions) || !isRecord(value.extensions.legacy)) {
     issues.push("canonical_extensions_invalid");
@@ -708,10 +718,13 @@ function canonicalManifestShapeIssues(value) {
     || !isRecord(value.extensions.legacy)
   ) issues.push("canonical_extensions_shape_invalid");
   if (
-    !isRecord(value.compatibility)
-    || !exactKeys(value.compatibility, ["legacy_projection"])
-    || !isRecord(value.compatibility.legacy_projection)
-    || !exactKeys(value.compatibility.legacy_projection, ["path", "algorithm", "sha256"])
+    value.compatibility !== undefined
+    && (
+      !isRecord(value.compatibility)
+      || !exactKeys(value.compatibility, ["legacy_projection"])
+      || !isRecord(value.compatibility.legacy_projection)
+      || !exactKeys(value.compatibility.legacy_projection, ["path", "algorithm", "sha256"])
+    )
   ) issues.push("canonical_compatibility_shape_invalid");
   for (const field of ["governance", "doctor"]) {
     if (value[field] !== undefined && !isRecord(value[field])) issues.push(`canonical_${field}_invalid`);
@@ -787,10 +800,11 @@ function legacyActivationProjection({
   const allowedFormats = new Set(Array.isArray(activationFormats) ? activationFormats : []);
   const eligibleFormat = state === "legacy"
     ? "legacy"
-    : state === "transition" && canonicalPresent
-      ? "transition"
+    : ["transition", "current"].includes(state) && canonicalPresent
+      ? state
       : null;
-  if (canonicalPresent && (eligibleFormat !== "transition" || !allowedFormats.has("transition"))) {
+  const canonicalFormat = eligibleFormat === "transition" || eligibleFormat === "current";
+  if (canonicalPresent && (!canonicalFormat || !allowedFormats.has(eligibleFormat))) {
     return { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
   }
   if (eligibleFormat === null || !allowedFormats.has(eligibleFormat) || resource?.kind !== "organization") {
@@ -807,10 +821,11 @@ function legacyActivationProjection({
   const repositoryBinding = resource.root_repository;
   const forgeBinding = companyManifest?.forge_binding;
   // A parity-valid transition declares exactly the identity of its legacy
-  // projection. A legacy root without `forge_binding` normalizes to an
-  // unverified Organization binding with an absent or unverified root binding
-  // and is bound by the locators below; its migrated transition form carries
-  // the same facts, so it follows the same rule. A verified pair still has to
+  // projection, and a canonical-only `current` root declares the same facts
+  // without the projection. A legacy root without `forge_binding` normalizes
+  // to an unverified Organization binding with an absent or unverified root
+  // binding and is bound by the locators below; its canonical forms carry the
+  // same facts, so they follow the same rule. A verified pair still has to
   // match the live immutable IDs, and a partial pair never qualifies.
   const transitionBindingsUnverified = organizationBinding?.binding_state === "unverified"
     && (repositoryBinding === null || repositoryBinding?.binding_state === "unverified");
@@ -818,7 +833,7 @@ function legacyActivationProjection({
     && repositoryBinding?.binding_state === "verified"
     && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
     && String(repositoryBinding.repository_id ?? "") === String(expectedRepositoryId ?? "");
-  const forgeBindingSupported = eligibleFormat === "transition"
+  const forgeBindingSupported = canonicalFormat
     ? transitionBindingsUnverified || transitionBindingsVerified
     : forgeBinding === undefined
     || isValidOrganizationForgeBinding(forgeBinding, {
@@ -834,9 +849,7 @@ function legacyActivationProjection({
     ? {
         status: "supported",
         format: eligibleFormat,
-        reason: eligibleFormat === "transition"
-          ? "transition_identity_pair_supported"
-          : "legacy_identity_pair_supported",
+        reason: `${eligibleFormat}_identity_pair_supported`,
       }
     : { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" };
 }
