@@ -34,7 +34,7 @@ z 2026-11-01, na které odkazují dokumenty rootu (`decision NNNN`). Když se
 | 0042 | Launchpad je auto-discovery first: skenuje kandidátní Organization mounty a jejich `lazurio.organization.json` / legacy compatibility projection vyhodnotí jediný Core resolver s one-resource-per-mount deduplikací a fail-closed konfliktem; root config není allowlist a bezpečnostní kontroly platí pro všechny mounty stejně. |
 | 0043 | Neplatný manifest Organizaci izoluje: Launchpad vadný mount bezpečně odstaví, nikdy kvůli němu nepadá celé UI. |
 | 0044 | Noví klienti nastupují rovnou na GEN3 (žádný GEN2 onboarding). |
-| 0045 | `_GENn` je trvalý generační marker názvu repa/mountu; interní brand identita zůstává čistá. |
+| 0045 | `_GENn` je generační marker názvu repa/mountu; interní brand identita zůstává čistá. Kořen Organizace přechází na nový repozitář `<Org>_GEN4` (změněno 0251 v rejstříku Lazurio Platform). |
 | 0046 | Gbrain (paměť Buddyho) patří do personalspace, nikdy do firemní organizace. |
 | 0047 | Dvě surfaces: Launchpad = builder-first lokální; Lazurio Dashboard = hosted admin/user vstup. |
 | 0048 | Produktové plány Free/Solo/Team/Enterprise a hosting režimy (localhost/hosted/selfhosted). |

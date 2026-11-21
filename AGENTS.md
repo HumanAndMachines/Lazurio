@@ -51,7 +51,9 @@ když pořád není jasno, zeptej se uživatele nástrojem na otázky.
   s dodatky; nasazuje plán DEV-6691).
 - GEN3 je oficiální označení Lazurio Rootu na počítači, GEN4 Lazurio
   Platform s Lazurio Folderem a Prostředími (0225, mění 0219). Platí
-  v textech; repozitáře ani složky se nepřejmenovávají. GEN3 zůstává
+  v textech; repozitáře ani složky se nepřejmenovávají, s výjimkou kořenů
+  Organizací, které po jedné přecházejí na nové repozitáře `<Org>_GEN4`
+  s historií GEN3 (0251). GEN3 zůstává
   udržovaná pro zákazníky, kteří na ní pracují, ale nové normy se píšou jen
   do GEN4 a root na ně odkazuje. Na mechanismech Folderu se root sjednocuje
   (0219).
