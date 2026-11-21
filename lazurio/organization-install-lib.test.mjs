@@ -2212,6 +2212,24 @@ test("N2: an existing organizations/X_GEN3 folder whose origin moved to X_GEN4 s
   expect(fixture.updates[0][0].path).toBe(`organizations/${login}_GEN3`);
 });
 
+test("N2: a case-folded organizations/x_gen3 folder blocks a GEN4 install instead of materializing a second root (Codex review of #734)", async () => {
+  const fixture = await gen4RemoteFixture();
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      ...fixture.deps,
+      readDirectory: async () => [`${login}_GEN3`.toLowerCase()],
+    },
+  });
+  expect(report).toMatchObject({
+    state: "blocked",
+    target: { reason: "materialization_target_case_collision" },
+  });
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN4`))).toBe(false);
+  expect(fixture.updates).toEqual([]);
+});
+
 test("N2: a renamed organizations/X_GEN4 folder is the root folder", async () => {
   const fixture = await gen4RemoteFixture();
   await cloneInto(fixture, `${login}_GEN4`, gen4HttpsRemote);

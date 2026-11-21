@@ -174,6 +174,11 @@ export async function installOrganization({
   const caseCollision = await caseFoldedOrganizationTarget({
     organizationsPath: join(absoluteRoot, "organizations"),
     targetName,
+    // Both generation names count (LZD-0041 G1): `exampleorganization_GEN3`
+    // collides with a target `ExampleOrganization_GEN4` as much as with
+    // `ExampleOrganization_GEN3`, so a second root is never materialized.
+    otherNames: ORGANIZATION_ROOT_REPOSITORY_GENERATIONS
+      .map((generation) => organizationRootRepositoryName(source.organization.login, generation)),
     readDirectory: deps.readDirectory ?? readdir,
   });
   if (caseCollision) {
@@ -1328,11 +1333,11 @@ async function verifyInstallRootBoundary(rootPath) {
   }
 }
 
-async function caseFoldedOrganizationTarget({ organizationsPath, targetName, readDirectory }) {
-  const foldedTarget = targetName.toLocaleLowerCase("en-US");
+async function caseFoldedOrganizationTarget({ organizationsPath, targetName, otherNames = [], readDirectory }) {
+  const folded = new Set([targetName, ...otherNames].map((name) => name.toLocaleLowerCase("en-US")));
   const entries = await readDirectory(organizationsPath);
   return entries.find((entry) => (
-    entry !== targetName && entry.toLocaleLowerCase("en-US") === foldedTarget
+    entry !== targetName && folded.has(entry.toLocaleLowerCase("en-US"))
   )) ?? null;
 }
 
