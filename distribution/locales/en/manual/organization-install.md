@@ -218,8 +218,11 @@ The GitHub App itself does not replace the Organization source. A usable
 Lazurio Organization has all of the following at once:
 
 1. the `Lazurio for GitHub` App installed with a verified repository scope;
-2. the canonical root repo `<login>/<login>_GEN3` on `main` with a valid
-   Organization manifest and an immutable Forge binding;
+2. the canonical root repo `<login>/<login>_GEN4` or `<login>/<login>_GEN3` on
+   `main` with a valid Organization manifest and an immutable Forge binding.
+   When both exist, the root is the one its own documents declare
+   (`root_repository.locator` and `organization.forge_binding.locator`), GEN4
+   when both do; the name suffix alone never decides (LZD-0041 G1);
 3. a local mount created only by the convergent command
    `lazurio organization install`.
 
@@ -260,8 +263,9 @@ permission on every repository in the install scope of their role.
   `infra` or any other restricted repository;
 - the canonical Lazurio Root `<home>/Lazurio` has already gone through
   `lazurio install` and has a real `organizations/` folder;
-- the Organization root repo `<login>/<login>_GEN3` exists on `main`, contains
-  a valid Forge binding, and the user can read it.
+- the Organization root repo `<login>/<login>_GEN4` or `<login>/<login>_GEN3`
+  exists on `main`, contains a valid Forge binding, and the user can read it.
+  Neither `company.gen3.json` nor a `compatibility` block is required.
 
 The command is local-only. It never creates or changes a GitHub repo, a GitHub
 App grant, Team membership, branch rules, visibility, a port, or a commit. A
@@ -791,8 +795,12 @@ production installation always uses `~/Lazurio` on macOS/Linux and
 predictable path, and the absolute path simultaneously carries the Machine's
 OS account. This operation therefore does not accept `--root`.
 
-The first run materializes the exact Organization root into
-`organizations/<CanonicalLogin>_GEN3` and, via the regular update reconciler,
+The first run materializes the exact Organization root into a folder named
+after the root repo, `organizations/<CanonicalLogin>_GEN4` or
+`organizations/<CanonicalLogin>_GEN3`. An existing folder of the same login
+with the other suffix stays: an Environment may keep `organizations/X_GEN3`
+with its origin already on `X_GEN4` until the folder is renamed (decision
+N2). Two folders for one Organization stop the install. Then, via the regular update reconciler,
 adds the available declared Modules. The same explicit installer can then
 atomically add an active `repository_db_mount` only at root-space
 `mission-control/db` or canonical `workspace/<module>/db`, always under exactly
