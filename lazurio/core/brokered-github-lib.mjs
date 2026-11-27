@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import { organizationRootRepositoryNames } from "./organization-root-repository-lib.mjs";
+import {
+  organizationRootRepositoryNames,
+  parseOrganizationRootRepositoryName,
+} from "./organization-root-repository-lib.mjs";
 import { githubRepositoryCoordinate } from "./organization-slot-scope-lib.mjs";
 
 // Shared Organization Team VM (root decisions 0147–0149). Its only GitHub
@@ -125,7 +128,17 @@ export function brokeredGitHubProviderContext(identity, organizationLogin) {
     const selected = identity.repositories.find((repository) => repository.fullName.toLowerCase() === root);
     if (selected) return { cwd: "/", repository: selected.fullName };
   }
-  return null;
+  // After a rename of the Organization on GitHub its root keeps the name it
+  // was created under (`<earlier login>_GEN3`, LazurioPlatform#1281): the one
+  // root-named repository of this Organization the policy allows, never a
+  // choice between two.
+  const owned = identity.repositories.filter((repository) => {
+    const [owner, name, ...rest] = repository.fullName.split("/");
+    return rest.length === 0
+      && owner?.toLowerCase() === organizationLogin.toLowerCase()
+      && parseOrganizationRootRepositoryName(name) !== null;
+  });
+  return owned.length === 1 ? { cwd: "/", repository: owned[0].fullName } : null;
 }
 
 // The exact envelope the released `brokered-gh` adapter (Lazurio/github-app

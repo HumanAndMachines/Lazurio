@@ -94,7 +94,11 @@ test("readers: forge binding, repository identity and the company.gen3 schema ac
   expect(isValidForgeBindingShape(binding("Example/Example_GEN3"))).toBe(true);
   expect(isValidForgeBindingShape(binding("Example/Example_GEN4"))).toBe(true);
   expect(isValidForgeBindingShape(binding("Example/Example_GEN5"))).toBe(false);
-  expect(isValidForgeBindingShape(binding("Example/Other_GEN4"))).toBe(false);
+  // A root keeps the name it was created under when its Organization is
+  // renamed (LazurioPlatform#1281): any root name the login owns, bound by
+  // the repository's immutable id.
+  expect(isValidForgeBindingShape(binding("Example/Other_GEN4"))).toBe(true);
+  expect(isValidForgeBindingShape(binding("Other/Example_GEN4"))).toBe(false);
   expect(githubRepositoryUrlIdentity("git@github.com:Example/Example_GEN4.git")).toBe("example/Example_GEN4");
   expect(githubRepositoryCoordinateIdentity("Example/Example_GEN4")).toBe("example/Example_GEN4");
   expect(githubRepositoryCoordinateIdentity("Example/Example_GEN5")).toBeNull();
