@@ -154,3 +154,19 @@ test("G1: broker context accepts a GEN4 root and prefers it when the policy allo
   expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN5": 8 }), "Example")).toBeNull();
   expect(brokeredGitHubProviderContext(withPolicy({ "Example/Example_GEN4": 7 }), "bad login!")).toBeNull();
 });
+
+test("after a rename the one root-named repository under the new login is the root; two are no choice", () => {
+  const withPolicy = (repositories) => ({
+    valid: true,
+    repositories: Object.entries(repositories).map(([fullName, id]) => ({ fullName, id })),
+  });
+  expect(brokeredGitHubProviderContext(withPolicy({ "Renamed/Example_GEN3": 6 }), "Renamed"))
+    .toEqual({ cwd: "/", repository: "Renamed/Example_GEN3" });
+  // The exact name still wins.
+  expect(brokeredGitHubProviderContext(withPolicy({ "Renamed/Example_GEN3": 6, "Renamed/Renamed_GEN3": 7 }), "Renamed"))
+    .toEqual({ cwd: "/", repository: "Renamed/Renamed_GEN3" });
+  expect(brokeredGitHubProviderContext(withPolicy({ "Renamed/Example_GEN3": 6, "Renamed/Other_GEN4": 7 }), "Renamed"))
+    .toBeNull();
+  expect(brokeredGitHubProviderContext(withPolicy({ "Other/Example_GEN3": 6 }), "Renamed")).toBeNull();
+  expect(brokeredGitHubProviderContext(withPolicy({ "Renamed/notes": 6 }), "Renamed")).toBeNull();
+});

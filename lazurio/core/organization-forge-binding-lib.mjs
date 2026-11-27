@@ -1,4 +1,4 @@
-import { organizationRootRepositoryNames } from "./organization-root-repository-lib.mjs";
+import { parseOrganizationRootRepositoryName } from "./organization-root-repository-lib.mjs";
 
 export const ORGANIZATION_FORGE_BINDING_VERSION = "lazurio.forge-binding.github.v0";
 
@@ -9,9 +9,14 @@ export const ORGANIZATION_GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,
  * Immutable GitHub Organization/repository binding recorded in an Organization
  * root. This module depends only on the leaf root-name module, so the
  * scaffold generator and the manifest resolver can both consume it without an
- * import cycle. The repository is `<login>/<login>_GEN3` or
- * `<login>/<login>_GEN4` (LZD-0041 G1); which one is the root is the binding's
- * own declaration, matched against the live repository by its callers.
+ * import cycle. The repository is `<login>/<name>_GEN3` or
+ * `<login>/<name>_GEN4` (LZD-0041 G1), owned by the Organization's login.
+ * `<name>` is the login the root was created under; it stays when the
+ * Organization is renamed on GitHub, which keeps the repository and its id
+ * (LazurioPlatform#1281). The immutable `repository.id` and
+ * `organization.id`, matched against the live repository by the callers,
+ * are what identify the root; which repository is the root is the binding's
+ * own declaration.
  */
 export function isValidOrganizationForgeBinding(value, {
   organizationId,
@@ -40,9 +45,16 @@ export function isValidForgeBindingShape(value) {
     && typeof value.repository.id === "string"
     && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.repository.id ?? "")
     && typeof value.repository.asserted_full_name === "string"
-    && organizationRootRepositoryNames(value.organization.asserted_login)
-      .some((name) => value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${name}`.toLowerCase())
+    && isRootOfLogin(value.repository.asserted_full_name, value.organization.asserted_login)
     && value.repository.default_branch === "main";
+}
+
+/** `<login>/<name>_GEN3|_GEN4`, owned by `login` (case-insensitive). */
+function isRootOfLogin(fullName, login) {
+  const parts = fullName.split("/");
+  return parts.length === 2
+    && parts[0].toLowerCase() === login.toLowerCase()
+    && parseOrganizationRootRepositoryName(parts[1]) !== null;
 }
 
 function isRecord(value) {
